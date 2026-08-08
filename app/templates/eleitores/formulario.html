@@ -6,12 +6,17 @@
     <a class="btn btn-outline-secondary" href="/eleitores">Voltar</a>
 </div>
 
-<form class="card" method="post" action="{% if eleitor %}/eleitores/{{ eleitor.id }}/editar{% else %}/eleitores/novo{% endif %}">
+{% if erro %}
+<div class="alert alert-danger" role="alert">{{ erro }}</div>
+{% endif %}
+
+<form class="card" method="post" action="{% if eleitor and eleitor.id %}/eleitores/{{ eleitor.id }}/editar{% else %}/eleitores/novo{% endif %}">
     <div class="card-body p-4">
         <div class="row g-3">
             <div class="col-md-8">
                 <label class="form-label" for="nome">Nome *</label>
-                <input class="form-control" id="nome" name="nome" value="{{ eleitor.nome if eleitor else '' }}" maxlength="150" required autofocus>
+                <input class="form-control" id="nome" name="nome" value="{{ eleitor.nome if eleitor else '' }}" maxlength="150" minlength="3" required autofocus>
+                <div class="form-text">Mínimo de 3 caracteres.</div>
             </div>
             <div class="col-md-4">
                 <label class="form-label" for="nascimento">Nascimento</label>
@@ -19,11 +24,11 @@
             </div>
             <div class="col-md-6">
                 <label class="form-label" for="telefone">Telefone</label>
-                <input class="form-control" id="telefone" name="telefone" value="{{ eleitor.telefone if eleitor and eleitor.telefone else '' }}" maxlength="30">
+                <input class="form-control" id="telefone" name="telefone" value="{{ eleitor.telefone if eleitor and eleitor.telefone else '' }}" maxlength="15" placeholder="(00) 00000-0000" inputmode="tel">
             </div>
             <div class="col-md-6">
                 <label class="form-label" for="whatsapp">WhatsApp</label>
-                <input class="form-control" id="whatsapp" name="whatsapp" value="{{ eleitor.whatsapp if eleitor and eleitor.whatsapp else '' }}" maxlength="30">
+                <input class="form-control" id="whatsapp" name="whatsapp" value="{{ eleitor.whatsapp if eleitor and eleitor.whatsapp else '' }}" maxlength="15" placeholder="(00) 00000-0000" inputmode="tel">
             </div>
             <div class="col-12">
                 <label class="form-label" for="endereco">Endereço</label>
@@ -48,4 +53,37 @@
         <button class="btn btn-primary" type="submit">Salvar</button>
     </div>
 </form>
+
+<script>
+(function () {
+    function formatarTelefone(valor) {
+        const digitos = valor.replace(/\D/g, '').slice(0, 11);
+        if (digitos.length > 10) {
+            return digitos.replace(/^(\d{2})(\d{5})(\d{0,4}).*/, function (_, ddd, parte1, parte2) {
+                return parte2 ? '(' + ddd + ') ' + parte1 + '-' + parte2 : '(' + ddd + ') ' + parte1;
+            });
+        }
+        if (digitos.length > 6) {
+            return digitos.replace(/^(\d{2})(\d{4})(\d{0,4}).*/, function (_, ddd, parte1, parte2) {
+                return parte2 ? '(' + ddd + ') ' + parte1 + '-' + parte2 : '(' + ddd + ') ' + parte1;
+            });
+        }
+        if (digitos.length > 2) {
+            return digitos.replace(/^(\d{2})(\d{0,4}).*/, '($1) $2');
+        }
+        if (digitos.length > 0) {
+            return digitos.replace(/^(\d{0,2}).*/, '($1');
+        }
+        return '';
+    }
+
+    ['telefone', 'whatsapp'].forEach(function (id) {
+        const campo = document.getElementById(id);
+        if (!campo) return;
+        campo.addEventListener('input', function () {
+            campo.value = formatarTelefone(campo.value);
+        });
+    });
+})();
+</script>
 {% endblock %}

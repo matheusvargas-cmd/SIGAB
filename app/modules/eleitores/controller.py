@@ -1,4 +1,5 @@
 from datetime import date
+from types import SimpleNamespace
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -27,13 +28,29 @@ def flash_message(
 
 
 @router.get("", response_class=HTMLResponse)
-def listar(request: Request, pesquisa: str = "", db: Session = Depends(get_db)):
-    eleitores = EleitorService.listar(db, pesquisa)
-    return templates.TemplateResponse(
+def listar(
+    request: Request,
+    pesquisa: str = "",
+    pagina: int = 1,
+    db: Session = Depends(get_db),
+):
+    eleitores, pagina_atual, total_paginas = EleitorService.listar(db, pesquisa, pagina)
+    resposta = templates.TemplateResponse(
         request=request,
         name="eleitores/lista.html",
-        context={"titulo": "Eleitores", "eleitores": eleitores, "pesquisa": pesquisa},
+        context={
+            "titulo": "Eleitores",
+            "eleitores": eleitores,
+            "pesquisa": pesquisa,
+            "pagina_atual": pagina_atual,
+            "total_paginas": total_paginas,
+            "flash_message": request.cookies.get("flash_message"),
+            "flash_category": request.cookies.get("flash_category", "warning"),
+        },
     )
+    resposta.delete_cookie("flash_message", path="/eleitores")
+    resposta.delete_cookie("flash_category", path="/eleitores")
+    return resposta
 
 
 @router.get("/novo", response_class=HTMLResponse)
@@ -47,6 +64,7 @@ def novo(request: Request):
 
 @router.post("/novo")
 def criar(
+    request: Request,
     nome: str = Form(...),
     telefone: str | None = Form(None),
     whatsapp: str | None = Form(None),
@@ -62,8 +80,36 @@ def criar(
             db, nome, telefone, whatsapp, nascimento, endereco, bairro, cidade, observacoes
         )
     except ValueError as error:
-        return flash_message(str(error))
-    return flash_message("Eleitor cadastrado com sucesso.", "success")
+        eleitor_preenchido = SimpleNamespace(
+            id=None,
+            nome=nome,
+            telefone=telefone,
+            whatsapp=whatsapp,
+            nascimento=nascimento,
+            endereco=endereco,
+            bairro=bairro,
+            cidade=cidade,
+            observacoes=observacoes,
+        )
+        return templates.TemplateResponse(
+            request=request,
+            name="eleitores/formulario.html",
+            context={"titulo": "Novo eleitor", "eleitor": eleitor_preenchido, "erro": str(error)},
+            status_code=400,
+        )
+    return flash_message("Eleitor cadastrado.", "success")
+
+
+@router.get("/{eleitor_id}", response_class=HTMLResponse)
+def visualizar(request: Request, eleitor_id: int, db: Session = Depends(get_db)):
+    eleitor = EleitorService.obter_por_id(db, eleitor_id)
+    if eleitor is None:
+        return flash_message("Eleitor não encontrado.")
+    return templates.TemplateResponse(
+        request=request,
+        name="eleitores/visualizar.html",
+        context={"titulo": eleitor.nome, "eleitor": eleitor},
+    )
 
 
 @router.get("/{eleitor_id}/editar", response_class=HTMLResponse)
@@ -80,6 +126,7 @@ def editar(request: Request, eleitor_id: int, db: Session = Depends(get_db)):
 
 @router.post("/{eleitor_id}/editar")
 def atualizar(
+    request: Request,
     eleitor_id: int,
     nome: str = Form(...),
     telefone: str | None = Form(None),
@@ -108,8 +155,24 @@ def atualizar(
             observacoes,
         )
     except ValueError as error:
-        return flash_message(str(error))
-    return flash_message("Eleitor atualizado com sucesso.", "success")
+        eleitor_preenchido = SimpleNamespace(
+            id=eleitor_id,
+            nome=nome,
+            telefone=telefone,
+            whatsapp=whatsapp,
+            nascimento=nascimento,
+            endereco=endereco,
+            bairro=bairro,
+            cidade=cidade,
+            observacoes=observacoes,
+        )
+        return templates.TemplateResponse(
+            request=request,
+            name="eleitores/formulario.html",
+            context={"titulo": "Editar eleitor", "eleitor": eleitor_preenchido, "erro": str(error)},
+            status_code=400,
+        )
+    return flash_message("Eleitor atualizado.", "success")
 
 
 @router.post("/{eleitor_id}/excluir")
@@ -121,4 +184,4 @@ def excluir(eleitor_id: int, db: Session = Depends(get_db)):
         EleitorService.excluir(db, eleitor)
     except ValueError as error:
         return flash_message(str(error))
-    return flash_message("Eleitor excluído com sucesso.", "success")
+    return flash_message("Eleitor excluído.", "success")

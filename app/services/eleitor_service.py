@@ -1,29 +1,45 @@
+import re
 from datetime import date
+from math import ceil
 from typing import Any
 
-from sqlalchemy import exists, or_, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.demanda import Demanda
 from app.models.eleitor import Eleitor
 
+POR_PAGINA = 20
+NOME_MINIMO_CARACTERES = 3
+
 
 class EleitorService:
     @staticmethod
-    def listar(db: Session, pesquisa: str | None = None) -> list[Eleitor]:
+    def listar(
+        db: Session, pesquisa: str | None = None, pagina: int = 1
+    ) -> tuple[list[Eleitor], int, int]:
         consulta = select(Eleitor).order_by(Eleitor.nome)
+        consulta_total = select(func.count()).select_from(Eleitor)
+
         if pesquisa and pesquisa.strip():
             termo = f"%{pesquisa.strip()}%"
-            consulta = consulta.where(
-                or_(
-                    Eleitor.nome.ilike(termo),
-                    Eleitor.telefone.ilike(termo),
-                    Eleitor.whatsapp.ilike(termo),
-                    Eleitor.cidade.ilike(termo),
-                    Eleitor.bairro.ilike(termo),
-                )
+            filtro = or_(
+                Eleitor.nome.ilike(termo),
+                Eleitor.telefone.ilike(termo),
+                Eleitor.whatsapp.ilike(termo),
+                Eleitor.cidade.ilike(termo),
+                Eleitor.bairro.ilike(termo),
             )
-        return list(db.scalars(consulta).all())
+            consulta = consulta.where(filtro)
+            consulta_total = consulta_total.where(filtro)
+
+        total_registros = db.scalar(consulta_total) or 0
+        total_paginas = max(1, ceil(total_registros / POR_PAGINA))
+        pagina_atual = min(max(1, pagina), total_paginas)
+
+        consulta = consulta.limit(POR_PAGINA).offset((pagina_atual - 1) * POR_PAGINA)
+        eleitores = list(db.scalars(consulta).all())
+        return eleitores, pagina_atual, total_paginas
 
     @staticmethod
     def obter_por_id(db: Session, eleitor_id: int) -> Eleitor | None:
@@ -41,18 +57,18 @@ class EleitorService:
         cidade: str | None = None,
         observacoes: str | None = None,
     ) -> Eleitor:
-        eleitor = Eleitor(
-            **EleitorService._normalizar_dados(
-                nome=nome,
-                telefone=telefone,
-                whatsapp=whatsapp,
-                nascimento=nascimento,
-                endereco=endereco,
-                bairro=bairro,
-                cidade=cidade,
-                observacoes=observacoes,
-            )
+        dados = EleitorService._normalizar_dados(
+            nome=nome,
+            telefone=telefone,
+            whatsapp=whatsapp,
+            nascimento=nascimento,
+            endereco=endereco,
+            bairro=bairro,
+            cidade=cidade,
+            observacoes=observacoes,
         )
+        EleitorService._validar_duplicidade(db, dados["nome"], dados["telefone"])
+        eleitor = Eleitor(**dados)
         db.add(eleitor)
         db.commit()
         db.refresh(eleitor)
@@ -81,6 +97,9 @@ class EleitorService:
             cidade=cidade,
             observacoes=observacoes,
         )
+        EleitorService._validar_duplicidade(
+            db, dados["nome"], dados["telefone"], ignorar_id=eleitor.id
+        )
         for campo, valor in dados.items():
             setattr(eleitor, campo, valor)
         db.commit()
@@ -93,18 +112,36 @@ class EleitorService:
             select(exists().where(Demanda.eleitor_id == eleitor.id))
         )
         if possui_demandas:
-            raise ValueError("Não é possível excluir um eleitor com demandas vinculadas.")
+            raise ValueError("Eleitor possui demandas vinculadas.")
         db.delete(eleitor)
         db.commit()
 
     @staticmethod
     def _normalizar_dados(**dados: Any) -> dict[str, Any]:
-        nome = dados["nome"].strip()
-        if not nome:
-            raise ValueError("O nome é obrigatório.")
+        nome = (dados.get("nome") or "").strip()
+        if len(nome) < NOME_MINIMO_CARACTERES:
+            raise ValueError("Nome inválido.")
 
         dados["nome"] = nome
         for campo, valor in dados.items():
             if campo != "nome" and isinstance(valor, str):
                 dados[campo] = valor.strip() or None
         return dados
+
+    @staticmethod
+    def _validar_duplicidade(
+        db: Session, nome: str, telefone: str | None, ignorar_id: int | None = None
+    ) -> None:
+        # Duplicidade só é verificada quando há telefone, pois é a combinação
+        # Nome + Telefone que caracteriza o mesmo cadastro (regra da Release 0.2).
+        digitos_telefone = re.sub(r"\D", "", telefone or "")
+        if not digitos_telefone:
+            return
+
+        consulta = select(Eleitor).where(func.lower(Eleitor.nome) == nome.lower())
+        if ignorar_id is not None:
+            consulta = consulta.where(Eleitor.id != ignorar_id)
+
+        for candidato in db.scalars(consulta):
+            if re.sub(r"\D", "", candidato.telefone or "") == digitos_telefone:
+                raise ValueError("Cadastro duplicado.")

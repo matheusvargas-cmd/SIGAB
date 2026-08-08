@@ -9,6 +9,10 @@
     <a class="btn btn-primary" href="/eleitores/novo">Novo cadastro</a>
 </div>
 
+{% if flash_message %}
+<div class="alert alert-{{ flash_category }}" role="alert">{% if flash_category == 'success' %}✔ {% endif %}{{ flash_message }}</div>
+{% endif %}
+
 <form class="row g-2 mb-4" method="get" action="/eleitores">
     <div class="col-sm-8 col-md-6">
         <label class="visually-hidden" for="pesquisa">Pesquisar eleitor</label>
@@ -43,8 +47,9 @@
                         <td>{{ eleitor.bairro or '-' }}</td>
                         <td>{{ eleitor.cidade or '-' }}</td>
                         <td class="text-end pe-3 text-nowrap">
+                            <a class="btn btn-sm btn-outline-secondary" href="/eleitores/{{ eleitor.id }}">Visualizar</a>
                             <a class="btn btn-sm btn-outline-primary" href="/eleitores/{{ eleitor.id }}/editar">Editar</a>
-                            <form class="d-inline" method="post" action="/eleitores/{{ eleitor.id }}/excluir">
+                            <form class="d-inline" method="post" action="/eleitores/{{ eleitor.id }}/excluir" onsubmit="return confirm('Confirma a exclusão deste eleitor?');">
                                 <button class="btn btn-sm btn-outline-danger" type="submit">Excluir</button>
                             </form>
                         </td>
@@ -60,9 +65,25 @@
 
 <nav class="mt-3" aria-label="Paginação de eleitores">
     <ul class="pagination justify-content-end mb-0">
-        <li class="page-item disabled"><span class="page-link">Anterior</span></li>
-        <li class="page-item active" aria-current="page"><span class="page-link">1</span></li>
-        <li class="page-item disabled"><span class="page-link">Próxima</span></li>
+        <li class="page-item {% if pagina_atual <= 1 %}disabled{% endif %}">
+            {% if pagina_atual > 1 %}
+            <a class="page-link" href="/eleitores?pagina={{ pagina_atual - 1 }}{% if pesquisa %}&pesquisa={{ pesquisa|urlencode }}{% endif %}">Anterior</a>
+            {% else %}
+            <span class="page-link">Anterior</span>
+            {% endif %}
+        </li>
+        {% for numero in range(1, total_paginas + 1) %}
+        <li class="page-item {% if numero == pagina_atual %}active{% endif %}" {% if numero == pagina_atual %}aria-current="page"{% endif %}>
+            <a class="page-link" href="/eleitores?pagina={{ numero }}{% if pesquisa %}&pesquisa={{ pesquisa|urlencode }}{% endif %}">{{ numero }}</a>
+        </li>
+        {% endfor %}
+        <li class="page-item {% if pagina_atual >= total_paginas %}disabled{% endif %}">
+            {% if pagina_atual < total_paginas %}
+            <a class="page-link" href="/eleitores?pagina={{ pagina_atual + 1 }}{% if pesquisa %}&pesquisa={{ pesquisa|urlencode }}{% endif %}">Próxima</a>
+            {% else %}
+            <span class="page-link">Próxima</span>
+            {% endif %}
+        </li>
     </ul>
 </nav>
 {% endblock %}
