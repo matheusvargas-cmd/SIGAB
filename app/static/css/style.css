@@ -1,0 +1,5 @@
+body{background:#eef2f7}
+.sidebar{background:#0B315C;height:100vh;padding:20px}
+.sidebar h4,.sidebar a{color:#fff}
+.sidebar a{display:block;text-decoration:none;margin:12px 0}
+.card{border:none;box-shadow:0 0 10px rgba(0,0,0,.15)}
