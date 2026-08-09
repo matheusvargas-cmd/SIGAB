@@ -1,0 +1,208 @@
+from datetime import date, datetime
+from math import ceil
+from typing import Any
+
+from sqlalchemy import case, func, or_, select
+from sqlalchemy.orm import Session, joinedload
+
+from app.models.demanda import Demanda
+from app.models.eleitor import Eleitor
+
+POR_PAGINA = 20
+TITULO_MINIMO_CARACTERES = 5
+
+CATEGORIAS = [
+    "Saúde",
+    "Educação",
+    "Obras",
+    "Iluminação",
+    "Limpeza",
+    "Trânsito",
+    "Esporte",
+    "Assistência Social",
+    "Habitação",
+    "Outros",
+]
+STATUS_OPCOES = ["Aberta", "Em andamento", "Aguardando terceiros", "Concluída", "Cancelada"]
+PRIORIDADE_OPCOES = ["Baixa", "Normal", "Alta", "Urgente"]
+
+_ORDEM_PRIORIDADE = case(
+    (Demanda.prioridade == "Urgente", 0),
+    (Demanda.prioridade == "Alta", 1),
+    (Demanda.prioridade == "Normal", 2),
+    (Demanda.prioridade == "Baixa", 3),
+    else_=4,
+)
+
+
+class DemandaService:
+    @staticmethod
+    def listar(
+        db: Session, pesquisa: str | None = None, pagina: int = 1
+    ) -> tuple[list[Demanda], int, int]:
+        consulta = (
+            select(Demanda)
+            .join(Eleitor, Demanda.eleitor_id == Eleitor.id)
+            .options(joinedload(Demanda.eleitor))
+        )
+        consulta_total = (
+            select(func.count())
+            .select_from(Demanda)
+            .join(Eleitor, Demanda.eleitor_id == Eleitor.id)
+        )
+
+        if pesquisa and pesquisa.strip():
+            termo = f"%{pesquisa.strip()}%"
+            filtro = or_(
+                Eleitor.nome.ilike(termo),
+                Demanda.titulo.ilike(termo),
+                Demanda.categoria.ilike(termo),
+                Demanda.status.ilike(termo),
+                Demanda.responsavel.ilike(termo),
+                Eleitor.cidade.ilike(termo),
+            )
+            consulta = consulta.where(filtro)
+            consulta_total = consulta_total.where(filtro)
+
+        total_registros = db.scalar(consulta_total) or 0
+        total_paginas = max(1, ceil(total_registros / POR_PAGINA))
+        pagina_atual = min(max(1, pagina), total_paginas)
+
+        consulta = (
+            consulta.order_by(_ORDEM_PRIORIDADE, Demanda.data_abertura)
+            .limit(POR_PAGINA)
+            .offset((pagina_atual - 1) * POR_PAGINA)
+        )
+        demandas = list(db.scalars(consulta).unique().all())
+        return demandas, pagina_atual, total_paginas
+
+    @staticmethod
+    def obter_por_id(db: Session, demanda_id: int) -> Demanda | None:
+        return db.get(Demanda, demanda_id)
+
+    @staticmethod
+    def listar_eleitores_para_selecao(db: Session) -> list[Eleitor]:
+        return list(db.scalars(select(Eleitor).order_by(Eleitor.nome)).all())
+
+    @staticmethod
+    def criar(
+        db: Session,
+        eleitor_id: str | None,
+        titulo: str,
+        descricao: str | None,
+        categoria: str | None,
+        status: str | None,
+        prioridade: str | None,
+        responsavel: str | None = None,
+        prazo: date | None = None,
+        observacoes_internas: str | None = None,
+    ) -> Demanda:
+        dados = DemandaService._validar_dados(
+            db, eleitor_id, titulo, descricao, categoria, status, prioridade
+        )
+        demanda = Demanda(
+            eleitor_id=dados["eleitor_id"],
+            titulo=dados["titulo"],
+            descricao=dados["descricao"],
+            categoria=dados["categoria"],
+            status=dados["status"],
+            prioridade=dados["prioridade"],
+            responsavel=(responsavel or "").strip() or None,
+            prazo=prazo,
+            observacoes_internas=(observacoes_internas or "").strip() or None,
+            data_abertura=datetime.now(),
+            data_fechamento=datetime.now() if dados["status"] == "Concluída" else None,
+        )
+        db.add(demanda)
+        db.commit()
+        db.refresh(demanda)
+        return demanda
+
+    @staticmethod
+    def atualizar(
+        db: Session,
+        demanda: Demanda,
+        eleitor_id: str | None,
+        titulo: str,
+        descricao: str | None,
+        categoria: str | None,
+        status: str | None,
+        prioridade: str | None,
+        responsavel: str | None = None,
+        prazo: date | None = None,
+        observacoes_internas: str | None = None,
+    ) -> Demanda:
+        dados = DemandaService._validar_dados(
+            db, eleitor_id, titulo, descricao, categoria, status, prioridade
+        )
+
+        if demanda.status == "Concluída" and dados["status"] == "Aberta":
+            raise ValueError("Não é possível reabrir uma demanda concluída.")
+
+        if dados["status"] == "Concluída" and demanda.status != "Concluída":
+            demanda.data_fechamento = datetime.now()
+        elif dados["status"] != "Concluída" and demanda.status == "Concluída":
+            demanda.data_fechamento = None
+
+        demanda.eleitor_id = dados["eleitor_id"]
+        demanda.titulo = dados["titulo"]
+        demanda.descricao = dados["descricao"]
+        demanda.categoria = dados["categoria"]
+        demanda.status = dados["status"]
+        demanda.prioridade = dados["prioridade"]
+        demanda.responsavel = (responsavel or "").strip() or None
+        demanda.prazo = prazo
+        demanda.observacoes_internas = (observacoes_internas or "").strip() or None
+
+        db.commit()
+        db.refresh(demanda)
+        return demanda
+
+    @staticmethod
+    def excluir(db: Session, demanda: Demanda) -> None:
+        db.delete(demanda)
+        db.commit()
+
+    @staticmethod
+    def _validar_dados(
+        db: Session,
+        eleitor_id: str | None,
+        titulo: str,
+        descricao: str | None,
+        categoria: str | None,
+        status: str | None,
+        prioridade: str | None,
+    ) -> dict[str, Any]:
+        try:
+            eleitor_id_convertido = int(eleitor_id) if eleitor_id else None
+        except (TypeError, ValueError):
+            eleitor_id_convertido = None
+
+        if eleitor_id_convertido is None or db.get(Eleitor, eleitor_id_convertido) is None:
+            raise ValueError("Eleitor obrigatório.")
+
+        titulo_normalizado = (titulo or "").strip()
+        if len(titulo_normalizado) < TITULO_MINIMO_CARACTERES:
+            raise ValueError("Título inválido.")
+
+        descricao_normalizada = (descricao or "").strip()
+        if not descricao_normalizada:
+            raise ValueError("Descrição obrigatória.")
+
+        if categoria not in CATEGORIAS:
+            raise ValueError("Categoria obrigatória.")
+
+        if status not in STATUS_OPCOES:
+            raise ValueError("Status obrigatório.")
+
+        if prioridade not in PRIORIDADE_OPCOES:
+            raise ValueError("Prioridade obrigatória.")
+
+        return {
+            "eleitor_id": eleitor_id_convertido,
+            "titulo": titulo_normalizado,
+            "descricao": descricao_normalizada,
+            "categoria": categoria,
+            "status": status,
+            "prioridade": prioridade,
+        }

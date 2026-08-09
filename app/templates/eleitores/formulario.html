@@ -22,6 +22,9 @@
                 <label class="form-label" for="nascimento">Nascimento</label>
                 <input class="form-control" id="nascimento" name="nascimento" type="date" value="{{ eleitor.nascimento.isoformat() if eleitor and eleitor.nascimento else '' }}">
             </div>
+            <div class="col-12">
+                <p class="form-secao-titulo mb-0">Contato</p>
+            </div>
             <div class="col-md-6">
                 <label class="form-label" for="telefone">Telefone</label>
                 <input class="form-control" id="telefone" name="telefone" value="{{ eleitor.telefone if eleitor and eleitor.telefone else '' }}" maxlength="15" placeholder="(00) 00000-0000" inputmode="tel">
@@ -29,6 +32,9 @@
             <div class="col-md-6">
                 <label class="form-label" for="whatsapp">WhatsApp</label>
                 <input class="form-control" id="whatsapp" name="whatsapp" value="{{ eleitor.whatsapp if eleitor and eleitor.whatsapp else '' }}" maxlength="15" placeholder="(00) 00000-0000" inputmode="tel">
+            </div>
+            <div class="col-12">
+                <p class="form-secao-titulo mb-0">Localização</p>
             </div>
             <div class="col-12">
                 <label class="form-label" for="endereco">Endereço</label>

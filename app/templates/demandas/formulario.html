@@ -1,0 +1,89 @@
+{% extends 'shared/base.html' %}
+
+{% block conteudo %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">{{ titulo }}</h2>
+    <a class="btn btn-outline-secondary" href="/demandas">Voltar</a>
+</div>
+
+{% if erro %}
+<div class="alert alert-danger" role="alert">{{ erro }}</div>
+{% endif %}
+
+<form class="card" method="post" action="{% if demanda and demanda.id %}/demandas/{{ demanda.id }}/editar{% else %}/demandas/novo{% endif %}">
+    <div class="card-body p-4">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label" for="eleitor_id">Eleitor *</label>
+                <select class="form-select" id="eleitor_id" name="eleitor_id" required>
+                    <option value="">Selecione...</option>
+                    {% for opcao in eleitores %}
+                    <option value="{{ opcao.id }}" {% if demanda and demanda.eleitor_id == opcao.id %}selected{% endif %}>{{ opcao.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="titulo">Título *</label>
+                <input class="form-control" id="titulo" name="titulo" value="{{ demanda.titulo if demanda else '' }}" maxlength="150" minlength="5" required>
+                <div class="form-text">Mínimo de 5 caracteres.</div>
+            </div>
+            <div class="col-12">
+                <p class="form-secao-titulo mb-0">Detalhes da demanda</p>
+            </div>
+            <div class="col-12">
+                <label class="form-label" for="descricao">Descrição *</label>
+                <textarea class="form-control" id="descricao" name="descricao" rows="3" required>{{ demanda.descricao if demanda and demanda.descricao else '' }}</textarea>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="categoria">Categoria *</label>
+                <select class="form-select" id="categoria" name="categoria" required>
+                    <option value="">Selecione...</option>
+                    {% for opcao in categorias %}
+                    <option value="{{ opcao }}" {% if demanda and demanda.categoria == opcao %}selected{% endif %}>{{ opcao }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="status">Status *</label>
+                <select class="form-select" id="status" name="status" required>
+                    {% for opcao in status_opcoes %}
+                    {% if not (demanda and demanda.status == 'Concluída' and opcao == 'Aberta') %}
+                    <option value="{{ opcao }}" {% if (demanda and demanda.status == opcao) or (not demanda and opcao == 'Aberta') %}selected{% endif %}>{{ opcao }}</option>
+                    {% endif %}
+                    {% endfor %}
+                </select>
+                {% if demanda and demanda.status == 'Concluída' %}
+                <div class="form-text">Uma demanda concluída não pode voltar para "Aberta".</div>
+                {% endif %}
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="prioridade">Prioridade *</label>
+                <select class="form-select" id="prioridade" name="prioridade" required>
+                    {% for opcao in prioridade_opcoes %}
+                    <option value="{{ opcao }}" {% if (demanda and demanda.prioridade == opcao) or (not demanda and opcao == 'Normal') %}selected{% endif %}>{{ opcao }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-12">
+                <p class="form-secao-titulo mb-0">Acompanhamento</p>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="responsavel">Responsável</label>
+                <input class="form-control" id="responsavel" name="responsavel" value="{{ demanda.responsavel if demanda and demanda.responsavel else '' }}" maxlength="150">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="prazo">Prazo</label>
+                <input class="form-control" id="prazo" name="prazo" type="date" value="{{ demanda.prazo.isoformat() if demanda and demanda.prazo else '' }}">
+            </div>
+            <div class="col-12">
+                <label class="form-label" for="observacoes_internas">Observações internas</label>
+                <textarea class="form-control" id="observacoes_internas" name="observacoes_internas" rows="3">{{ demanda.observacoes_internas if demanda and demanda.observacoes_internas else '' }}</textarea>
+            </div>
+        </div>
+    </div>
+    <div class="card-footer bg-white text-end">
+        <a class="btn btn-outline-secondary" href="/demandas">Cancelar</a>
+        <button class="btn btn-primary" type="submit">Salvar</button>
+    </div>
+</form>
+{% endblock %}

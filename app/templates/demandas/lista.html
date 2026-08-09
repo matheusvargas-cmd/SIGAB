@@ -1,0 +1,107 @@
+{% extends 'shared/base.html' %}
+
+{% block conteudo %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+        <h2 class="mb-0">Demandas</h2>
+        <p class="text-muted mb-0">Acompanhamento de demandas</p>
+    </div>
+    <a class="btn btn-primary" href="/demandas/novo">Nova demanda</a>
+</div>
+
+{% if flash_message %}
+<div class="alert alert-{{ flash_category }}" role="alert">{% if flash_category == 'success' %}✔ {% endif %}{{ flash_message }}</div>
+{% endif %}
+
+<form class="row g-2 mb-4" method="get" action="/demandas">
+    <div class="col-sm-8 col-md-6">
+        <label class="visually-hidden" for="pesquisa">Pesquisar demanda</label>
+        <input class="form-control" id="pesquisa" name="pesquisa" value="{{ pesquisa }}" placeholder="Eleitor, título, categoria, status, responsável ou cidade">
+    </div>
+    <div class="col-auto">
+        <button class="btn btn-outline-primary" type="submit">Pesquisar</button>
+        {% if pesquisa %}<a class="btn btn-outline-secondary" href="/demandas">Limpar</a>{% endif %}
+    </div>
+</form>
+
+{% set status_classes = {
+    'Aberta': 'text-bg-primary',
+    'Em andamento': 'text-bg-warning',
+    'Aguardando terceiros': 'badge-laranja',
+    'Concluída': 'text-bg-success',
+    'Cancelada': 'text-bg-danger',
+} %}
+{% set prioridade_classes = {
+    'Baixa': 'text-bg-secondary',
+    'Normal': 'text-bg-primary',
+    'Alta': 'badge-laranja',
+    'Urgente': 'text-bg-danger',
+} %}
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th class="ps-3">Prioridade</th>
+                        <th>Status</th>
+                        <th>Título</th>
+                        <th>Eleitor</th>
+                        <th>Categoria</th>
+                        <th>Responsável</th>
+                        <th>Prazo</th>
+                        <th class="text-end pe-3">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for demanda in demandas %}
+                    <tr>
+                        <td class="ps-3"><span class="badge {{ prioridade_classes.get(demanda.prioridade, 'text-bg-secondary') }}">{{ demanda.prioridade }}</span></td>
+                        <td><span class="badge {{ status_classes.get(demanda.status, 'text-bg-secondary') }}">{{ demanda.status }}</span></td>
+                        <td>{{ demanda.titulo }}</td>
+                        <td>{{ demanda.eleitor.nome if demanda.eleitor else '-' }}</td>
+                        <td>{{ demanda.categoria or '-' }}</td>
+                        <td>{{ demanda.responsavel or '-' }}</td>
+                        <td>{{ demanda.prazo.strftime('%d/%m/%Y') if demanda.prazo else '-' }}</td>
+                        <td class="text-end pe-3 text-nowrap">
+                            <a class="btn btn-sm btn-outline-secondary" href="/demandas/{{ demanda.id }}">Visualizar</a>
+                            <a class="btn btn-sm btn-outline-primary" href="/demandas/{{ demanda.id }}/editar">Editar</a>
+                            <form class="d-inline" method="post" action="/demandas/{{ demanda.id }}/excluir" onsubmit="return confirm('Confirma a exclusão desta demanda?');">
+                                <button class="btn btn-sm btn-outline-danger" type="submit">Excluir</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td class="text-center text-muted py-4" colspan="8">Nenhuma demanda encontrada.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<nav class="mt-3" aria-label="Paginação de demandas">
+    <ul class="pagination justify-content-end mb-0">
+        <li class="page-item {% if pagina_atual <= 1 %}disabled{% endif %}">
+            {% if pagina_atual > 1 %}
+            <a class="page-link" href="/demandas?pagina={{ pagina_atual - 1 }}{% if pesquisa %}&pesquisa={{ pesquisa|urlencode }}{% endif %}">Anterior</a>
+            {% else %}
+            <span class="page-link">Anterior</span>
+            {% endif %}
+        </li>
+        {% for numero in range(1, total_paginas + 1) %}
+        <li class="page-item {% if numero == pagina_atual %}active{% endif %}" {% if numero == pagina_atual %}aria-current="page"{% endif %}>
+            <a class="page-link" href="/demandas?pagina={{ numero }}{% if pesquisa %}&pesquisa={{ pesquisa|urlencode }}{% endif %}">{{ numero }}</a>
+        </li>
+        {% endfor %}
+        <li class="page-item {% if pagina_atual >= total_paginas %}disabled{% endif %}">
+            {% if pagina_atual < total_paginas %}
+            <a class="page-link" href="/demandas?pagina={{ pagina_atual + 1 }}{% if pesquisa %}&pesquisa={{ pesquisa|urlencode }}{% endif %}">Próxima</a>
+            {% else %}
+            <span class="page-link">Próxima</span>
+            {% endif %}
+        </li>
+    </ul>
+</nav>
+{% endblock %}

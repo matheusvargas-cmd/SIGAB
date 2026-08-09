@@ -3,22 +3,76 @@
 <head>
 <meta charset='utf-8'>
 <meta name='viewport' content='width=device-width, initial-scale=1'>
-<title>{{ titulo }}</title>
-<link href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css' rel='stylesheet'>
+<title>{{ titulo }} · conecta360</title>
+<link rel='icon' type='image/x-icon' href='/static/img/favicon.ico'>
+<link rel='icon' type='image/png' sizes='32x32' href='/static/img/icone-32.png'>
+<link rel='icon' type='image/png' sizes='64x64' href='/static/img/icone-64.png'>
+<link rel='icon' type='image/png' sizes='128x128' href='/static/img/icone-128.png'>
+<link href='/static/css/bootstrap.min.css' rel='stylesheet'>
 <link href='/static/css/style.css' rel='stylesheet'>
 </head>
 <body>
+{% set caminho = request.url.path %}
+{% if caminho == '/' %}
+{% set modulo_atual = 'Dashboard' %}
+{% elif caminho.startswith('/eleitores') %}
+{% set modulo_atual = 'Eleitores' %}
+{% elif caminho.startswith('/demandas') %}
+{% set modulo_atual = 'Demandas' %}
+{% elif caminho.startswith('/agenda') %}
+{% set modulo_atual = 'Agenda' %}
+{% else %}
+{% set modulo_atual = titulo %}
+{% endif %}
 <div class='container-fluid'>
 <div class='row'>
-<nav class='col-2 sidebar'>
-<h4>SIGAB</h4>
-<hr>
-<a href='/'>Dashboard</a>
-<a href='/eleitores'>Eleitores</a>
-<a href='/demandas'>Demandas</a>
-<a href='/agenda'>Agenda</a>
+<nav class='col-md-3 col-lg-2 sidebar px-0'>
+    <div class="sidebar-marca">
+        <img src="/static/img/logo-horizontal.png" alt="conecta360 — Gestão Inteligente de Gabinetes" class="sidebar-logo">
+    </div>
+    <ul class="sidebar-nav">
+        <li>
+            <a href="/" class="{% if caminho == '/' %}ativo{% endif %}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg>
+                Dashboard
+            </a>
+        </li>
+        <li>
+            <a href="/eleitores" class="{% if caminho.startswith('/eleitores') %}ativo{% endif %}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"></path></svg>
+                Eleitores
+            </a>
+        </li>
+        <li>
+            <a href="/demandas" class="{% if caminho.startswith('/demandas') %}ativo{% endif %}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"></rect><path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"></path><path d="M9 11h6M9 15h6M9 19h3"></path></svg>
+                Demandas
+            </a>
+        </li>
+        <li>
+            <a href="/agenda" class="{% if caminho.startswith('/agenda') %}ativo{% endif %}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>
+                Agenda
+            </a>
+        </li>
+    </ul>
+    <div class="sidebar-rodape">conecta360</div>
 </nav>
-<main class='col-10 p-4'>
+<main class='col-md-9 col-lg-10 p-4'>
+    <header class="topbar">
+        <div>
+            <div class="topbar-breadcrumb">
+                <a href="/">Início</a>{% if modulo_atual != 'Dashboard' %} / {{ modulo_atual }}{% endif %}{% if titulo and titulo != modulo_atual %} / {{ titulo }}{% endif %}
+            </div>
+            <h1 class="topbar-titulo">{{ titulo }}</h1>
+        </div>
+        <div class="topbar-acoes">
+            <div class="topbar-busca">
+                <input type="search" placeholder="Pesquisar..." aria-label="Pesquisar" disabled>
+            </div>
+            <div class="topbar-usuario" title="Área do usuário (em breve)">U</div>
+        </div>
+    </header>
 {% block conteudo %}{% endblock %}
 </main>
 </div>
