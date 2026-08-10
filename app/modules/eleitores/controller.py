@@ -1,12 +1,13 @@
-from datetime import date
+from datetime import date, datetime
 from types import SimpleNamespace
 
-from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.services.eleitor_csv_service import EleitorCsvService
 from app.services.eleitor_service import EleitorService
 
 router = APIRouter(prefix="/eleitores", tags=["Eleitores"])
@@ -98,6 +99,51 @@ def criar(
             status_code=400,
         )
     return flash_message("Eleitor cadastrado.", "success")
+
+
+@router.get("/exportar")
+def exportar_csv(db: Session = Depends(get_db)):
+    conteudo = EleitorCsvService.exportar(db)
+    nome_arquivo = f"eleitores_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
+    return Response(
+        content=conteudo,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{nome_arquivo}"'},
+    )
+
+
+@router.get("/importar/modelo")
+def modelo_csv():
+    conteudo = EleitorCsvService.modelo_vazio()
+    return Response(
+        content=conteudo,
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="modelo_eleitores.csv"'},
+    )
+
+
+@router.get("/importar", response_class=HTMLResponse)
+def importar_pagina(request: Request):
+    return templates.TemplateResponse(
+        request=request,
+        name="eleitores/importar.html",
+        context={"titulo": "Importar eleitores", "resultado": None},
+    )
+
+
+@router.post("/importar", response_class=HTMLResponse)
+async def importar_csv(
+    request: Request,
+    arquivo: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    conteudo = await arquivo.read()
+    resultado = EleitorCsvService.importar(db, conteudo)
+    return templates.TemplateResponse(
+        request=request,
+        name="eleitores/importar.html",
+        context={"titulo": "Importar eleitores", "resultado": resultado},
+    )
 
 
 @router.get("/{eleitor_id}", response_class=HTMLResponse)

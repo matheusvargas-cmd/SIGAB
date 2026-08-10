@@ -55,6 +55,10 @@ class EleitorService:
         return list(db.scalars(consulta).all())
 
     @staticmethod
+    def listar_todos(db: Session) -> list[Eleitor]:
+        return list(db.scalars(select(Eleitor).order_by(Eleitor.nome)).all())
+
+    @staticmethod
     def criar(
         db: Session,
         nome: str,

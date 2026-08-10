@@ -1,0 +1,57 @@
+{% extends 'shared/base.html' %}
+
+{% block conteudo %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">Importar eleitores</h2>
+    <a class="btn btn-outline-secondary" href="/eleitores">Voltar</a>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body p-4">
+        <p class="mb-2">Selecione um arquivo CSV com os eleitores a importar.</p>
+        <ul class="text-muted small mb-3">
+            <li>A coluna <strong>nome</strong> é obrigatória; as demais colunas são opcionais.</li>
+            <li>Aceita separador vírgula (,) ou ponto e vírgula (;) — detectado automaticamente.</li>
+            <li>Aceita arquivos em UTF-8 ou UTF-8 com BOM (padrão de exportação do Excel).</li>
+            <li>Eleitores já cadastrados (mesmo nome e telefone) são identificados e ignorados — nada é sobrescrito ou duplicado.</li>
+        </ul>
+        <p class="mb-3"><a href="/eleitores/importar/modelo">Baixar modelo de CSV em branco</a></p>
+        <form method="post" action="/eleitores/importar" enctype="multipart/form-data" class="d-flex flex-wrap gap-2 align-items-center">
+            <input class="form-control" style="max-width: 360px;" type="file" name="arquivo" accept=".csv,text/csv" required>
+            <button class="btn btn-primary" type="submit">Importar</button>
+        </form>
+    </div>
+</div>
+
+{% if resultado %}
+<div class="card">
+    <div class="card-header">Resultado da importação</div>
+    <div class="card-body p-4">
+        {% if resultado.erro_arquivo %}
+        <div class="alert alert-danger mb-0" role="alert">{{ resultado.erro_arquivo }}</div>
+        {% else %}
+        <p class="mb-3">
+            <strong>{{ resultado.processados }}</strong> registros processados ·
+            <strong>{{ resultado.importados }}</strong> novos eleitores ·
+            <strong>{{ resultado.duplicados }}</strong> duplicados ignorados ·
+            <strong>{{ resultado.erros|length }}</strong> com erro
+        </p>
+        {% if resultado.erros %}
+        <div class="table-responsive">
+            <table class="table table-sm mb-0">
+                <thead>
+                    <tr><th>Linha</th><th>Motivo</th></tr>
+                </thead>
+                <tbody>
+                    {% for numero, motivo in resultado.erros %}
+                    <tr><td>{{ numero }}</td><td>{{ motivo }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

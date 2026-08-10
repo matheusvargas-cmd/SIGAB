@@ -211,6 +211,37 @@ Importação do sistema Meu Mandato.
 
 ---
 
+# Release 0.7.0
+
+## Status
+
+Concluída
+
+## Data
+
+10/08/2026
+
+## Objetivo
+
+Importação e exportação de Eleitores via CSV.
+
+### Funcionalidades
+
+- Exportação da base completa de Eleitores para CSV (UTF-8 com BOM, compatível com Excel).
+- Importação de Eleitores via CSV, com detecção automática de delimitador (`,` ou `;`).
+- Modelo de CSV em branco para download.
+- Reaproveita as regras de validação e duplicidade já existentes em `EleitorService` — nenhuma regra nova.
+- Resumo da importação (processados, novos, duplicados ignorados, erros por linha) e tolerância a linhas inválidas sem interromper o processamento.
+
+### Alterações
+
+- `EleitorService.listar_todos()` adicionado para a exportação.
+- `EleitorCsvService` criado para concentrar a lógica de leitura/escrita de CSV.
+- Rotas `/eleitores/exportar`, `/eleitores/importar` e `/eleitores/importar/modelo` adicionadas ao controller de Eleitores.
+- Botões "Importar CSV" / "Exportar CSV" na listagem de Eleitores.
+
+---
+
 # Histórico Futuro
 
 Todas as novas versões deverão seguir o padrão:
