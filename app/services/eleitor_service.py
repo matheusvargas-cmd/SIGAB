@@ -59,6 +59,30 @@ class EleitorService:
         return list(db.scalars(select(Eleitor).order_by(Eleitor.nome)).all())
 
     @staticmethod
+    def listar_cidades(db: Session) -> list[str]:
+        consulta = (
+            select(Eleitor.cidade)
+            .where(Eleitor.cidade.isnot(None))
+            .distinct()
+            .order_by(Eleitor.cidade)
+        )
+        return [cidade for cidade in db.scalars(consulta).all() if cidade]
+
+    @staticmethod
+    def relatorio_por_bairro(db: Session, cidade: str | None = None) -> list[dict]:
+        consulta = select(Eleitor.bairro, func.count()).group_by(Eleitor.bairro)
+        if cidade:
+            consulta = consulta.where(Eleitor.cidade == cidade)
+
+        linhas = db.execute(consulta).all()
+        resultado = [
+            {"rotulo": bairro or "Não informado", "quantidade": quantidade}
+            for bairro, quantidade in linhas
+        ]
+        resultado.sort(key=lambda item: item["quantidade"], reverse=True)
+        return resultado
+
+    @staticmethod
     def criar(
         db: Session,
         nome: str,

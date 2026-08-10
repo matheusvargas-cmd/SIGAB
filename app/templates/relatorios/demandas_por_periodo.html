@@ -1,0 +1,53 @@
+{% extends 'shared/base.html' %}
+
+{% block conteudo %}
+<div class="d-flex justify-content-between align-items-center mb-4 no-print">
+    <h2 class="mb-0">Demandas por período</h2>
+    <a class="btn btn-outline-secondary" href="/relatorios">Voltar</a>
+</div>
+
+<form class="row g-2 align-items-end mb-4 no-print" method="get" action="/relatorios/demandas-por-periodo">
+    <div class="col-auto">
+        <label class="form-label" for="data_inicio">De</label>
+        <input class="form-control" type="date" id="data_inicio" name="data_inicio" value="{{ data_inicio.isoformat() if data_inicio else '' }}">
+    </div>
+    <div class="col-auto">
+        <label class="form-label" for="data_fim">Até</label>
+        <input class="form-control" type="date" id="data_fim" name="data_fim" value="{{ data_fim.isoformat() if data_fim else '' }}">
+    </div>
+    <div class="col-auto">
+        <label class="form-label" for="status">Status</label>
+        <select class="form-select" id="status" name="status">
+            <option value="">Todos</option>
+            {% for opcao in status_opcoes %}
+            <option value="{{ opcao }}" {% if status == opcao %}selected{% endif %}>{{ opcao }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-auto">
+        <label class="form-label" for="categoria">Categoria</label>
+        <select class="form-select" id="categoria" name="categoria">
+            <option value="">Todas</option>
+            {% for opcao in categorias %}
+            <option value="{{ opcao }}" {% if categoria == opcao %}selected{% endif %}>{{ opcao }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-auto">
+        <button class="btn btn-primary" type="submit">Gerar</button>
+    </div>
+    <div class="col-auto">
+        <a class="btn btn-outline-secondary" href="/relatorios/demandas-por-periodo/exportar?{{ query_export }}">Exportar CSV</a>
+    </div>
+    <div class="col-auto">
+        <button class="btn btn-outline-secondary" type="button" onclick="window.print()">Imprimir</button>
+    </div>
+</form>
+
+<h4 class="d-none d-print-block mb-3">Demandas por período</h4>
+
+<p class="text-muted">Total no período: <strong>{{ total }}</strong> · mês no formato AAAA-MM</p>
+
+{% set rotulo_coluna = 'Mês' %}
+{% include 'relatorios/_tabela_rotulo_quantidade.html' %}
+{% endblock %}

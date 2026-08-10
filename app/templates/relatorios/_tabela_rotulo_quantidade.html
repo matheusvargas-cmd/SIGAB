@@ -1,0 +1,24 @@
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th class="ps-3">{{ rotulo_coluna }}</th>
+                        <th class="text-end pe-3">Quantidade</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in dados %}
+                    <tr>
+                        <td class="ps-3">{{ item.rotulo }}</td>
+                        <td class="text-end pe-3">{{ item.quantidade }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td class="text-center text-muted py-4" colspan="2">Nenhum dado encontrado.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

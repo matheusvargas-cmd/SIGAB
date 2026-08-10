@@ -21,6 +21,8 @@
 {% set modulo_atual = 'Demandas' %}
 {% elif caminho.startswith('/agenda') %}
 {% set modulo_atual = 'Agenda' %}
+{% elif caminho.startswith('/relatorios') %}
+{% set modulo_atual = 'Relatórios' %}
 {% else %}
 {% set modulo_atual = titulo %}
 {% endif %}
@@ -53,6 +55,12 @@
             <a href="/agenda" class="{% if caminho.startswith('/agenda') %}ativo{% endif %}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>
                 Agenda
+            </a>
+        </li>
+        <li>
+            <a href="/relatorios" class="{% if caminho.startswith('/relatorios') %}ativo{% endif %}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="12" width="4" height="8" rx="1"></rect><rect x="10" y="7" width="4" height="13" rx="1"></rect><rect x="16" y="3" width="4" height="17" rx="1"></rect></svg>
+                Relatórios
             </a>
         </li>
     </ul>

@@ -84,6 +84,23 @@ class AgendaService:
         return list(db.scalars(consulta).all())
 
     @staticmethod
+    def relatorio_por_periodo(
+        db: Session,
+        data_inicio: date | None = None,
+        data_fim: date | None = None,
+        status: str | None = None,
+    ) -> list[Agenda]:
+        consulta = select(Agenda).options(joinedload(Agenda.eleitor))
+        if data_inicio:
+            consulta = consulta.where(Agenda.inicio >= datetime.combine(data_inicio, time.min))
+        if data_fim:
+            consulta = consulta.where(Agenda.inicio <= datetime.combine(data_fim, time.max))
+        if status:
+            consulta = consulta.where(Agenda.status == status)
+        consulta = consulta.order_by(Agenda.inicio)
+        return list(db.scalars(consulta).unique().all())
+
+    @staticmethod
     def criar(
         db: Session,
         titulo: str,

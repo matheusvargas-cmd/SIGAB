@@ -1,0 +1,129 @@
+{% extends 'shared/base.html' %}
+
+{% block conteudo %}
+{% set status_classes = {
+    'Aberta': 'text-bg-primary',
+    'Em andamento': 'text-bg-warning',
+    'Aguardando terceiros': 'badge-laranja',
+    'Concluída': 'text-bg-success',
+    'Cancelada': 'text-bg-danger',
+} %}
+{% set prioridade_classes = {
+    'Baixa': 'text-bg-secondary',
+    'Normal': 'text-bg-primary',
+    'Alta': 'badge-laranja',
+    'Urgente': 'text-bg-danger',
+} %}
+
+<div class="d-flex justify-content-between align-items-center mb-4 no-print">
+    <h2 class="mb-0">Demandas por eleitor</h2>
+    <a class="btn btn-outline-secondary" href="/relatorios">Voltar</a>
+</div>
+
+<form class="row g-2 mb-4 no-print" method="get" action="/relatorios/demandas-por-eleitor">
+    <div class="col-sm-8 col-md-6">
+        <label class="visually-hidden" for="pesquisa">Pesquisar eleitor</label>
+        <input class="form-control" id="pesquisa" name="pesquisa" value="{{ pesquisa }}" placeholder="Nome, telefone, WhatsApp, cidade ou bairro do eleitor">
+    </div>
+    <div class="col-auto">
+        <button class="btn btn-outline-primary" type="submit">Pesquisar</button>
+    </div>
+</form>
+
+{% if eleitor %}
+<h4 class="d-none d-print-block mb-3">Demandas por eleitor</h4>
+
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        Eleitor
+        <span class="no-print">
+            <a class="btn btn-outline-secondary btn-sm" href="/relatorios/demandas-por-eleitor/exportar?eleitor_id={{ eleitor.id }}">Exportar CSV</a>
+            <button class="btn btn-outline-secondary btn-sm" type="button" onclick="window.print()">Imprimir</button>
+        </span>
+    </div>
+    <div class="card-body">
+        <dl class="row mb-0">
+            <dt class="col-sm-3">Nome</dt>
+            <dd class="col-sm-9">{{ eleitor.nome }}</dd>
+
+            <dt class="col-sm-3">Telefone</dt>
+            <dd class="col-sm-9">{{ eleitor.telefone or '-' }}</dd>
+
+            <dt class="col-sm-3">Bairro/Cidade</dt>
+            <dd class="col-sm-9 mb-0">{{ eleitor.bairro or '-' }} / {{ eleitor.cidade or '-' }}</dd>
+        </dl>
+    </div>
+</div>
+
+<p class="text-muted">Total de demandas: <strong>{{ demandas|length }}</strong></p>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th class="ps-3">Prioridade</th>
+                        <th>Status</th>
+                        <th>Título</th>
+                        <th>Categoria</th>
+                        <th>Data de abertura</th>
+                        <th class="text-end pe-3">Prazo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for demanda in demandas %}
+                    <tr>
+                        <td class="ps-3"><span class="badge {{ prioridade_classes.get(demanda.prioridade, 'text-bg-secondary') }}">{{ demanda.prioridade }}</span></td>
+                        <td><span class="badge {{ status_classes.get(demanda.status, 'text-bg-secondary') }}">{{ demanda.status }}</span></td>
+                        <td>{{ demanda.titulo }}</td>
+                        <td>{{ demanda.categoria or '-' }}</td>
+                        <td>{{ demanda.data_abertura.strftime('%d/%m/%Y') if demanda.data_abertura else '-' }}</td>
+                        <td class="text-end pe-3">{{ demanda.prazo.strftime('%d/%m/%Y') if demanda.prazo else '-' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td class="text-center text-muted py-4" colspan="6">Este eleitor ainda não possui demandas.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% elif resultados_busca %}
+<div class="card no-print">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th class="ps-3">Nome</th>
+                        <th>Telefone</th>
+                        <th>Bairro</th>
+                        <th>Cidade</th>
+                        <th class="text-end pe-3">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for resultado in resultados_busca %}
+                    <tr>
+                        <td class="ps-3">{{ resultado.nome }}</td>
+                        <td>{{ resultado.telefone or '-' }}</td>
+                        <td>{{ resultado.bairro or '-' }}</td>
+                        <td>{{ resultado.cidade or '-' }}</td>
+                        <td class="text-end pe-3">
+                            <a class="btn btn-sm btn-outline-primary" href="/relatorios/demandas-por-eleitor?eleitor_id={{ resultado.id }}">Ver relatório</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% elif pesquisa %}
+<p class="text-muted no-print">Nenhum eleitor encontrado para "{{ pesquisa }}".</p>
+{% else %}
+<p class="text-muted no-print">Pesquise um eleitor para ver o histórico completo de demandas dele.</p>
+{% endif %}
+{% endblock %}

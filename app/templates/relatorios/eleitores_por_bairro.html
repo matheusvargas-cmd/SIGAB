@@ -1,0 +1,36 @@
+{% extends 'shared/base.html' %}
+
+{% block conteudo %}
+<div class="d-flex justify-content-between align-items-center mb-4 no-print">
+    <h2 class="mb-0">Eleitores por bairro</h2>
+    <a class="btn btn-outline-secondary" href="/relatorios">Voltar</a>
+</div>
+
+<form class="row g-2 align-items-end mb-4 no-print" method="get" action="/relatorios/eleitores-por-bairro">
+    <div class="col-auto">
+        <label class="form-label" for="cidade">Cidade</label>
+        <select class="form-select" id="cidade" name="cidade">
+            <option value="">Todas</option>
+            {% for opcao in cidades %}
+            <option value="{{ opcao }}" {% if cidade == opcao %}selected{% endif %}>{{ opcao }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-auto">
+        <button class="btn btn-primary" type="submit">Gerar</button>
+    </div>
+    <div class="col-auto">
+        <a class="btn btn-outline-secondary" href="/relatorios/eleitores-por-bairro/exportar?{{ query_export }}">Exportar CSV</a>
+    </div>
+    <div class="col-auto">
+        <button class="btn btn-outline-secondary" type="button" onclick="window.print()">Imprimir</button>
+    </div>
+</form>
+
+<h4 class="d-none d-print-block mb-3">Eleitores por bairro</h4>
+
+<p class="text-muted">Total: <strong>{{ total }}</strong></p>
+
+{% set rotulo_coluna = 'Bairro' %}
+{% include 'relatorios/_tabela_rotulo_quantidade.html' %}
+{% endblock %}

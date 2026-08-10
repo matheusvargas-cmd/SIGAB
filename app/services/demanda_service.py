@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, time
 from math import ceil
 from typing import Any
 
@@ -111,6 +111,97 @@ class DemandaService:
             .limit(limite)
         )
         return list(db.scalars(consulta).unique().all())
+
+    @staticmethod
+    def relatorio_por_status(
+        db: Session,
+        data_inicio: date | None = None,
+        data_fim: date | None = None,
+        categoria: str | None = None,
+        prioridade: str | None = None,
+    ) -> list[dict]:
+        consulta = select(Demanda.status, func.count()).group_by(Demanda.status)
+        consulta = DemandaService._aplicar_filtros_relatorio(
+            consulta, data_inicio, data_fim, categoria=categoria, prioridade=prioridade
+        )
+        contagem = dict(db.execute(consulta).all())
+        return [
+            {"rotulo": status, "quantidade": contagem.get(status, 0)}
+            for status in STATUS_OPCOES
+        ]
+
+    @staticmethod
+    def relatorio_por_categoria(
+        db: Session,
+        data_inicio: date | None = None,
+        data_fim: date | None = None,
+        status: str | None = None,
+        prioridade: str | None = None,
+    ) -> list[dict]:
+        consulta = select(Demanda.categoria, func.count()).group_by(Demanda.categoria)
+        consulta = DemandaService._aplicar_filtros_relatorio(
+            consulta, data_inicio, data_fim, status=status, prioridade=prioridade
+        )
+        contagem = dict(db.execute(consulta).all())
+        resultado = [
+            {"rotulo": categoria, "quantidade": contagem.get(categoria, 0)}
+            for categoria in CATEGORIAS
+        ]
+        resultado.sort(key=lambda item: item["quantidade"], reverse=True)
+        return resultado
+
+    @staticmethod
+    def relatorio_por_periodo(
+        db: Session,
+        data_inicio: date | None = None,
+        data_fim: date | None = None,
+        status: str | None = None,
+        categoria: str | None = None,
+    ) -> list[dict]:
+        consulta = select(Demanda.data_abertura)
+        consulta = DemandaService._aplicar_filtros_relatorio(
+            consulta, data_inicio, data_fim, status=status, categoria=categoria
+        )
+        contagem: dict[str, int] = {}
+        for (data_abertura,) in db.execute(consulta).all():
+            if not data_abertura:
+                continue
+            chave = data_abertura.strftime("%Y-%m")
+            contagem[chave] = contagem.get(chave, 0) + 1
+        return [
+            {"rotulo": chave, "quantidade": quantidade}
+            for chave, quantidade in sorted(contagem.items())
+        ]
+
+    @staticmethod
+    def relatorio_por_eleitor(db: Session, eleitor_id: int) -> list[Demanda]:
+        consulta = (
+            select(Demanda)
+            .where(Demanda.eleitor_id == eleitor_id)
+            .order_by(Demanda.data_abertura.desc())
+        )
+        return list(db.scalars(consulta).all())
+
+    @staticmethod
+    def _aplicar_filtros_relatorio(
+        consulta,
+        data_inicio: date | None = None,
+        data_fim: date | None = None,
+        categoria: str | None = None,
+        prioridade: str | None = None,
+        status: str | None = None,
+    ):
+        if data_inicio:
+            consulta = consulta.where(Demanda.data_abertura >= datetime.combine(data_inicio, time.min))
+        if data_fim:
+            consulta = consulta.where(Demanda.data_abertura <= datetime.combine(data_fim, time.max))
+        if categoria:
+            consulta = consulta.where(Demanda.categoria == categoria)
+        if prioridade:
+            consulta = consulta.where(Demanda.prioridade == prioridade)
+        if status:
+            consulta = consulta.where(Demanda.status == status)
+        return consulta
 
     @staticmethod
     def criar(

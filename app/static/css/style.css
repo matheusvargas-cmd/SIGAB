@@ -610,3 +610,29 @@ a:hover {
     width: 100%;
   }
 }
+
+/* ---------- Impressão de relatórios ---------- */
+
+@media print {
+  .container-fluid,
+  .row {
+    display: block !important;
+  }
+
+  main {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  body {
+    background: #fff !important;
+  }
+
+  .sidebar,
+  .topbar,
+  .no-print {
+    display: none !important;
+  }
+}

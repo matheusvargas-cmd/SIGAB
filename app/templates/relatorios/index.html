@@ -1,0 +1,76 @@
+{% extends 'shared/base.html' %}
+
+{% block conteudo %}
+<div class="mb-4">
+    <h2 class="mb-0">Relatórios</h2>
+    <p class="text-muted mb-0">Análises detalhadas com filtros, exportação em CSV e impressão.</p>
+</div>
+
+<div class="row g-3">
+    <div class="col-12">
+        <p class="form-secao-titulo mb-2">Eleitores</p>
+    </div>
+    <div class="col-md-6 col-xl-4">
+        <div class="card h-100">
+            <div class="card-body p-4">
+                <h3 class="h6 mb-2">Eleitores por bairro</h3>
+                <p class="text-muted small mb-3">Distribuição da base de eleitores por bairro.</p>
+                <a class="btn btn-outline-primary btn-sm" href="/relatorios/eleitores-por-bairro">Abrir</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <p class="form-secao-titulo mb-2">Demandas</p>
+    </div>
+    <div class="col-md-6 col-xl-4">
+        <div class="card h-100">
+            <div class="card-body p-4">
+                <h3 class="h6 mb-2">Demandas por status</h3>
+                <p class="text-muted small mb-3">Quantidade de demandas em cada etapa do fluxo.</p>
+                <a class="btn btn-outline-primary btn-sm" href="/relatorios/demandas-por-status">Abrir</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-xl-4">
+        <div class="card h-100">
+            <div class="card-body p-4">
+                <h3 class="h6 mb-2">Demandas por categoria</h3>
+                <p class="text-muted small mb-3">Quais tipos de demanda são mais recorrentes.</p>
+                <a class="btn btn-outline-primary btn-sm" href="/relatorios/demandas-por-categoria">Abrir</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-xl-4">
+        <div class="card h-100">
+            <div class="card-body p-4">
+                <h3 class="h6 mb-2">Demandas por período</h3>
+                <p class="text-muted small mb-3">Evolução mensal de demandas abertas.</p>
+                <a class="btn btn-outline-primary btn-sm" href="/relatorios/demandas-por-periodo">Abrir</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-xl-4">
+        <div class="card h-100">
+            <div class="card-body p-4">
+                <h3 class="h6 mb-2">Demandas por eleitor</h3>
+                <p class="text-muted small mb-3">Histórico completo de demandas de um cidadão específico.</p>
+                <a class="btn btn-outline-primary btn-sm" href="/relatorios/demandas-por-eleitor">Abrir</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <p class="form-secao-titulo mb-2">Agenda</p>
+    </div>
+    <div class="col-md-6 col-xl-4">
+        <div class="card h-100">
+            <div class="card-body p-4">
+                <h3 class="h6 mb-2">Compromissos por período</h3>
+                <p class="text-muted small mb-3">Pauta de compromissos em um intervalo de datas.</p>
+                <a class="btn btn-outline-primary btn-sm" href="/relatorios/compromissos-por-periodo">Abrir</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
