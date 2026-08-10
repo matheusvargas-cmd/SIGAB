@@ -345,6 +345,10 @@ a:hover {
   background-color: rgba(25, 118, 210, 0.05);
 }
 
+.linha-passada {
+  opacity: 0.6;
+}
+
 .table td.text-muted,
 .table .empty-state {
   color: var(--c360-cinza-texto);

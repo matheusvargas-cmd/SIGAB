@@ -105,7 +105,7 @@ Nunca conter regras de negócio.
 
 ## Agenda
 
-Status: ⏳
+Status: ✅ Concluído
 
 - Compromissos
 - Visitas

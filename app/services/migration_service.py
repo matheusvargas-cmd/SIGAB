@@ -47,3 +47,23 @@ class MigrationService:
                 if nome not in colunas:
                     conexao.execute(text(f"ALTER TABLE demandas ADD COLUMN {nome} {tipo}"))
                     logger.info("Coluna %s adicionada à tabela demandas.", nome)
+
+    @staticmethod
+    def atualizar_schema_agenda() -> None:
+        inspector = inspect(engine)
+        if "agenda" not in inspector.get_table_names():
+            return
+
+        colunas = {coluna["name"] for coluna in inspector.get_columns("agenda")}
+        novas_colunas = {
+            "eleitor_id": "INTEGER",
+            "responsavel": "VARCHAR(150)",
+            "telefone_contato": "VARCHAR(30)",
+            "status": "VARCHAR(30) DEFAULT 'Agendado'",
+        }
+
+        with engine.begin() as conexao:
+            for nome, tipo in novas_colunas.items():
+                if nome not in colunas:
+                    conexao.execute(text(f"ALTER TABLE agenda ADD COLUMN {nome} {tipo}"))
+                    logger.info("Coluna %s adicionada à tabela agenda.", nome)

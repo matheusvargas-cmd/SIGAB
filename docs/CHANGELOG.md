@@ -164,7 +164,11 @@ Dashboard completo.
 
 ## Status
 
-Planejada
+Concluída
+
+## Data
+
+09/08/2026
 
 ## Objetivo
 
@@ -172,11 +176,19 @@ Agenda.
 
 ### Funcionalidades
 
-- Compromissos
-- Visitas
-- Reuniões
-- Eventos
-- Lembretes
+- Cadastro, listagem, edição, visualização e exclusão de compromissos
+- Pesquisa por título, descrição, local, responsável, status e eleitor
+- Paginação (20 por página) e ordenação cronológica (futuros primeiro, passados continuam acessíveis)
+- Destaque visual para compromisso de hoje e compromissos já passados
+- Status: Agendado, Confirmado, Realizado, Cancelado
+- Vínculo opcional com Eleitor
+
+### Alterações
+
+- Model `Agenda` completado com `eleitor_id` (opcional), `responsavel`, `telefone_contato` e `status`.
+- `AgendaService` criado seguindo o padrão de `EleitorService`/`DemandaService`.
+- `MigrationService.atualizar_schema_agenda()` para compatibilidade com banco SQLite existente.
+- Templates `agenda/lista.html`, `agenda/formulario.html` e `agenda/visualizar.html` usando a identidade visual Conecta360 já existente.
 
 ---
 

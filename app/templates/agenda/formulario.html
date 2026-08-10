@@ -1,0 +1,118 @@
+{% extends 'shared/base.html' %}
+
+{% block conteudo %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">{{ titulo }}</h2>
+    <a class="btn btn-outline-secondary" href="/agenda">Voltar</a>
+</div>
+
+{% if erro %}
+<div class="alert alert-danger" role="alert">{{ erro }}</div>
+{% endif %}
+
+<form class="card" method="post" action="{% if compromisso and compromisso.id %}/agenda/{{ compromisso.id }}/editar{% else %}/agenda/novo{% endif %}">
+    <div class="card-body p-4">
+        <div class="row g-3">
+            <div class="col-md-8">
+                <label class="form-label" for="titulo">Título *</label>
+                <input class="form-control" id="titulo" name="titulo" value="{{ compromisso.titulo if compromisso else '' }}" maxlength="150" minlength="5" required autofocus>
+                <div class="form-text">Mínimo de 5 caracteres.</div>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="status">Status *</label>
+                <select class="form-select" id="status" name="status" required>
+                    {% for opcao in status_opcoes %}
+                    <option value="{{ opcao }}" {% if (compromisso and compromisso.status == opcao) or (not compromisso and opcao == 'Agendado') %}selected{% endif %}>{{ opcao }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-12">
+                <p class="form-secao-titulo mb-0">Data e horário</p>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="data">Data *</label>
+                <input class="form-control" id="data" name="data" type="date" value="{{ compromisso.data.isoformat() if compromisso and compromisso.data else '' }}" required>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="hora_inicio">Horário *</label>
+                <input class="form-control" id="hora_inicio" name="hora_inicio" type="time" value="{{ compromisso.hora_inicio.strftime('%H:%M') if compromisso and compromisso.hora_inicio else '' }}" required>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="hora_fim">Término</label>
+                <input class="form-control" id="hora_fim" name="hora_fim" type="time" value="{{ compromisso.hora_fim.strftime('%H:%M') if compromisso and compromisso.hora_fim else '' }}">
+            </div>
+
+            <div class="col-12">
+                <p class="form-secao-titulo mb-0">Local e responsável</p>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="local">Local</label>
+                <input class="form-control" id="local" name="local" value="{{ compromisso.local if compromisso and compromisso.local else '' }}" maxlength="150">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="responsavel">Responsável</label>
+                <input class="form-control" id="responsavel" name="responsavel" value="{{ compromisso.responsavel if compromisso and compromisso.responsavel else '' }}" maxlength="150">
+            </div>
+
+            <div class="col-12">
+                <p class="form-secao-titulo mb-0">Eleitor relacionado (opcional)</p>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="eleitor_id">Eleitor</label>
+                <select class="form-select" id="eleitor_id" name="eleitor_id">
+                    <option value="">Nenhum</option>
+                    {% for opcao in eleitores %}
+                    <option value="{{ opcao.id }}" {% if compromisso and compromisso.eleitor_id == opcao.id %}selected{% endif %}>{{ opcao.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="telefone_contato">Telefone/contato</label>
+                <input class="form-control" id="telefone_contato" name="telefone_contato" value="{{ compromisso.telefone_contato if compromisso and compromisso.telefone_contato else '' }}" maxlength="15" placeholder="(00) 00000-0000" inputmode="tel">
+            </div>
+
+            <div class="col-12">
+                <label class="form-label" for="descricao">Descrição / observações</label>
+                <textarea class="form-control" id="descricao" name="descricao" rows="3">{{ compromisso.descricao if compromisso and compromisso.descricao else '' }}</textarea>
+            </div>
+        </div>
+    </div>
+    <div class="card-footer bg-white text-end">
+        <a class="btn btn-outline-secondary" href="/agenda">Cancelar</a>
+        <button class="btn btn-primary" type="submit">Salvar</button>
+    </div>
+</form>
+
+<script>
+(function () {
+    function formatarTelefone(valor) {
+        const digitos = valor.replace(/\D/g, '').slice(0, 11);
+        if (digitos.length > 10) {
+            return digitos.replace(/^(\d{2})(\d{5})(\d{0,4}).*/, function (_, ddd, parte1, parte2) {
+                return parte2 ? '(' + ddd + ') ' + parte1 + '-' + parte2 : '(' + ddd + ') ' + parte1;
+            });
+        }
+        if (digitos.length > 6) {
+            return digitos.replace(/^(\d{2})(\d{4})(\d{0,4}).*/, function (_, ddd, parte1, parte2) {
+                return parte2 ? '(' + ddd + ') ' + parte1 + '-' + parte2 : '(' + ddd + ') ' + parte1;
+            });
+        }
+        if (digitos.length > 2) {
+            return digitos.replace(/^(\d{2})(\d{0,4}).*/, '($1) $2');
+        }
+        if (digitos.length > 0) {
+            return digitos.replace(/^(\d{0,2}).*/, '($1');
+        }
+        return '';
+    }
+
+    const campo = document.getElementById('telefone_contato');
+    if (campo) {
+        campo.addEventListener('input', function () {
+            campo.value = formatarTelefone(campo.value);
+        });
+    }
+})();
+</script>
+{% endblock %}

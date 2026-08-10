@@ -1,0 +1,105 @@
+{% extends 'shared/base.html' %}
+
+{% block conteudo %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+        <h2 class="mb-0">Agenda</h2>
+        <p class="text-muted mb-0">Compromissos, reuniões e visitas do gabinete</p>
+    </div>
+    <a class="btn btn-primary" href="/agenda/novo">Novo compromisso</a>
+</div>
+
+{% if flash_message %}
+<div class="alert alert-{{ flash_category }}" role="alert">{% if flash_category == 'success' %}✔ {% endif %}{{ flash_message }}</div>
+{% endif %}
+
+<form class="row g-2 mb-4" method="get" action="/agenda">
+    <div class="col-sm-8 col-md-6">
+        <label class="visually-hidden" for="pesquisa">Pesquisar compromisso</label>
+        <input class="form-control" id="pesquisa" name="pesquisa" value="{{ pesquisa }}" placeholder="Título, local, responsável, status ou eleitor">
+    </div>
+    <div class="col-auto">
+        <button class="btn btn-outline-primary" type="submit">Pesquisar</button>
+        {% if pesquisa %}<a class="btn btn-outline-secondary" href="/agenda">Limpar</a>{% endif %}
+    </div>
+</form>
+
+{% set status_classes = {
+    'Agendado': 'text-bg-secondary',
+    'Confirmado': 'text-bg-primary',
+    'Realizado': 'text-bg-success',
+    'Cancelado': 'text-bg-danger',
+} %}
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th class="ps-3">Data</th>
+                        <th>Horário</th>
+                        <th>Título</th>
+                        <th>Local</th>
+                        <th>Responsável</th>
+                        <th>Status</th>
+                        <th class="text-end pe-3">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for compromisso in compromissos %}
+                    {% set eh_hoje = compromisso.inicio and compromisso.inicio.date() == agora.date() %}
+                    {% set passado = compromisso.inicio and compromisso.inicio < agora %}
+                    <tr class="{% if passado %}linha-passada{% endif %}">
+                        <td class="ps-3 text-nowrap">
+                            {{ compromisso.inicio.strftime('%d/%m/%Y') if compromisso.inicio else '-' }}
+                            {% if eh_hoje %}<span class="badge badge-laranja">Hoje</span>{% endif %}
+                        </td>
+                        <td class="text-nowrap">
+                            {{ compromisso.inicio.strftime('%H:%M') if compromisso.inicio else '-' }}{% if compromisso.fim %} – {{ compromisso.fim.strftime('%H:%M') }}{% endif %}
+                        </td>
+                        <td>{{ compromisso.titulo }}</td>
+                        <td>{{ compromisso.local or '-' }}</td>
+                        <td>{{ compromisso.responsavel or '-' }}</td>
+                        <td><span class="badge {{ status_classes.get(compromisso.status, 'text-bg-secondary') }}">{{ compromisso.status or 'Agendado' }}</span></td>
+                        <td class="text-end pe-3 text-nowrap">
+                            <a class="btn btn-sm btn-outline-secondary" href="/agenda/{{ compromisso.id }}">Visualizar</a>
+                            <a class="btn btn-sm btn-outline-primary" href="/agenda/{{ compromisso.id }}/editar">Editar</a>
+                            <form class="d-inline" method="post" action="/agenda/{{ compromisso.id }}/excluir" onsubmit="return confirm('Confirma a exclusão deste compromisso?');">
+                                <button class="btn btn-sm btn-outline-danger" type="submit">Excluir</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td class="text-center text-muted py-4" colspan="7">Nenhum compromisso encontrado.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<nav class="mt-3" aria-label="Paginação da agenda">
+    <ul class="pagination justify-content-end mb-0">
+        <li class="page-item {% if pagina_atual <= 1 %}disabled{% endif %}">
+            {% if pagina_atual > 1 %}
+            <a class="page-link" href="/agenda?pagina={{ pagina_atual - 1 }}{% if pesquisa %}&pesquisa={{ pesquisa|urlencode }}{% endif %}">Anterior</a>
+            {% else %}
+            <span class="page-link">Anterior</span>
+            {% endif %}
+        </li>
+        {% for numero in range(1, total_paginas + 1) %}
+        <li class="page-item {% if numero == pagina_atual %}active{% endif %}" {% if numero == pagina_atual %}aria-current="page"{% endif %}>
+            <a class="page-link" href="/agenda?pagina={{ numero }}{% if pesquisa %}&pesquisa={{ pesquisa|urlencode }}{% endif %}">{{ numero }}</a>
+        </li>
+        {% endfor %}
+        <li class="page-item {% if pagina_atual >= total_paginas %}disabled{% endif %}">
+            {% if pagina_atual < total_paginas %}
+            <a class="page-link" href="/agenda?pagina={{ pagina_atual + 1 }}{% if pesquisa %}&pesquisa={{ pesquisa|urlencode }}{% endif %}">Próxima</a>
+            {% else %}
+            <span class="page-link">Próxima</span>
+            {% endif %}
+        </li>
+    </ul>
+</nav>
+{% endblock %}
