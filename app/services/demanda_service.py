@@ -26,6 +26,8 @@ CATEGORIAS = [
 STATUS_OPCOES = ["Aberta", "Em andamento", "Aguardando terceiros", "Concluída", "Cancelada"]
 PRIORIDADE_OPCOES = ["Baixa", "Normal", "Alta", "Urgente"]
 
+STATUS_FINALIZADOS = ("Concluída", "Cancelada")
+
 _ORDEM_PRIORIDADE = case(
     (Demanda.prioridade == "Urgente", 0),
     (Demanda.prioridade == "Alta", 1),
@@ -83,6 +85,32 @@ class DemandaService:
     @staticmethod
     def listar_eleitores_para_selecao(db: Session) -> list[Eleitor]:
         return list(db.scalars(select(Eleitor).order_by(Eleitor.nome)).all())
+
+    @staticmethod
+    def contar_em_andamento(db: Session) -> int:
+        consulta = (
+            select(func.count())
+            .select_from(Demanda)
+            .where(Demanda.status.notin_(STATUS_FINALIZADOS))
+        )
+        return db.scalar(consulta) or 0
+
+    @staticmethod
+    def contar_concluidas(db: Session) -> int:
+        consulta = (
+            select(func.count()).select_from(Demanda).where(Demanda.status == "Concluída")
+        )
+        return db.scalar(consulta) or 0
+
+    @staticmethod
+    def listar_recentes(db: Session, limite: int = 5) -> list[Demanda]:
+        consulta = (
+            select(Demanda)
+            .options(joinedload(Demanda.eleitor))
+            .order_by(Demanda.data_abertura.desc())
+            .limit(limite)
+        )
+        return list(db.scalars(consulta).unique().all())
 
     @staticmethod
     def criar(

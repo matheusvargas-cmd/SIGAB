@@ -67,6 +67,23 @@ class AgendaService:
         return list(db.scalars(select(Eleitor).order_by(Eleitor.nome)).all())
 
     @staticmethod
+    def contar_futuros(db: Session) -> int:
+        agora = datetime.now()
+        consulta = select(func.count()).select_from(Agenda).where(Agenda.inicio >= agora)
+        return db.scalar(consulta) or 0
+
+    @staticmethod
+    def listar_proximos(db: Session, limite: int = 5) -> list[Agenda]:
+        agora = datetime.now()
+        consulta = (
+            select(Agenda)
+            .where(Agenda.inicio >= agora)
+            .order_by(Agenda.inicio)
+            .limit(limite)
+        )
+        return list(db.scalars(consulta).all())
+
+    @staticmethod
     def criar(
         db: Session,
         titulo: str,

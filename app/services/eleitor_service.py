@@ -46,6 +46,15 @@ class EleitorService:
         return db.get(Eleitor, eleitor_id)
 
     @staticmethod
+    def contar(db: Session) -> int:
+        return db.scalar(select(func.count()).select_from(Eleitor)) or 0
+
+    @staticmethod
+    def listar_recentes(db: Session, limite: int = 5) -> list[Eleitor]:
+        consulta = select(Eleitor).order_by(Eleitor.id.desc()).limit(limite)
+        return list(db.scalars(consulta).all())
+
+    @staticmethod
     def criar(
         db: Session,
         nome: str,
