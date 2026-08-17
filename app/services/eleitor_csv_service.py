@@ -118,6 +118,128 @@ class EleitorCsvService:
 
         return resultado
 
+    CABECALHO_HISTORICO_OBRIGATORIO = {"Ref Eleitor", "Nome"}
+
+    @staticmethod
+    def importar_historico(db: Session, conteudo: bytes) -> dict:
+        """Importa o CSV histórico do sistema anterior (ex.: municipe.csv).
+
+        Usa `Ref Eleitor` como identificador de idempotência: se já existir
+        um eleitor com o mesmo `ref_historico`, a linha é só contada como
+        "já existente" e nenhum campo é alterado — mesmo padrão usado por
+        `DemandaCsvService`/`AgendaCsvService`. Isso garante que qualquer
+        edição manual feita depois da primeira importação nunca é
+        sobrescrita por uma reimportação.
+        """
+        resultado = {
+            "processados": 0,
+            "novos": 0,
+            "existentes": 0,
+            "ignorados": 0,
+            "erros": [],
+            "erro_arquivo": None,
+        }
+
+        try:
+            texto = conteudo.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            resultado["erro_arquivo"] = (
+                "Não foi possível ler o arquivo como texto UTF-8. "
+                "Salve o CSV em formato UTF-8 e tente novamente."
+            )
+            return resultado
+
+        if not texto.strip():
+            resultado["erro_arquivo"] = "Arquivo CSV vazio."
+            return resultado
+
+        leitor = csv.DictReader(io.StringIO(texto))
+        if not leitor.fieldnames:
+            resultado["erro_arquivo"] = "Arquivo CSV sem cabeçalho."
+            return resultado
+
+        colunas = {coluna.strip() for coluna in leitor.fieldnames if coluna}
+        faltantes = EleitorCsvService.CABECALHO_HISTORICO_OBRIGATORIO - colunas
+        if faltantes:
+            resultado["erro_arquivo"] = (
+                f"O CSV precisa ter as colunas {', '.join(sorted(faltantes))}."
+            )
+            return resultado
+
+        for numero, linha in enumerate(leitor, start=2):
+            resultado["processados"] += 1
+
+            if not any((valor or "").strip() for valor in linha.values() if valor):
+                resultado["ignorados"] += 1
+                continue
+
+            ref_historico_bruto = (linha.get("Ref Eleitor") or "").strip()
+
+            try:
+                if not ref_historico_bruto:
+                    raise ValueError("Ref Eleitor ausente.")
+
+                if EleitorService.obter_por_ref_historico(db, ref_historico_bruto) is not None:
+                    resultado["existentes"] += 1
+                    continue
+
+                dados = EleitorCsvService._mapear_linha_historica(linha)
+                EleitorService.criar(db, **dados)
+                resultado["novos"] += 1
+            except ValueError as error:
+                db.rollback()
+                resultado["erros"].append((numero, str(error)))
+            except Exception:
+                db.rollback()
+                logger.exception(
+                    "Erro inesperado ao importar a linha %s do CSV histórico de eleitores.", numero
+                )
+                resultado["erros"].append((numero, "Erro inesperado ao processar esta linha."))
+
+        return resultado
+
+    @staticmethod
+    def _mapear_linha_historica(linha: dict) -> dict:
+        def valor(chave: str) -> str | None:
+            bruto = linha.get(chave)
+            if bruto is None:
+                return None
+            limpo = bruto.strip()
+            if not limpo or limpo.upper() == "NULL":
+                return None
+            return limpo
+
+        ref_historico = valor("Ref Eleitor")
+        if not ref_historico:
+            raise ValueError("Ref Eleitor ausente.")
+
+        nome = valor("Nome")
+        if not nome:
+            raise ValueError("Nome ausente.")
+
+        nascimento = EleitorCsvService._converter_data(valor("Data Nascimento"))
+
+        partes_endereco = [parte for parte in (valor("Endereço"), valor("Número")) if parte]
+        endereco = ", ".join(partes_endereco) if partes_endereco else None
+        complemento = valor("Complemento")
+        if complemento:
+            endereco = f"{endereco} - {complemento}" if endereco else complemento
+
+        return {
+            "ref_historico": ref_historico,
+            "nome": nome,
+            "apelido": valor("Apelido"),
+            "endereco": endereco,
+            "bairro": valor("Bairro"),
+            "cidade": valor("Cidade"),
+            "nascimento": nascimento,
+            "email": valor("E-mail"),
+            "telefone": valor("Telefones"),
+            "titulo_eleitor": valor("Titulo eleitor"),
+            "zona_eleitoral": valor("Zona eleitoral"),
+            "observacoes": valor("Observação"),
+        }
+
     @staticmethod
     def _detectar_delimitador(texto: str) -> str:
         amostra = "\n".join(texto.splitlines()[:5])

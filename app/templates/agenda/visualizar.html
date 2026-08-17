@@ -9,9 +9,19 @@
 } %}
 
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2 class="mb-0">{{ compromisso.titulo }}</h2>
+    <h2 class="mb-0">
+        {{ compromisso.titulo }}
+        {% if compromisso.demanda_id %}<span class="badge text-bg-info text-dark align-middle">Demanda</span>{% endif %}
+    </h2>
     <a class="btn btn-outline-secondary" href="/agenda">Voltar</a>
 </div>
+
+{% if compromisso.demanda_id %}
+<div class="alert alert-info" role="alert">
+    Compromisso automático gerado a partir de uma demanda.
+    <a href="/demandas/{{ compromisso.demanda_id }}">Abrir demanda</a>
+</div>
+{% endif %}
 
 {% if compromisso.eleitor %}
 <div class="card mb-3">

@@ -12,6 +12,9 @@ class Agenda(Base):
     eleitor_id = Column(Integer, ForeignKey("eleitores.id"), nullable=True)
     eleitor = relationship("Eleitor")
 
+    demanda_id = Column(Integer, ForeignKey("demandas.id"), nullable=True)
+    demanda = relationship("Demanda")
+
     titulo = Column(String(150), nullable=False)
 
     descricao = Column(Text)
@@ -27,3 +30,5 @@ class Agenda(Base):
     telefone_contato = Column(String(30))
 
     status = Column(String(30), default="Agendado")
+
+    ref_historico = Column(String(64))

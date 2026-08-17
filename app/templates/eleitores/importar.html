@@ -23,12 +23,35 @@
     </div>
 </div>
 
+<div class="card mb-4">
+    <div class="card-body p-4">
+        <p class="mb-2">Importar arquivo histórico do sistema anterior (<code>municipe.csv</code>).</p>
+        <ul class="text-muted small mb-3">
+            <li>Formato próprio do sistema anterior (colunas como "Ref Eleitor", "Nome", "Data Nascimento" etc.).</li>
+            <li>Usa a coluna <strong>Ref Eleitor</strong> para identificar eleitores já importados — executar novamente não duplica; um eleitor já existente é apenas contado, sem alterar nenhum dado (inclusive edições manuais feitas depois da importação).</li>
+            <li>CPF não é importado por este arquivo (não existe nessa planilha).</li>
+        </ul>
+        <form method="post" action="/eleitores/importar-historico" enctype="multipart/form-data" class="d-flex flex-wrap gap-2 align-items-center">
+            <input class="form-control" style="max-width: 360px;" type="file" name="arquivo" accept=".csv,text/csv" required>
+            <button class="btn btn-outline-primary" type="submit">Importar histórico</button>
+        </form>
+    </div>
+</div>
+
 {% if resultado %}
 <div class="card">
     <div class="card-header">Resultado da importação</div>
     <div class="card-body p-4">
         {% if resultado.erro_arquivo %}
         <div class="alert alert-danger mb-0" role="alert">{{ resultado.erro_arquivo }}</div>
+        {% elif 'novos' in resultado %}
+        <p class="mb-3">
+            <strong>{{ resultado.processados }}</strong> linhas processadas ·
+            <strong>{{ resultado.novos }}</strong> novos ·
+            <strong>{{ resultado.existentes }}</strong> já existentes ·
+            <strong>{{ resultado.ignorados }}</strong> ignorados ·
+            <strong>{{ resultado.erros|length }}</strong> com erro
+        </p>
         {% else %}
         <p class="mb-3">
             <strong>{{ resultado.processados }}</strong> registros processados ·
@@ -36,7 +59,8 @@
             <strong>{{ resultado.duplicados }}</strong> duplicados ignorados ·
             <strong>{{ resultado.erros|length }}</strong> com erro
         </p>
-        {% if resultado.erros %}
+        {% endif %}
+        {% if not resultado.erro_arquivo and resultado.erros %}
         <div class="table-responsive">
             <table class="table table-sm mb-0">
                 <thead>
@@ -49,7 +73,6 @@
                 </tbody>
             </table>
         </div>
-        {% endif %}
         {% endif %}
     </div>
 </div>

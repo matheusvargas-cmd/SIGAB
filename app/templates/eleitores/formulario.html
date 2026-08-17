@@ -19,19 +19,42 @@
                 <div class="form-text">Mínimo de 3 caracteres.</div>
             </div>
             <div class="col-md-4">
+                <label class="form-label" for="apelido">Apelido</label>
+                <input class="form-control" id="apelido" name="apelido" value="{{ eleitor.apelido if eleitor and eleitor.apelido else '' }}" maxlength="100">
+            </div>
+            <div class="col-md-4">
                 <label class="form-label" for="nascimento">Nascimento</label>
                 <input class="form-control" id="nascimento" name="nascimento" type="date" value="{{ eleitor.nascimento.isoformat() if eleitor and eleitor.nascimento else '' }}">
             </div>
             <div class="col-12">
                 <p class="form-secao-titulo mb-0">Contato</p>
             </div>
-            <div class="col-md-6">
+            <div class="col-md-4">
                 <label class="form-label" for="telefone">Telefone</label>
                 <input class="form-control" id="telefone" name="telefone" value="{{ eleitor.telefone if eleitor and eleitor.telefone else '' }}" maxlength="15" placeholder="(00) 00000-0000" inputmode="tel">
             </div>
-            <div class="col-md-6">
+            <div class="col-md-4">
                 <label class="form-label" for="whatsapp">WhatsApp</label>
                 <input class="form-control" id="whatsapp" name="whatsapp" value="{{ eleitor.whatsapp if eleitor and eleitor.whatsapp else '' }}" maxlength="15" placeholder="(00) 00000-0000" inputmode="tel">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="email">E-mail</label>
+                <input class="form-control" id="email" name="email" type="email" value="{{ eleitor.email if eleitor and eleitor.email else '' }}" maxlength="150">
+            </div>
+            <div class="col-12">
+                <p class="form-secao-titulo mb-0">Documentos eleitorais</p>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="cpf">CPF</label>
+                <input class="form-control" id="cpf" name="cpf" value="{{ eleitor.cpf if eleitor and eleitor.cpf else '' }}" maxlength="14" placeholder="000.000.000-00" inputmode="numeric">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="titulo_eleitor">Título de eleitor</label>
+                <input class="form-control" id="titulo_eleitor" name="titulo_eleitor" value="{{ eleitor.titulo_eleitor if eleitor and eleitor.titulo_eleitor else '' }}" maxlength="12" inputmode="numeric">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="zona_eleitoral">Zona eleitoral</label>
+                <input class="form-control" id="zona_eleitoral" name="zona_eleitoral" value="{{ eleitor.zona_eleitoral if eleitor and eleitor.zona_eleitoral else '' }}" maxlength="10" inputmode="numeric">
             </div>
             <div class="col-12">
                 <p class="form-secao-titulo mb-0">Localização</p>

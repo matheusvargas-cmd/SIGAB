@@ -1,0 +1,63 @@
+{% extends 'shared/base.html' %}
+
+{% block conteudo %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">{{ categoria.nome }}</h2>
+    <a class="btn btn-outline-secondary" href="/configuracoes/categorias">Voltar</a>
+</div>
+
+{% if flash_message %}
+<div class="alert alert-{{ flash_category }}" role="alert">{% if flash_category == 'success' %}✔ {% endif %}{{ flash_message }}</div>
+{% endif %}
+
+<div class="card mb-4">
+    <div class="card-body p-4 d-flex justify-content-between align-items-center">
+        <div>
+            <span class="badge {{ 'text-bg-success' if categoria.ativo else 'text-bg-secondary' }}">{{ 'Ativa' if categoria.ativo else 'Inativa' }}</span>
+        </div>
+        <div class="d-flex gap-2">
+            <a class="btn btn-sm btn-outline-primary" href="/configuracoes/categorias/{{ categoria.id }}/editar">Editar</a>
+            <form method="post" action="/configuracoes/categorias/{{ categoria.id }}/alternar">
+                <button class="btn btn-sm btn-outline-warning" type="submit">{{ 'Desativar' if categoria.ativo else 'Ativar' }}</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0">Subcategorias</h4>
+    <a class="btn btn-primary btn-sm" href="/configuracoes/categorias/{{ categoria.id }}/subcategorias/novo">Nova subcategoria</a>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th class="ps-3">Nome</th>
+                        <th>Status</th>
+                        <th class="text-end pe-3">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for subcategoria in subcategorias %}
+                    <tr>
+                        <td class="ps-3">{{ subcategoria.nome }}</td>
+                        <td><span class="badge {{ 'text-bg-success' if subcategoria.ativo else 'text-bg-secondary' }}">{{ 'Ativa' if subcategoria.ativo else 'Inativa' }}</span></td>
+                        <td class="text-end pe-3 text-nowrap">
+                            <a class="btn btn-sm btn-outline-primary" href="/configuracoes/categorias/{{ categoria.id }}/subcategorias/{{ subcategoria.id }}/editar">Editar</a>
+                            <form class="d-inline" method="post" action="/configuracoes/categorias/{{ categoria.id }}/subcategorias/{{ subcategoria.id }}/alternar">
+                                <button class="btn btn-sm btn-outline-warning" type="submit">{{ 'Desativar' if subcategoria.ativo else 'Ativar' }}</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td class="text-center text-muted py-4" colspan="3">Nenhuma subcategoria cadastrada.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

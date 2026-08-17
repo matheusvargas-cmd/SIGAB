@@ -6,6 +6,7 @@ from typing import Any
 from sqlalchemy import exists, func, or_, select
 from sqlalchemy.orm import Session
 
+from app.core.busca import normalizar
 from app.models.demanda import Demanda
 from app.models.eleitor import Eleitor
 
@@ -22,13 +23,15 @@ class EleitorService:
         consulta_total = select(func.count()).select_from(Eleitor)
 
         if pesquisa and pesquisa.strip():
-            termo = f"%{pesquisa.strip()}%"
+            termo = f"%{normalizar(pesquisa.strip())}%"
             filtro = or_(
-                Eleitor.nome.ilike(termo),
-                Eleitor.telefone.ilike(termo),
-                Eleitor.whatsapp.ilike(termo),
-                Eleitor.cidade.ilike(termo),
-                Eleitor.bairro.ilike(termo),
+                func.normalizar(Eleitor.nome).like(termo),
+                func.normalizar(Eleitor.telefone).like(termo),
+                func.normalizar(Eleitor.whatsapp).like(termo),
+                func.normalizar(Eleitor.cidade).like(termo),
+                func.normalizar(Eleitor.bairro).like(termo),
+                func.normalizar(Eleitor.cpf).like(termo),
+                func.normalizar(Eleitor.titulo_eleitor).like(termo),
             )
             consulta = consulta.where(filtro)
             consulta_total = consulta_total.where(filtro)
@@ -46,6 +49,40 @@ class EleitorService:
         return db.get(Eleitor, eleitor_id)
 
     @staticmethod
+    def obter_por_ref_historico(db: Session, ref_historico: str) -> Eleitor | None:
+        return db.scalar(select(Eleitor).where(Eleitor.ref_historico == ref_historico))
+
+    @staticmethod
+    def resolver_selecao(
+        db: Session,
+        selecionar_eleitor_id: int | None,
+        eleitor_id_atual: int | None = None,
+        trocar: bool = False,
+        sem_eleitor: bool = False,
+        ja_existe: bool = False,
+    ) -> tuple["Eleitor | None", bool]:
+        """Resolve a seleção de eleitor nos formulários de Demanda/Agenda
+        (busca por nome em vez de lista única). Retorna (eleitor, resolvido).
+
+        ja_existe=True indica um registro já salvo (edição) cujo eleitor
+        (mesmo que nenhum) já é uma escolha válida, e não deve forçar a
+        busca a cada vez que a tela é aberta.
+        """
+        if selecionar_eleitor_id is not None:
+            eleitor = EleitorService.obter_por_id(db, selecionar_eleitor_id)
+            return eleitor, eleitor is not None
+        if trocar:
+            return None, False
+        if sem_eleitor:
+            return None, True
+        if eleitor_id_atual:
+            eleitor = EleitorService.obter_por_id(db, eleitor_id_atual)
+            return eleitor, True
+        if ja_existe:
+            return None, True
+        return None, False
+
+    @staticmethod
     def contar(db: Session) -> int:
         return db.scalar(select(func.count()).select_from(Eleitor)) or 0
 
@@ -57,6 +94,17 @@ class EleitorService:
     @staticmethod
     def listar_todos(db: Session) -> list[Eleitor]:
         return list(db.scalars(select(Eleitor).order_by(Eleitor.nome)).all())
+
+    @staticmethod
+    def listar_aniversariantes_hoje(db: Session) -> list[Eleitor]:
+        hoje = date.today()
+        consulta = (
+            select(Eleitor)
+            .where(Eleitor.nascimento.isnot(None))
+            .where(func.strftime("%m-%d", Eleitor.nascimento) == hoje.strftime("%m-%d"))
+            .order_by(Eleitor.nome)
+        )
+        return list(db.scalars(consulta).all())
 
     @staticmethod
     def listar_cidades(db: Session) -> list[str]:
@@ -93,6 +141,12 @@ class EleitorService:
         bairro: str | None = None,
         cidade: str | None = None,
         observacoes: str | None = None,
+        apelido: str | None = None,
+        email: str | None = None,
+        cpf: str | None = None,
+        titulo_eleitor: str | None = None,
+        zona_eleitoral: str | None = None,
+        ref_historico: str | None = None,
     ) -> Eleitor:
         dados = EleitorService._normalizar_dados(
             nome=nome,
@@ -103,6 +157,12 @@ class EleitorService:
             bairro=bairro,
             cidade=cidade,
             observacoes=observacoes,
+            apelido=apelido,
+            email=email,
+            cpf=cpf,
+            titulo_eleitor=titulo_eleitor,
+            zona_eleitoral=zona_eleitoral,
+            ref_historico=ref_historico,
         )
         EleitorService._validar_duplicidade(db, dados["nome"], dados["telefone"])
         eleitor = Eleitor(**dados)
@@ -123,7 +183,16 @@ class EleitorService:
         bairro: str | None = None,
         cidade: str | None = None,
         observacoes: str | None = None,
+        apelido: str | None = None,
+        email: str | None = None,
+        cpf: str | None = None,
+        titulo_eleitor: str | None = None,
+        zona_eleitoral: str | None = None,
     ) -> Eleitor:
+        # ref_historico não faz parte do formulário de edição (é um
+        # identificador interno de importação) e por isso não é aceito nem
+        # sobrescrito aqui — evita apagar o vínculo com o CSV histórico ao
+        # editar um eleitor pela tela normal.
         dados = EleitorService._normalizar_dados(
             nome=nome,
             telefone=telefone,
@@ -133,6 +202,11 @@ class EleitorService:
             bairro=bairro,
             cidade=cidade,
             observacoes=observacoes,
+            apelido=apelido,
+            email=email,
+            cpf=cpf,
+            titulo_eleitor=titulo_eleitor,
+            zona_eleitoral=zona_eleitoral,
         )
         EleitorService._validar_duplicidade(
             db, dados["nome"], dados["telefone"], ignorar_id=eleitor.id

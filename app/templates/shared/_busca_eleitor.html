@@ -1,0 +1,39 @@
+<div class="card">
+    <div class="card-body p-4">
+        <p class="mb-3">Busque o eleitor pelo nome ou título de eleitor para continuar{{ '.' if obrigatorio else ', ou continue sem vincular.' }}</p>
+        <form class="row g-2 mb-3" method="get" action="{{ acao_busca }}">
+            <div class="col-sm-8 col-md-6">
+                <label class="visually-hidden" for="pesquisa_eleitor">Pesquisar eleitor</label>
+                <input class="form-control" id="pesquisa_eleitor" name="pesquisa_eleitor" value="{{ pesquisa_eleitor }}" placeholder="Nome ou título de eleitor" autofocus>
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-primary" type="submit">Buscar</button>
+                {% if not obrigatorio %}
+                <a class="btn btn-outline-secondary" href="{{ acao_busca }}?sem_eleitor=1">Continuar sem eleitor</a>
+                {% endif %}
+            </div>
+        </form>
+        {% if resultados_busca_eleitor %}
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead>
+                    <tr><th>Nome</th><th>Título de eleitor</th><th>Telefone</th><th>Bairro</th><th class="text-end">Ações</th></tr>
+                </thead>
+                <tbody>
+                    {% for resultado in resultados_busca_eleitor %}
+                    <tr>
+                        <td>{{ resultado.nome }}</td>
+                        <td>{{ resultado.titulo_eleitor or '-' }}</td>
+                        <td>{{ resultado.telefone or resultado.whatsapp or '-' }}</td>
+                        <td>{{ resultado.bairro or '-' }}</td>
+                        <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{{ acao_busca }}?selecionar_eleitor_id={{ resultado.id }}">Selecionar</a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% elif pesquisa_eleitor %}
+        <p class="text-muted small mb-0">Nenhum eleitor encontrado para "{{ pesquisa_eleitor }}".</p>
+        {% endif %}
+    </div>
+</div>

@@ -10,17 +10,33 @@
 <div class="alert alert-danger" role="alert">{{ erro }}</div>
 {% endif %}
 
+{% if not eleitor_resolvido %}
+{% include 'shared/_busca_eleitor.html' %}
+{% else %}
 <form class="card" method="post" action="{% if demanda and demanda.id %}/demandas/{{ demanda.id }}/editar{% else %}/demandas/novo{% endif %}">
     <div class="card-body p-4">
         <div class="row g-3">
-            <div class="col-md-6">
-                <label class="form-label" for="eleitor_id">Eleitor *</label>
-                <select class="form-select" id="eleitor_id" name="eleitor_id" required>
-                    <option value="">Selecione...</option>
-                    {% for opcao in eleitores %}
-                    <option value="{{ opcao.id }}" {% if demanda and demanda.eleitor_id == opcao.id %}selected{% endif %}>{{ opcao.nome }}</option>
-                    {% endfor %}
-                </select>
+            <div class="col-12">
+                <label class="form-label">Eleitor *</label>
+                <div class="d-flex align-items-start justify-content-between gap-2 border rounded p-3 bg-light">
+                    <dl class="row mb-0 flex-grow-1">
+                        <dt class="col-sm-3">Nome</dt>
+                        <dd class="col-sm-9">{{ eleitor_atual.nome }}</dd>
+
+                        <dt class="col-sm-3">Telefone</dt>
+                        <dd class="col-sm-9">{{ eleitor_atual.telefone or eleitor_atual.whatsapp or '-' }}</dd>
+
+                        {% if eleitor_atual.titulo_eleitor %}
+                        <dt class="col-sm-3">Título de eleitor</dt>
+                        <dd class="col-sm-9">{{ eleitor_atual.titulo_eleitor }}</dd>
+                        {% endif %}
+
+                        <dt class="col-sm-3">Bairro/Cidade</dt>
+                        <dd class="col-sm-9 mb-0">{{ eleitor_atual.bairro or '-' }}{% if eleitor_atual.cidade %} · {{ eleitor_atual.cidade }}{% endif %}</dd>
+                    </dl>
+                    <a class="btn btn-sm btn-outline-secondary text-nowrap" href="{{ acao_busca }}?trocar_eleitor=1">Trocar</a>
+                </div>
+                <input type="hidden" name="eleitor_id" value="{{ eleitor_atual.id }}">
             </div>
             <div class="col-md-6">
                 <label class="form-label" for="titulo">Título *</label>
@@ -34,16 +50,22 @@
                 <label class="form-label" for="descricao">Descrição *</label>
                 <textarea class="form-control" id="descricao" name="descricao" rows="3" required>{{ demanda.descricao if demanda and demanda.descricao else '' }}</textarea>
             </div>
-            <div class="col-md-4">
-                <label class="form-label" for="categoria">Categoria *</label>
-                <select class="form-select" id="categoria" name="categoria" required>
+            <div class="col-md-3">
+                <label class="form-label" for="categoria_id">Categoria *</label>
+                <select class="form-select" id="categoria_id" name="categoria_id" required>
                     <option value="">Selecione...</option>
                     {% for opcao in categorias %}
-                    <option value="{{ opcao }}" {% if demanda and demanda.categoria == opcao %}selected{% endif %}>{{ opcao }}</option>
+                    <option value="{{ opcao.id }}" {% if demanda and demanda.categoria_id == opcao.id %}selected{% endif %}>{{ opcao.nome }}{% if not opcao.ativo %} (inativa){% endif %}</option>
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
+                <label class="form-label" for="subcategoria_id">Subcategoria</label>
+                <select class="form-select" id="subcategoria_id" name="subcategoria_id" data-subcategoria-atual="{{ demanda.subcategoria_id if demanda and demanda.subcategoria_id else '' }}">
+                    <option value="">Nenhuma</option>
+                </select>
+            </div>
+            <div class="col-md-3">
                 <label class="form-label" for="status">Status *</label>
                 <select class="form-select" id="status" name="status" required>
                     {% for opcao in status_opcoes %}
@@ -56,7 +78,7 @@
                 <div class="form-text">Uma demanda concluída não pode voltar para "Aberta".</div>
                 {% endif %}
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <label class="form-label" for="prioridade">Prioridade *</label>
                 <select class="form-select" id="prioridade" name="prioridade" required>
                     {% for opcao in prioridade_opcoes %}
@@ -86,4 +108,40 @@
         <button class="btn btn-primary" type="submit">Salvar</button>
     </div>
 </form>
+
+<script>
+(function () {
+    var subcategoriasPorCategoria = {{ subcategoria_por_categoria_json | safe }};
+    var categoriaSelect = document.getElementById('categoria_id');
+    var subcategoriaSelect = document.getElementById('subcategoria_id');
+    var subcategoriaAtual = subcategoriaSelect.getAttribute('data-subcategoria-atual');
+
+    function atualizarSubcategorias(manterSelecao) {
+        var opcoes = subcategoriasPorCategoria[categoriaSelect.value] || [];
+        subcategoriaSelect.innerHTML = '';
+
+        var vazia = document.createElement('option');
+        vazia.value = '';
+        vazia.textContent = 'Nenhuma';
+        subcategoriaSelect.appendChild(vazia);
+
+        opcoes.forEach(function (opcao) {
+            var elemento = document.createElement('option');
+            elemento.value = opcao.id;
+            elemento.textContent = opcao.nome;
+            if (manterSelecao && String(opcao.id) === String(subcategoriaAtual)) {
+                elemento.selected = true;
+            }
+            subcategoriaSelect.appendChild(elemento);
+        });
+    }
+
+    categoriaSelect.addEventListener('change', function () {
+        atualizarSubcategorias(false);
+    });
+
+    atualizarSubcategorias(true);
+})();
+</script>
+{% endif %}
 {% endblock %}

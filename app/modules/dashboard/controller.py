@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -27,5 +29,7 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
             "eleitores_recentes": EleitorService.listar_recentes(db, LIMITE_RECENTES),
             "demandas_recentes": DemandaService.listar_recentes(db, LIMITE_RECENTES),
             "proximos_compromissos": AgendaService.listar_proximos(db, LIMITE_RECENTES),
+            "aniversariantes_hoje": EleitorService.listar_aniversariantes_hoje(db),
+            "hoje": date.today(),
         },
     )

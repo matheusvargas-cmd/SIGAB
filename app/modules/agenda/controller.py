@@ -1,14 +1,16 @@
 from datetime import date, datetime, time
 from types import SimpleNamespace
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models.agenda import Agenda
+from app.services.agenda_csv_service import AgendaCsvService
 from app.services.agenda_service import STATUS_OPCOES, AgendaService
+from app.services.eleitor_service import EleitorService
 
 router = APIRouter(prefix="/agenda", tags=["Agenda"])
 templates = Jinja2Templates(directory="app/templates")
@@ -30,7 +32,6 @@ def flash_message(
 
 def _opcoes_formulario(db: Session) -> dict:
     return {
-        "eleitores": AgendaService.listar_eleitores_para_selecao(db),
         "status_opcoes": STATUS_OPCOES,
     }
 
@@ -78,12 +79,59 @@ def listar(
     return resposta
 
 
+@router.get("/importar", response_class=HTMLResponse)
+def importar_pagina(request: Request):
+    return templates.TemplateResponse(
+        request=request,
+        name="agenda/importar.html",
+        context={"titulo": "Importar agenda", "resultado": None},
+    )
+
+
+@router.post("/importar", response_class=HTMLResponse)
+async def importar_csv(
+    request: Request,
+    arquivo: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    conteudo = await arquivo.read()
+    resultado = AgendaCsvService.importar_compromisso_historico(db, conteudo)
+    return templates.TemplateResponse(
+        request=request,
+        name="agenda/importar.html",
+        context={"titulo": "Importar agenda", "resultado": resultado},
+    )
+
+
 @router.get("/novo", response_class=HTMLResponse)
-def novo(request: Request, db: Session = Depends(get_db)):
+def novo(
+    request: Request,
+    pesquisa_eleitor: str = "",
+    selecionar_eleitor_id: int | None = None,
+    sem_eleitor: bool = False,
+    db: Session = Depends(get_db),
+):
+    eleitor_atual, eleitor_resolvido = EleitorService.resolver_selecao(
+        db, selecionar_eleitor_id, sem_eleitor=sem_eleitor
+    )
+    resultados_busca_eleitor = []
+    if not eleitor_resolvido and pesquisa_eleitor.strip():
+        resultados_busca_eleitor, _, _ = EleitorService.listar(db, pesquisa_eleitor, 1)
+
     return templates.TemplateResponse(
         request=request,
         name="agenda/formulario.html",
-        context={"titulo": "Novo compromisso", "compromisso": None, **_opcoes_formulario(db)},
+        context={
+            "titulo": "Novo compromisso",
+            "compromisso": None,
+            "eleitor_atual": eleitor_atual,
+            "eleitor_resolvido": eleitor_resolvido,
+            "obrigatorio": False,
+            "acao_busca": "/agenda/novo",
+            "pesquisa_eleitor": pesquisa_eleitor,
+            "resultados_busca_eleitor": resultados_busca_eleitor,
+            **_opcoes_formulario(db),
+        },
     )
 
 
@@ -130,12 +178,23 @@ def criar(
             telefone_contato=telefone_contato,
             status=status,
         )
+        eleitor_atual = (
+            EleitorService.obter_por_id(db, compromisso_preenchido.eleitor_id)
+            if compromisso_preenchido.eleitor_id
+            else None
+        )
         return templates.TemplateResponse(
             request=request,
             name="agenda/formulario.html",
             context={
                 "titulo": "Novo compromisso",
                 "compromisso": compromisso_preenchido,
+                "eleitor_atual": eleitor_atual,
+                "eleitor_resolvido": True,
+                "obrigatorio": False,
+                "acao_busca": "/agenda/novo",
+                "pesquisa_eleitor": "",
+                "resultados_busca_eleitor": [],
                 "erro": str(error),
                 **_opcoes_formulario(db),
             },
@@ -157,16 +216,38 @@ def visualizar(request: Request, agenda_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{agenda_id}/editar", response_class=HTMLResponse)
-def editar(request: Request, agenda_id: int, db: Session = Depends(get_db)):
+def editar(
+    request: Request,
+    agenda_id: int,
+    pesquisa_eleitor: str = "",
+    selecionar_eleitor_id: int | None = None,
+    trocar_eleitor: bool = False,
+    sem_eleitor: bool = False,
+    db: Session = Depends(get_db),
+):
     compromisso = AgendaService.obter_por_id(db, agenda_id)
     if compromisso is None:
         return flash_message("Compromisso não encontrado.")
+
+    eleitor_atual, eleitor_resolvido = EleitorService.resolver_selecao(
+        db, selecionar_eleitor_id, compromisso.eleitor_id, trocar_eleitor, sem_eleitor, ja_existe=True
+    )
+    resultados_busca_eleitor = []
+    if not eleitor_resolvido and pesquisa_eleitor.strip():
+        resultados_busca_eleitor, _, _ = EleitorService.listar(db, pesquisa_eleitor, 1)
+
     return templates.TemplateResponse(
         request=request,
         name="agenda/formulario.html",
         context={
             "titulo": "Editar compromisso",
             "compromisso": _para_formulario(compromisso),
+            "eleitor_atual": eleitor_atual,
+            "eleitor_resolvido": eleitor_resolvido,
+            "obrigatorio": False,
+            "acao_busca": f"/agenda/{agenda_id}/editar",
+            "pesquisa_eleitor": pesquisa_eleitor,
+            "resultados_busca_eleitor": resultados_busca_eleitor,
             **_opcoes_formulario(db),
         },
     )
@@ -220,12 +301,23 @@ def atualizar(
             telefone_contato=telefone_contato,
             status=status,
         )
+        eleitor_atual = (
+            EleitorService.obter_por_id(db, compromisso_preenchido.eleitor_id)
+            if compromisso_preenchido.eleitor_id
+            else None
+        )
         return templates.TemplateResponse(
             request=request,
             name="agenda/formulario.html",
             context={
                 "titulo": "Editar compromisso",
                 "compromisso": compromisso_preenchido,
+                "eleitor_atual": eleitor_atual,
+                "eleitor_resolvido": True,
+                "obrigatorio": False,
+                "acao_busca": f"/agenda/{agenda_id}/editar",
+                "pesquisa_eleitor": "",
+                "resultados_busca_eleitor": [],
                 "erro": str(error),
                 **_opcoes_formulario(db),
             },

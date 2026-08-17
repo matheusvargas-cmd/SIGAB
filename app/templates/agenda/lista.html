@@ -6,7 +6,10 @@
         <h2 class="mb-0">Agenda</h2>
         <p class="text-muted mb-0">Compromissos, reuniões e visitas do gabinete</p>
     </div>
-    <a class="btn btn-primary" href="/agenda/novo">Novo compromisso</a>
+    <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-outline-secondary" href="/agenda/importar">Importar Agenda</a>
+        <a class="btn btn-primary" href="/agenda/novo">Novo compromisso</a>
+    </div>
 </div>
 
 {% if flash_message %}
@@ -58,7 +61,10 @@
                         <td class="text-nowrap">
                             {{ compromisso.inicio.strftime('%H:%M') if compromisso.inicio else '-' }}{% if compromisso.fim %} – {{ compromisso.fim.strftime('%H:%M') }}{% endif %}
                         </td>
-                        <td>{{ compromisso.titulo }}</td>
+                        <td>
+                            {{ compromisso.titulo }}
+                            {% if compromisso.demanda_id %}<span class="badge text-bg-info text-dark" title="Compromisso automático gerado por uma demanda">Demanda</span>{% endif %}
+                        </td>
                         <td>{{ compromisso.local or '-' }}</td>
                         <td>{{ compromisso.responsavel or '-' }}</td>
                         <td><span class="badge {{ status_classes.get(compromisso.status, 'text-bg-secondary') }}">{{ compromisso.status or 'Agendado' }}</span></td>

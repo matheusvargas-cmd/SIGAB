@@ -1,19 +1,25 @@
+import json
 from datetime import date
 from types import SimpleNamespace
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.models.categoria import Categoria
+from app.models.subcategoria import Subcategoria
+from app.services.agenda_service import AgendaService
+from app.services.categoria_service import CategoriaService
+from app.services.demanda_csv_service import DemandaCsvService
 from app.services.demanda_service import (
-    CATEGORIAS,
     PRIORIDADE_OPCOES,
     STATUS_OPCOES,
     DemandaService,
 )
 from app.services.eleitor_service import EleitorService
+from app.services.subcategoria_service import SubcategoriaService
 
 router = APIRouter(prefix="/demandas", tags=["Demandas"])
 templates = Jinja2Templates(directory="app/templates")
@@ -33,10 +39,30 @@ def flash_message(
     return redirect
 
 
-def _opcoes_formulario(db: Session) -> dict:
+def _opcoes_formulario(
+    db: Session,
+    categoria_atual: Categoria | None = None,
+    subcategoria_atual: Subcategoria | None = None,
+) -> dict:
+    categorias = CategoriaService.listar_ativas(db)
+    if categoria_atual and not categoria_atual.ativo and categoria_atual.id not in {
+        categoria.id for categoria in categorias
+    }:
+        categorias = categorias + [categoria_atual]
+
+    subcategoria_por_categoria: dict[int, list[dict]] = {}
+    for subcategoria in SubcategoriaService.listar_ativas(db):
+        subcategoria_por_categoria.setdefault(subcategoria.categoria_id, []).append(
+            {"id": subcategoria.id, "nome": subcategoria.nome}
+        )
+    if subcategoria_atual and not subcategoria_atual.ativo:
+        lista = subcategoria_por_categoria.setdefault(subcategoria_atual.categoria_id, [])
+        if not any(item["id"] == subcategoria_atual.id for item in lista):
+            lista.append({"id": subcategoria_atual.id, "nome": subcategoria_atual.nome})
+
     return {
-        "eleitores": DemandaService.listar_eleitores_para_selecao(db),
-        "categorias": CATEGORIAS,
+        "categorias": categorias,
+        "subcategoria_por_categoria_json": json.dumps(subcategoria_por_categoria),
         "status_opcoes": STATUS_OPCOES,
         "prioridade_opcoes": PRIORIDADE_OPCOES,
     }
@@ -68,12 +94,56 @@ def listar(
     return resposta
 
 
+@router.get("/importar", response_class=HTMLResponse)
+def importar_pagina(request: Request):
+    return templates.TemplateResponse(
+        request=request,
+        name="demandas/importar.html",
+        context={"titulo": "Importar demandas", "resultado": None},
+    )
+
+
+@router.post("/importar", response_class=HTMLResponse)
+async def importar_csv(
+    request: Request,
+    arquivo: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    conteudo = await arquivo.read()
+    resultado = DemandaCsvService.importar_atendimento_historico(db, conteudo)
+    return templates.TemplateResponse(
+        request=request,
+        name="demandas/importar.html",
+        context={"titulo": "Importar demandas", "resultado": resultado},
+    )
+
+
 @router.get("/novo", response_class=HTMLResponse)
-def novo(request: Request, db: Session = Depends(get_db)):
+def novo(
+    request: Request,
+    pesquisa_eleitor: str = "",
+    selecionar_eleitor_id: int | None = None,
+    db: Session = Depends(get_db),
+):
+    eleitor_atual, eleitor_resolvido = EleitorService.resolver_selecao(db, selecionar_eleitor_id)
+    resultados_busca_eleitor = []
+    if not eleitor_resolvido and pesquisa_eleitor.strip():
+        resultados_busca_eleitor, _, _ = EleitorService.listar(db, pesquisa_eleitor, 1)
+
     return templates.TemplateResponse(
         request=request,
         name="demandas/formulario.html",
-        context={"titulo": "Nova demanda", "demanda": None, **_opcoes_formulario(db)},
+        context={
+            "titulo": "Nova demanda",
+            "demanda": None,
+            "eleitor_atual": eleitor_atual,
+            "eleitor_resolvido": eleitor_resolvido,
+            "obrigatorio": True,
+            "acao_busca": "/demandas/novo",
+            "pesquisa_eleitor": pesquisa_eleitor,
+            "resultados_busca_eleitor": resultados_busca_eleitor,
+            **_opcoes_formulario(db),
+        },
     )
 
 
@@ -83,7 +153,8 @@ def criar(
     eleitor_id: str = Form(""),
     titulo: str = Form(...),
     descricao: str | None = Form(None),
-    categoria: str | None = Form(None),
+    categoria_id: str | None = Form(None),
+    subcategoria_id: str | None = Form(None),
     status: str | None = Form(None),
     prioridade: str | None = Form(None),
     responsavel: str | None = Form(None),
@@ -97,7 +168,8 @@ def criar(
             eleitor_id,
             titulo,
             descricao,
-            categoria,
+            categoria_id,
+            subcategoria_id,
             status,
             prioridade,
             responsavel,
@@ -110,12 +182,30 @@ def criar(
             eleitor_id=int(eleitor_id) if eleitor_id.isdigit() else None,
             titulo=titulo,
             descricao=descricao,
-            categoria=categoria,
+            categoria_id=int(categoria_id) if categoria_id and categoria_id.isdigit() else None,
+            subcategoria_id=int(subcategoria_id)
+            if subcategoria_id and subcategoria_id.isdigit()
+            else None,
             status=status,
             prioridade=prioridade,
             responsavel=responsavel,
             prazo=prazo,
             observacoes_internas=observacoes_internas,
+        )
+        eleitor_atual = (
+            EleitorService.obter_por_id(db, demanda_preenchida.eleitor_id)
+            if demanda_preenchida.eleitor_id
+            else None
+        )
+        categoria_atual = (
+            CategoriaService.obter_por_id(db, demanda_preenchida.categoria_id)
+            if demanda_preenchida.categoria_id
+            else None
+        )
+        subcategoria_atual = (
+            SubcategoriaService.obter_por_id(db, demanda_preenchida.subcategoria_id)
+            if demanda_preenchida.subcategoria_id
+            else None
         )
         return templates.TemplateResponse(
             request=request,
@@ -123,8 +213,14 @@ def criar(
             context={
                 "titulo": "Nova demanda",
                 "demanda": demanda_preenchida,
+                "eleitor_atual": eleitor_atual,
+                "eleitor_resolvido": True,
+                "obrigatorio": True,
+                "acao_busca": "/demandas/novo",
+                "pesquisa_eleitor": "",
+                "resultados_busca_eleitor": [],
                 "erro": str(error),
-                **_opcoes_formulario(db),
+                **_opcoes_formulario(db, categoria_atual, subcategoria_atual),
             },
             status_code=400,
         )
@@ -137,22 +233,53 @@ def visualizar(request: Request, demanda_id: int, db: Session = Depends(get_db))
     if demanda is None:
         return flash_message("Demanda não encontrada.")
     eleitor = EleitorService.obter_por_id(db, demanda.eleitor_id)
+    compromisso_retorno = AgendaService.obter_por_demanda(db, demanda.id)
     return templates.TemplateResponse(
         request=request,
         name="demandas/visualizar.html",
-        context={"titulo": demanda.titulo, "demanda": demanda, "eleitor": eleitor},
+        context={
+            "titulo": demanda.titulo,
+            "demanda": demanda,
+            "eleitor": eleitor,
+            "compromisso_retorno": compromisso_retorno,
+        },
     )
 
 
 @router.get("/{demanda_id}/editar", response_class=HTMLResponse)
-def editar(request: Request, demanda_id: int, db: Session = Depends(get_db)):
+def editar(
+    request: Request,
+    demanda_id: int,
+    pesquisa_eleitor: str = "",
+    selecionar_eleitor_id: int | None = None,
+    trocar_eleitor: bool = False,
+    db: Session = Depends(get_db),
+):
     demanda = DemandaService.obter_por_id(db, demanda_id)
     if demanda is None:
         return flash_message("Demanda não encontrada.")
+
+    eleitor_atual, eleitor_resolvido = EleitorService.resolver_selecao(
+        db, selecionar_eleitor_id, demanda.eleitor_id, trocar_eleitor
+    )
+    resultados_busca_eleitor = []
+    if not eleitor_resolvido and pesquisa_eleitor.strip():
+        resultados_busca_eleitor, _, _ = EleitorService.listar(db, pesquisa_eleitor, 1)
+
     return templates.TemplateResponse(
         request=request,
         name="demandas/formulario.html",
-        context={"titulo": "Editar demanda", "demanda": demanda, **_opcoes_formulario(db)},
+        context={
+            "titulo": "Editar demanda",
+            "demanda": demanda,
+            "eleitor_atual": eleitor_atual,
+            "eleitor_resolvido": eleitor_resolvido,
+            "obrigatorio": True,
+            "acao_busca": f"/demandas/{demanda_id}/editar",
+            "pesquisa_eleitor": pesquisa_eleitor,
+            "resultados_busca_eleitor": resultados_busca_eleitor,
+            **_opcoes_formulario(db, demanda.categoria_vinculada, demanda.subcategoria_vinculada),
+        },
     )
 
 
@@ -163,7 +290,8 @@ def atualizar(
     eleitor_id: str = Form(""),
     titulo: str = Form(...),
     descricao: str | None = Form(None),
-    categoria: str | None = Form(None),
+    categoria_id: str | None = Form(None),
+    subcategoria_id: str | None = Form(None),
     status: str | None = Form(None),
     prioridade: str | None = Form(None),
     responsavel: str | None = Form(None),
@@ -183,7 +311,8 @@ def atualizar(
             eleitor_id,
             titulo,
             descricao,
-            categoria,
+            categoria_id,
+            subcategoria_id,
             status,
             prioridade,
             responsavel,
@@ -196,12 +325,30 @@ def atualizar(
             eleitor_id=int(eleitor_id) if eleitor_id.isdigit() else None,
             titulo=titulo,
             descricao=descricao,
-            categoria=categoria,
+            categoria_id=int(categoria_id) if categoria_id and categoria_id.isdigit() else None,
+            subcategoria_id=int(subcategoria_id)
+            if subcategoria_id and subcategoria_id.isdigit()
+            else None,
             status=status,
             prioridade=prioridade,
             responsavel=responsavel,
             prazo=prazo,
             observacoes_internas=observacoes_internas,
+        )
+        eleitor_atual = (
+            EleitorService.obter_por_id(db, demanda_preenchida.eleitor_id)
+            if demanda_preenchida.eleitor_id
+            else None
+        )
+        categoria_atual = (
+            CategoriaService.obter_por_id(db, demanda_preenchida.categoria_id)
+            if demanda_preenchida.categoria_id
+            else None
+        )
+        subcategoria_atual = (
+            SubcategoriaService.obter_por_id(db, demanda_preenchida.subcategoria_id)
+            if demanda_preenchida.subcategoria_id
+            else None
         )
         return templates.TemplateResponse(
             request=request,
@@ -209,8 +356,14 @@ def atualizar(
             context={
                 "titulo": "Editar demanda",
                 "demanda": demanda_preenchida,
+                "eleitor_atual": eleitor_atual,
+                "eleitor_resolvido": True,
+                "obrigatorio": True,
+                "acao_busca": f"/demandas/{demanda_id}/editar",
+                "pesquisa_eleitor": "",
+                "resultados_busca_eleitor": [],
                 "erro": str(error),
-                **_opcoes_formulario(db),
+                **_opcoes_formulario(db, categoria_atual, subcategoria_atual),
             },
             status_code=400,
         )

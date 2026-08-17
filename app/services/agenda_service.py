@@ -5,7 +5,9 @@ from typing import Any
 from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.busca import normalizar
 from app.models.agenda import Agenda
+from app.models.demanda import Demanda
 from app.models.eleitor import Eleitor
 
 POR_PAGINA = 20
@@ -34,14 +36,14 @@ class AgendaService:
         )
 
         if pesquisa and pesquisa.strip():
-            termo = f"%{pesquisa.strip()}%"
+            termo = f"%{normalizar(pesquisa.strip())}%"
             filtro = or_(
-                Agenda.titulo.ilike(termo),
-                Agenda.descricao.ilike(termo),
-                Agenda.local.ilike(termo),
-                Agenda.responsavel.ilike(termo),
-                Agenda.status.ilike(termo),
-                Eleitor.nome.ilike(termo),
+                func.normalizar(Agenda.titulo).like(termo),
+                func.normalizar(Agenda.descricao).like(termo),
+                func.normalizar(Agenda.local).like(termo),
+                func.normalizar(Agenda.responsavel).like(termo),
+                func.normalizar(Agenda.status).like(termo),
+                func.normalizar(Eleitor.nome).like(termo),
             )
             consulta = consulta.where(filtro)
             consulta_total = consulta_total.where(filtro)
@@ -169,6 +171,107 @@ class AgendaService:
     def excluir(db: Session, compromisso: Agenda) -> None:
         db.delete(compromisso)
         db.commit()
+
+    @staticmethod
+    def obter_por_demanda(db: Session, demanda_id: int) -> Agenda | None:
+        return db.scalar(select(Agenda).where(Agenda.demanda_id == demanda_id))
+
+    @staticmethod
+    def sincronizar_retorno_demanda(db: Session, demanda: Demanda) -> None:
+        """Mantém o compromisso automático de retorno ao eleitor em sincronia
+        com o eleitor/prazo da demanda. Só considera o compromisso ligado a
+        esta demanda (`Agenda.demanda_id`) — nunca toca compromissos criados
+        manualmente, que sempre têm `demanda_id` nulo. Idempotente: chamar
+        várias vezes com os mesmos dados não cria nem altera nada além do
+        necessário.
+        """
+        compromisso = AgendaService.obter_por_demanda(db, demanda.id)
+
+        deve_existir = bool(demanda.eleitor_id) and demanda.prazo is not None
+        if not deve_existir:
+            if compromisso is not None:
+                db.delete(compromisso)
+                db.commit()
+            return
+
+        titulo = f"Retorno ao eleitor — {demanda.eleitor.nome}"
+        descricao = f"Retorno automático referente à demanda #{demanda.id}: {demanda.titulo}"
+        inicio = datetime.combine(demanda.prazo, time.min)
+
+        if compromisso is None:
+            compromisso = Agenda(
+                demanda_id=demanda.id,
+                eleitor_id=demanda.eleitor_id,
+                titulo=titulo,
+                descricao=descricao,
+                inicio=inicio,
+                status="Agendado",
+            )
+            db.add(compromisso)
+        elif (
+            compromisso.titulo != titulo
+            or compromisso.descricao != descricao
+            or compromisso.inicio != inicio
+            or compromisso.eleitor_id != demanda.eleitor_id
+        ):
+            compromisso.titulo = titulo
+            compromisso.descricao = descricao
+            compromisso.inicio = inicio
+            compromisso.eleitor_id = demanda.eleitor_id
+
+        db.commit()
+
+    @staticmethod
+    def excluir_compromisso_da_demanda(db: Session, demanda_id: int) -> None:
+        compromisso = AgendaService.obter_por_demanda(db, demanda_id)
+        if compromisso is not None:
+            db.delete(compromisso)
+            db.commit()
+
+    @staticmethod
+    def obter_por_ref_historico(db: Session, ref_historico: str) -> Agenda | None:
+        return db.scalar(select(Agenda).where(Agenda.ref_historico == ref_historico))
+
+    @staticmethod
+    def criar_historico(
+        db: Session,
+        titulo: str,
+        descricao: str | None,
+        local: str | None,
+        telefone_contato: str | None,
+        inicio: datetime,
+        fim: datetime | None,
+        status: str,
+        ref_historico: str,
+    ) -> Agenda:
+        # Caminho dedicado para a importação de compromisso.csv: os dados já
+        # chegam como datetime combinado (não data+hora separados) e não
+        # devem passar pela regra de tamanho mínimo do título do formulário
+        # (há Assuntos históricos legítimos com só 4 caracteres, ex. "Aula").
+        # eleitor_id e demanda_id são sempre nulos — a importação histórica
+        # nunca associa eleitor nem demanda.
+        titulo_normalizado = (titulo or "").strip()
+        if not titulo_normalizado:
+            raise ValueError("Título ausente.")
+        if status not in STATUS_OPCOES:
+            raise ValueError("Status inválido.")
+
+        compromisso = Agenda(
+            eleitor_id=None,
+            demanda_id=None,
+            titulo=titulo_normalizado,
+            descricao=(descricao or "").strip() or None,
+            local=(local or "").strip() or None,
+            inicio=inicio,
+            fim=fim,
+            telefone_contato=(telefone_contato or "").strip() or None,
+            status=status,
+            ref_historico=ref_historico,
+        )
+        db.add(compromisso)
+        db.commit()
+        db.refresh(compromisso)
+        return compromisso
 
     @staticmethod
     def _validar_dados(

@@ -5,8 +5,12 @@ from typing import Any
 from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.busca import normalizar
+from app.models.categoria import Categoria
 from app.models.demanda import Demanda
 from app.models.eleitor import Eleitor
+from app.models.subcategoria import Subcategoria
+from app.services.agenda_service import AgendaService
 
 POR_PAGINA = 20
 TITULO_MINIMO_CARACTERES = 5
@@ -54,14 +58,14 @@ class DemandaService:
         )
 
         if pesquisa and pesquisa.strip():
-            termo = f"%{pesquisa.strip()}%"
+            termo = f"%{normalizar(pesquisa.strip())}%"
             filtro = or_(
-                Eleitor.nome.ilike(termo),
-                Demanda.titulo.ilike(termo),
-                Demanda.categoria.ilike(termo),
-                Demanda.status.ilike(termo),
-                Demanda.responsavel.ilike(termo),
-                Eleitor.cidade.ilike(termo),
+                func.normalizar(Eleitor.nome).like(termo),
+                func.normalizar(Demanda.titulo).like(termo),
+                func.normalizar(Demanda.categoria).like(termo),
+                func.normalizar(Demanda.status).like(termo),
+                func.normalizar(Demanda.responsavel).like(termo),
+                func.normalizar(Eleitor.cidade).like(termo),
             )
             consulta = consulta.where(filtro)
             consulta_total = consulta_total.where(filtro)
@@ -81,6 +85,10 @@ class DemandaService:
     @staticmethod
     def obter_por_id(db: Session, demanda_id: int) -> Demanda | None:
         return db.get(Demanda, demanda_id)
+
+    @staticmethod
+    def obter_por_ref_historico(db: Session, ref_historico: str) -> Demanda | None:
+        return db.scalar(select(Demanda).where(Demanda.ref_historico == ref_historico))
 
     @staticmethod
     def listar_eleitores_para_selecao(db: Session) -> list[Eleitor]:
@@ -209,32 +217,49 @@ class DemandaService:
         eleitor_id: str | None,
         titulo: str,
         descricao: str | None,
-        categoria: str | None,
+        categoria_id: str | None,
+        subcategoria_id: str | None,
         status: str | None,
         prioridade: str | None,
         responsavel: str | None = None,
         prazo: date | None = None,
         observacoes_internas: str | None = None,
+        secretaria: str | None = None,
+        ref_historico: str | None = None,
+        data_abertura: datetime | None = None,
+        fechar_automaticamente: bool = True,
     ) -> Demanda:
+        # secretaria/ref_historico/data_abertura/fechar_automaticamente existem
+        # para a importação histórica (atendimento.csv): permitem gravar a
+        # data original do atendimento e desligar o fechamento automático,
+        # sem alterar o comportamento do formulário normal (que não passa
+        # esses argumentos).
         dados = DemandaService._validar_dados(
-            db, eleitor_id, titulo, descricao, categoria, status, prioridade
+            db, eleitor_id, titulo, descricao, categoria_id, subcategoria_id, status, prioridade
         )
         demanda = Demanda(
             eleitor_id=dados["eleitor_id"],
             titulo=dados["titulo"],
             descricao=dados["descricao"],
-            categoria=dados["categoria"],
+            categoria=dados["categoria_nome"],
+            categoria_id=dados["categoria_id"],
+            subcategoria_id=dados["subcategoria_id"],
             status=dados["status"],
             prioridade=dados["prioridade"],
             responsavel=(responsavel or "").strip() or None,
             prazo=prazo,
             observacoes_internas=(observacoes_internas or "").strip() or None,
-            data_abertura=datetime.now(),
-            data_fechamento=datetime.now() if dados["status"] == "Concluída" else None,
+            secretaria=(secretaria or "").strip() or None,
+            ref_historico=ref_historico,
+            data_abertura=data_abertura or datetime.now(),
+            data_fechamento=(
+                datetime.now() if fechar_automaticamente and dados["status"] == "Concluída" else None
+            ),
         )
         db.add(demanda)
         db.commit()
         db.refresh(demanda)
+        AgendaService.sincronizar_retorno_demanda(db, demanda)
         return demanda
 
     @staticmethod
@@ -244,7 +269,8 @@ class DemandaService:
         eleitor_id: str | None,
         titulo: str,
         descricao: str | None,
-        categoria: str | None,
+        categoria_id: str | None,
+        subcategoria_id: str | None,
         status: str | None,
         prioridade: str | None,
         responsavel: str | None = None,
@@ -252,7 +278,7 @@ class DemandaService:
         observacoes_internas: str | None = None,
     ) -> Demanda:
         dados = DemandaService._validar_dados(
-            db, eleitor_id, titulo, descricao, categoria, status, prioridade
+            db, eleitor_id, titulo, descricao, categoria_id, subcategoria_id, status, prioridade
         )
 
         if demanda.status == "Concluída" and dados["status"] == "Aberta":
@@ -266,7 +292,9 @@ class DemandaService:
         demanda.eleitor_id = dados["eleitor_id"]
         demanda.titulo = dados["titulo"]
         demanda.descricao = dados["descricao"]
-        demanda.categoria = dados["categoria"]
+        demanda.categoria = dados["categoria_nome"]
+        demanda.categoria_id = dados["categoria_id"]
+        demanda.subcategoria_id = dados["subcategoria_id"]
         demanda.status = dados["status"]
         demanda.prioridade = dados["prioridade"]
         demanda.responsavel = (responsavel or "").strip() or None
@@ -275,10 +303,12 @@ class DemandaService:
 
         db.commit()
         db.refresh(demanda)
+        AgendaService.sincronizar_retorno_demanda(db, demanda)
         return demanda
 
     @staticmethod
     def excluir(db: Session, demanda: Demanda) -> None:
+        AgendaService.excluir_compromisso_da_demanda(db, demanda.id)
         db.delete(demanda)
         db.commit()
 
@@ -288,7 +318,8 @@ class DemandaService:
         eleitor_id: str | None,
         titulo: str,
         descricao: str | None,
-        categoria: str | None,
+        categoria_id: str | None,
+        subcategoria_id: str | None,
         status: str | None,
         prioridade: str | None,
     ) -> dict[str, Any]:
@@ -308,8 +339,26 @@ class DemandaService:
         if not descricao_normalizada:
             raise ValueError("Descrição obrigatória.")
 
-        if categoria not in CATEGORIAS:
+        try:
+            categoria_id_convertido = int(categoria_id) if categoria_id else None
+        except (TypeError, ValueError):
+            categoria_id_convertido = None
+
+        categoria_obj = (
+            db.get(Categoria, categoria_id_convertido) if categoria_id_convertido else None
+        )
+        if categoria_obj is None:
             raise ValueError("Categoria obrigatória.")
+
+        subcategoria_id_convertido = None
+        if subcategoria_id and subcategoria_id.strip():
+            try:
+                subcategoria_id_convertido = int(subcategoria_id)
+            except (TypeError, ValueError):
+                raise ValueError("Subcategoria inválida.")
+            subcategoria_obj = db.get(Subcategoria, subcategoria_id_convertido)
+            if subcategoria_obj is None or subcategoria_obj.categoria_id != categoria_obj.id:
+                raise ValueError("Subcategoria não pertence à categoria selecionada.")
 
         if status not in STATUS_OPCOES:
             raise ValueError("Status obrigatório.")
@@ -321,7 +370,9 @@ class DemandaService:
             "eleitor_id": eleitor_id_convertido,
             "titulo": titulo_normalizado,
             "descricao": descricao_normalizada,
-            "categoria": categoria,
+            "categoria_id": categoria_obj.id,
+            "categoria_nome": categoria_obj.nome,
+            "subcategoria_id": subcategoria_id_convertido,
             "status": status,
             "prioridade": prioridade,
         }

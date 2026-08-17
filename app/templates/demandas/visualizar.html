@@ -33,6 +33,11 @@
             <dt class="col-sm-3">WhatsApp</dt>
             <dd class="col-sm-9">{{ eleitor.whatsapp if eleitor and eleitor.whatsapp else '-' }}</dd>
 
+            {% if eleitor and eleitor.titulo_eleitor %}
+            <dt class="col-sm-3">Título de eleitor</dt>
+            <dd class="col-sm-9">{{ eleitor.titulo_eleitor }}</dd>
+            {% endif %}
+
             <dt class="col-sm-3">Cidade</dt>
             <dd class="col-sm-9 mb-0">{{ eleitor.cidade if eleitor and eleitor.cidade else '-' }}</dd>
         </dl>
@@ -51,6 +56,9 @@
             <dt class="col-sm-3">Categoria</dt>
             <dd class="col-sm-9">{{ demanda.categoria or '-' }}</dd>
 
+            <dt class="col-sm-3">Subcategoria</dt>
+            <dd class="col-sm-9">{{ demanda.subcategoria_vinculada.nome if demanda.subcategoria_vinculada else '-' }}</dd>
+
             <dt class="col-sm-3">Responsável</dt>
             <dd class="col-sm-9">{{ demanda.responsavel or '-' }}</dd>
 
@@ -58,7 +66,13 @@
             <dd class="col-sm-9">{{ demanda.data_abertura.strftime('%d/%m/%Y %H:%M') if demanda.data_abertura else '-' }}</dd>
 
             <dt class="col-sm-3">Prazo</dt>
-            <dd class="col-sm-9">{{ demanda.prazo.strftime('%d/%m/%Y') if demanda.prazo else '-' }}</dd>
+            <dd class="col-sm-9">
+                {{ demanda.prazo.strftime('%d/%m/%Y') if demanda.prazo else '-' }}
+                {% if compromisso_retorno %}
+                <br><span class="badge text-bg-info text-dark">Retorno agendado para {{ compromisso_retorno.inicio.strftime('%d/%m/%Y') }}</span>
+                <a class="ms-1" href="/agenda/{{ compromisso_retorno.id }}">Abrir compromisso</a>
+                {% endif %}
+            </dd>
 
             <dt class="col-sm-3">Data de conclusão</dt>
             <dd class="col-sm-9">{{ demanda.data_fechamento.strftime('%d/%m/%Y %H:%M') if demanda.data_fechamento else '-' }}</dd>

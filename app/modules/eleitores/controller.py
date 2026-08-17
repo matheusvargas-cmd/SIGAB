@@ -74,11 +74,29 @@ def criar(
     bairro: str | None = Form(None),
     cidade: str | None = Form(None),
     observacoes: str | None = Form(None),
+    apelido: str | None = Form(None),
+    email: str | None = Form(None),
+    cpf: str | None = Form(None),
+    titulo_eleitor: str | None = Form(None),
+    zona_eleitoral: str | None = Form(None),
     db: Session = Depends(get_db),
 ):
     try:
         EleitorService.criar(
-            db, nome, telefone, whatsapp, nascimento, endereco, bairro, cidade, observacoes
+            db,
+            nome,
+            telefone,
+            whatsapp,
+            nascimento,
+            endereco,
+            bairro,
+            cidade,
+            observacoes,
+            apelido,
+            email,
+            cpf,
+            titulo_eleitor,
+            zona_eleitoral,
         )
     except ValueError as error:
         eleitor_preenchido = SimpleNamespace(
@@ -91,6 +109,11 @@ def criar(
             bairro=bairro,
             cidade=cidade,
             observacoes=observacoes,
+            apelido=apelido,
+            email=email,
+            cpf=cpf,
+            titulo_eleitor=titulo_eleitor,
+            zona_eleitoral=zona_eleitoral,
         )
         return templates.TemplateResponse(
             request=request,
@@ -146,6 +169,21 @@ async def importar_csv(
     )
 
 
+@router.post("/importar-historico", response_class=HTMLResponse)
+async def importar_csv_historico(
+    request: Request,
+    arquivo: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    conteudo = await arquivo.read()
+    resultado = EleitorCsvService.importar_historico(db, conteudo)
+    return templates.TemplateResponse(
+        request=request,
+        name="eleitores/importar.html",
+        context={"titulo": "Importar eleitores", "resultado": resultado},
+    )
+
+
 @router.get("/{eleitor_id}", response_class=HTMLResponse)
 def visualizar(request: Request, eleitor_id: int, db: Session = Depends(get_db)):
     eleitor = EleitorService.obter_por_id(db, eleitor_id)
@@ -182,6 +220,11 @@ def atualizar(
     bairro: str | None = Form(None),
     cidade: str | None = Form(None),
     observacoes: str | None = Form(None),
+    apelido: str | None = Form(None),
+    email: str | None = Form(None),
+    cpf: str | None = Form(None),
+    titulo_eleitor: str | None = Form(None),
+    zona_eleitoral: str | None = Form(None),
     db: Session = Depends(get_db),
 ):
     eleitor = EleitorService.obter_por_id(db, eleitor_id)
@@ -199,6 +242,11 @@ def atualizar(
             bairro,
             cidade,
             observacoes,
+            apelido,
+            email,
+            cpf,
+            titulo_eleitor,
+            zona_eleitoral,
         )
     except ValueError as error:
         eleitor_preenchido = SimpleNamespace(
@@ -211,6 +259,11 @@ def atualizar(
             bairro=bairro,
             cidade=cidade,
             observacoes=observacoes,
+            apelido=apelido,
+            email=email,
+            cpf=cpf,
+            titulo_eleitor=titulo_eleitor,
+            zona_eleitoral=zona_eleitoral,
         )
         return templates.TemplateResponse(
             request=request,

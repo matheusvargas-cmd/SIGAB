@@ -9,14 +9,29 @@
 <div class="card">
     <div class="card-body p-4">
         <dl class="row mb-0">
+            <dt class="col-sm-3">Apelido</dt>
+            <dd class="col-sm-9">{{ eleitor.apelido or '-' }}</dd>
+
             <dt class="col-sm-3">Telefone</dt>
             <dd class="col-sm-9">{{ eleitor.telefone or '-' }}</dd>
 
             <dt class="col-sm-3">WhatsApp</dt>
             <dd class="col-sm-9">{{ eleitor.whatsapp or '-' }}</dd>
 
+            <dt class="col-sm-3">E-mail</dt>
+            <dd class="col-sm-9">{{ eleitor.email or '-' }}</dd>
+
             <dt class="col-sm-3">Nascimento</dt>
             <dd class="col-sm-9">{{ eleitor.nascimento.strftime('%d/%m/%Y') if eleitor.nascimento else '-' }}</dd>
+
+            <dt class="col-sm-3">CPF</dt>
+            <dd class="col-sm-9">{{ eleitor.cpf or '-' }}</dd>
+
+            <dt class="col-sm-3">Título de eleitor</dt>
+            <dd class="col-sm-9">{{ eleitor.titulo_eleitor or '-' }}</dd>
+
+            <dt class="col-sm-3">Zona eleitoral</dt>
+            <dd class="col-sm-9">{{ eleitor.zona_eleitoral or '-' }}</dd>
 
             <dt class="col-sm-3">Endereço</dt>
             <dd class="col-sm-9">{{ eleitor.endereco or '-' }}</dd>

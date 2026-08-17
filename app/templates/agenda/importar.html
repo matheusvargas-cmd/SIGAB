@@ -1,0 +1,63 @@
+{% extends 'shared/base.html' %}
+
+{% block conteudo %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">Importar agenda</h2>
+    <a class="btn btn-outline-secondary" href="/agenda">Voltar</a>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body p-4">
+        <p class="mb-2">Importar arquivo histórico de compromissos do sistema anterior (<code>compromisso.csv</code>).</p>
+        <ul class="text-muted small mb-3">
+            <li>Formato próprio do sistema anterior (colunas "Data inicio", "Data fim", "Assunto", "Descrição", "Local", "Nome solicitante", "Telefone solicitante").</li>
+            <li>O arquivo não tem um identificador próprio — a importação gera um identificador a partir dos dados de cada linha, para não duplicar ao executar novamente.</li>
+            <li>Compromissos importados nunca são vinculados a eleitor ou demanda.</li>
+            <li>Registros com horário de término inválido são importados só com o início; o término é descartado e registrado no resultado.</li>
+        </ul>
+        <form method="post" action="/agenda/importar" enctype="multipart/form-data" class="d-flex flex-wrap gap-2 align-items-center">
+            <input class="form-control" style="max-width: 360px;" type="file" name="arquivo" accept=".csv,text/csv" required>
+            <button class="btn btn-primary" type="submit">Importar</button>
+        </form>
+    </div>
+</div>
+
+{% if resultado %}
+<div class="card mb-4">
+    <div class="card-header">Resultado da importação</div>
+    <div class="card-body p-4">
+        {% if resultado.erro_arquivo %}
+        <div class="alert alert-danger mb-0" role="alert">{{ resultado.erro_arquivo }}</div>
+        {% else %}
+        <p class="mb-0">
+            <strong>{{ resultado.processados }}</strong> processados ·
+            <strong>{{ resultado.importados }}</strong> importados ·
+            <strong>{{ resultado.existentes }}</strong> já existentes ·
+            <strong>{{ resultado.fim_invalido_ajustado }}</strong> com fim inválido ajustado ·
+            <strong>{{ resultado.erros|length }}</strong> com erro
+        </p>
+        {% endif %}
+    </div>
+</div>
+
+{% if resultado.erros %}
+<div class="card">
+    <div class="card-header">Erros encontrados</div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm mb-0">
+                <thead>
+                    <tr><th>Linha</th><th>Assunto</th><th>Motivo</th></tr>
+                </thead>
+                <tbody>
+                    {% for numero, assunto, motivo in resultado.erros %}
+                    <tr><td>{{ numero }}</td><td>{{ assunto or '-' }}</td><td>{{ motivo }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

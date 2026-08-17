@@ -278,6 +278,16 @@ a:hover {
   height: 100%;
 }
 
+a.stat-card {
+  color: inherit;
+  text-decoration: none;
+  transition: background-color 0.12s ease;
+}
+
+a.stat-card:hover {
+  background-color: rgba(25, 118, 210, 0.05);
+}
+
 .stat-card-icone {
   width: 52px;
   height: 52px;

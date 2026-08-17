@@ -10,6 +10,9 @@
 <div class="alert alert-danger" role="alert">{{ erro }}</div>
 {% endif %}
 
+{% if not eleitor_resolvido %}
+{% include 'shared/_busca_eleitor.html' %}
+{% else %}
 <form class="card" method="post" action="{% if compromisso and compromisso.id %}/agenda/{{ compromisso.id }}/editar{% else %}/agenda/novo{% endif %}">
     <div class="card-body p-4">
         <div class="row g-3">
@@ -58,14 +61,34 @@
             <div class="col-12">
                 <p class="form-secao-titulo mb-0">Eleitor relacionado (opcional)</p>
             </div>
-            <div class="col-md-6">
-                <label class="form-label" for="eleitor_id">Eleitor</label>
-                <select class="form-select" id="eleitor_id" name="eleitor_id">
-                    <option value="">Nenhum</option>
-                    {% for opcao in eleitores %}
-                    <option value="{{ opcao.id }}" {% if compromisso and compromisso.eleitor_id == opcao.id %}selected{% endif %}>{{ opcao.nome }}</option>
-                    {% endfor %}
-                </select>
+            <div class="col-12">
+                <label class="form-label">Eleitor</label>
+                {% if eleitor_atual %}
+                <div class="d-flex align-items-start justify-content-between gap-2 border rounded p-3 bg-light">
+                    <dl class="row mb-0 flex-grow-1">
+                        <dt class="col-sm-3">Nome</dt>
+                        <dd class="col-sm-9">{{ eleitor_atual.nome }}</dd>
+
+                        <dt class="col-sm-3">Telefone</dt>
+                        <dd class="col-sm-9">{{ eleitor_atual.telefone or eleitor_atual.whatsapp or '-' }}</dd>
+
+                        {% if eleitor_atual.titulo_eleitor %}
+                        <dt class="col-sm-3">Título de eleitor</dt>
+                        <dd class="col-sm-9">{{ eleitor_atual.titulo_eleitor }}</dd>
+                        {% endif %}
+
+                        <dt class="col-sm-3">Bairro/Cidade</dt>
+                        <dd class="col-sm-9 mb-0">{{ eleitor_atual.bairro or '-' }}{% if eleitor_atual.cidade %} · {{ eleitor_atual.cidade }}{% endif %}</dd>
+                    </dl>
+                    <a class="btn btn-sm btn-outline-secondary text-nowrap" href="{{ acao_busca }}?trocar_eleitor=1">Trocar</a>
+                </div>
+                {% else %}
+                <div class="d-flex align-items-center justify-content-between gap-2 border rounded p-3 bg-light">
+                    <span class="form-control-plaintext py-0 text-muted">Nenhum</span>
+                    <a class="btn btn-sm btn-outline-secondary text-nowrap" href="{{ acao_busca }}?trocar_eleitor=1">Trocar</a>
+                </div>
+                {% endif %}
+                <input type="hidden" name="eleitor_id" value="{{ eleitor_atual.id if eleitor_atual else '' }}">
             </div>
             <div class="col-md-6">
                 <label class="form-label" for="telefone_contato">Telefone/contato</label>
@@ -83,6 +106,7 @@
         <button class="btn btn-primary" type="submit">Salvar</button>
     </div>
 </form>
+{% endif %}
 
 <script>
 (function () {
