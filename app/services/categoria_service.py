@@ -18,6 +18,20 @@ class CategoriaService:
         return list(db.scalars(consulta).all())
 
     @staticmethod
+    def listar_nomes_para_filtro(db: Session, selecionado: str | None = None) -> list[str]:
+        """Nomes de categoria para dropdowns de filtro de relatórios: as
+        categorias ativas, mais a categoria atualmente selecionada mesmo
+        que esteja inativa — para continuar permitindo filtrar/visualizar
+        dados históricos já vinculados a ela (mesmo padrão do formulário
+        de Demanda)."""
+        nomes = [categoria.nome for categoria in CategoriaService.listar_ativas(db)]
+        if selecionado and selecionado not in nomes:
+            if CategoriaService.obter_por_nome(db, selecionado) is not None:
+                nomes.append(selecionado)
+                nomes.sort()
+        return nomes
+
+    @staticmethod
     def obter_por_id(db: Session, categoria_id: int) -> Categoria | None:
         return db.get(Categoria, categoria_id)
 

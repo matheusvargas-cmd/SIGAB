@@ -11,7 +11,8 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.services.agenda_service import STATUS_OPCOES as AGENDA_STATUS_OPCOES
 from app.services.agenda_service import AgendaService
-from app.services.demanda_service import CATEGORIAS, PRIORIDADE_OPCOES
+from app.services.categoria_service import CategoriaService
+from app.services.demanda_service import PRIORIDADE_OPCOES
 from app.services.demanda_service import STATUS_OPCOES as DEMANDA_STATUS_OPCOES
 from app.services.demanda_service import DemandaService
 from app.services.eleitor_service import EleitorService
@@ -78,7 +79,7 @@ def demandas_por_status(
             "data_fim": fim,
             "categoria": categoria,
             "prioridade": prioridade,
-            "categorias": CATEGORIAS,
+            "categorias": CategoriaService.listar_nomes_para_filtro(db, categoria),
             "prioridades": PRIORIDADE_OPCOES,
             "query_export": _query_string(
                 data_inicio=inicio, data_fim=fim, categoria=categoria, prioridade=prioridade
@@ -208,7 +209,7 @@ def demandas_por_periodo(
             "status": status,
             "categoria": categoria,
             "status_opcoes": DEMANDA_STATUS_OPCOES,
-            "categorias": CATEGORIAS,
+            "categorias": CategoriaService.listar_nomes_para_filtro(db, categoria),
             "query_export": _query_string(
                 data_inicio=inicio, data_fim=fim, status=status, categoria=categoria
             ),

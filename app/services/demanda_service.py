@@ -146,14 +146,15 @@ class DemandaService:
         status: str | None = None,
         prioridade: str | None = None,
     ) -> list[dict]:
-        consulta = select(Demanda.categoria, func.count()).group_by(Demanda.categoria)
+        consulta = select(Demanda.categoria_id, func.count()).group_by(Demanda.categoria_id)
         consulta = DemandaService._aplicar_filtros_relatorio(
             consulta, data_inicio, data_fim, status=status, prioridade=prioridade
         )
         contagem = dict(db.execute(consulta).all())
+        categorias = db.scalars(select(Categoria).order_by(Categoria.nome)).all()
         resultado = [
-            {"rotulo": categoria, "quantidade": contagem.get(categoria, 0)}
-            for categoria in CATEGORIAS
+            {"rotulo": categoria.nome, "quantidade": contagem.get(categoria.id, 0)}
+            for categoria in categorias
         ]
         resultado.sort(key=lambda item: item["quantidade"], reverse=True)
         return resultado
