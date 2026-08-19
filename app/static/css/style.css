@@ -62,6 +62,10 @@
 
 /* ---------- Base ---------- */
 
+html {
+  font-size: 15px;
+}
+
 body {
   background: var(--c360-cinza-claro);
   color: var(--c360-cinza-texto);
@@ -134,7 +138,8 @@ a:hover {
   transition: background-color 0.18s ease, color 0.18s ease, transform 0.12s ease;
 }
 
-.sidebar-nav a svg {
+.sidebar-nav a svg,
+.sidebar-grupo-titulo svg {
   width: 21px;
   height: 21px;
   flex-shrink: 0;
@@ -157,28 +162,57 @@ a:hover {
   transform: none;
 }
 
+.sidebar-grupo summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.sidebar-grupo summary::-webkit-details-marker,
+.sidebar-grupo summary::marker {
+  display: none;
+  content: '';
+}
+
 .sidebar-grupo-titulo {
   display: flex;
   align-items: center;
   gap: 14px;
   padding: 12px 14px;
-  color: rgba(255, 255, 255, 0.55);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-size: 0.72rem;
-  font-weight: 700;
+  border-radius: var(--c360-radius-sm);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.94rem;
+  font-weight: 500;
+  transition: background-color 0.18s ease, color 0.18s ease;
 }
 
-.sidebar-grupo-titulo svg {
-  width: 21px;
-  height: 21px;
+.sidebar-grupo-titulo:hover {
+  background: rgba(255, 255, 255, 0.10);
+  color: var(--c360-branco);
+}
+
+.sidebar-grupo-titulo.ativo {
+  background: linear-gradient(135deg, var(--c360-azul-secundario), var(--c360-azul-secundario-escuro));
+  color: var(--c360-branco);
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.sidebar-grupo-seta {
+  width: 16px;
+  height: 16px;
+  margin-left: auto;
   flex-shrink: 0;
+  transition: transform 0.18s ease;
+}
+
+.sidebar-grupo[open] .sidebar-grupo-seta {
+  transform: rotate(90deg);
 }
 
 .sidebar-subnav {
   list-style: none;
   margin: 0;
-  padding: 0 12px 0 26px;
+  padding: 4px 12px 0 26px;
 }
 
 .sidebar-subnav a {
@@ -375,10 +409,14 @@ a.stat-card:hover {
 }
 
 .table td {
-  padding-top: 14px;
-  padding-bottom: 14px;
+  padding-top: 12px;
+  padding-bottom: 12px;
   vertical-align: middle;
   border-bottom-color: var(--c360-borda);
+}
+
+.table tbody tr:nth-of-type(even) {
+  background-color: var(--c360-cinza-claro);
 }
 
 .table-hover tbody tr {
@@ -390,7 +428,7 @@ a.stat-card:hover {
 }
 
 .linha-passada {
-  opacity: 0.6;
+  opacity: 0.82;
 }
 
 .table td.text-muted,
