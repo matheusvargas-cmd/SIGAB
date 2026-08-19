@@ -385,8 +385,20 @@ a.stat-card:hover {
   border-bottom-color: var(--c360-borda);
 }
 
-.table tbody tr:nth-of-type(even) {
-  background-color: var(--c360-cinza-claro);
+/* O Bootstrap 5.3 pinta o fundo de cada célula individualmente via
+   variáveis CSS (--bs-table-bg-type/--bs-table-bg-state) compostas com um
+   box-shadow inset — um background-color direto no <tr> fica escondido
+   atrás disso. O zebra e o hover por isso são feitos pelas mesmas
+   variáveis que o Bootstrap já usa internamente para .table-striped e
+   .table-hover, garantindo que realmente apareçam e que o hover sempre
+   sobreponha corretamente o zebra (--bs-table-bg-state tem prioridade
+   sobre --bs-table-bg-type nessa cadeia). */
+.table tbody tr:nth-of-type(even) > * {
+  --bs-table-bg-type: var(--c360-cinza-claro);
+}
+
+.table-hover {
+  --bs-table-hover-bg: rgba(25, 118, 210, 0.08);
 }
 
 .tabela-fixa {
@@ -396,6 +408,8 @@ a.stat-card:hover {
 .tabela-fixa td,
 .tabela-fixa th {
   overflow-wrap: break-word;
+  padding-left: 0.4rem;
+  padding-right: 0.4rem;
 }
 
 .tabela-fixa td.text-nowrap,
@@ -403,12 +417,16 @@ a.stat-card:hover {
   overflow-wrap: normal;
 }
 
-.table-hover tbody tr {
-  transition: background-color 0.12s ease;
+.tabela-fixa .acoes-compactas {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
 }
 
-.table-hover tbody tr:hover {
-  background-color: rgba(25, 118, 210, 0.05);
+.tabela-fixa .acoes-compactas .btn {
+  padding-left: 0.4rem;
+  padding-right: 0.4rem;
 }
 
 .linha-passada {

@@ -79,11 +79,13 @@
                         <td>{{ demanda.responsavel or '-' }}</td>
                         <td>{{ demanda.prazo.strftime('%d/%m/%Y') if demanda.prazo else '-' }}</td>
                         <td class="text-end pe-3 text-nowrap">
-                            <a class="btn btn-sm btn-outline-secondary" href="/demandas/{{ demanda.id }}">Visualizar</a>
-                            <a class="btn btn-sm btn-outline-primary" href="/demandas/{{ demanda.id }}/editar">Editar</a>
-                            <form class="d-inline" method="post" action="/demandas/{{ demanda.id }}/excluir" onsubmit="return confirm('Confirma a exclusão desta demanda?');">
-                                <button class="btn btn-sm btn-outline-danger" type="submit">Excluir</button>
-                            </form>
+                            <div class="acoes-compactas">
+                                <a class="btn btn-sm btn-outline-secondary" href="/demandas/{{ demanda.id }}">Visualizar</a>
+                                <a class="btn btn-sm btn-outline-primary" href="/demandas/{{ demanda.id }}/editar">Editar</a>
+                                <form class="d-inline" method="post" action="/demandas/{{ demanda.id }}/excluir" onsubmit="return confirm('Confirma a exclusão desta demanda?');">
+                                    <button class="btn btn-sm btn-outline-danger" type="submit">Excluir</button>
+                                </form>
+                            </div>
                         </td>
                     </tr>
                     {% else %}
