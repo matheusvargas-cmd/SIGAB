@@ -138,11 +138,22 @@ a:hover {
   transition: background-color 0.18s ease, color 0.18s ease, transform 0.12s ease;
 }
 
-.sidebar-nav a svg,
-.sidebar-grupo-titulo svg {
+.sidebar-nav a svg {
   width: 21px;
   height: 21px;
   flex-shrink: 0;
+}
+
+.sidebar-nav a svg.sidebar-seta {
+  width: 14px;
+  height: 14px;
+  margin-left: auto;
+  flex-shrink: 0;
+  transition: transform 0.18s ease;
+}
+
+.sidebar-toggle.aberto .sidebar-seta {
+  transform: rotate(90deg);
 }
 
 .sidebar-nav a:hover {
@@ -162,57 +173,16 @@ a:hover {
   transform: none;
 }
 
-.sidebar-grupo summary {
-  list-style: none;
-  cursor: pointer;
-}
-
-.sidebar-grupo summary::-webkit-details-marker,
-.sidebar-grupo summary::marker {
-  display: none;
-  content: '';
-}
-
-.sidebar-grupo-titulo {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 14px;
-  border-radius: var(--c360-radius-sm);
-  color: rgba(255, 255, 255, 0.78);
-  font-size: 0.94rem;
-  font-weight: 500;
-  transition: background-color 0.18s ease, color 0.18s ease;
-}
-
-.sidebar-grupo-titulo:hover {
-  background: rgba(255, 255, 255, 0.10);
-  color: var(--c360-branco);
-}
-
-.sidebar-grupo-titulo.ativo {
-  background: linear-gradient(135deg, var(--c360-azul-secundario), var(--c360-azul-secundario-escuro));
-  color: var(--c360-branco);
-  font-weight: 600;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
-
-.sidebar-grupo-seta {
-  width: 16px;
-  height: 16px;
-  margin-left: auto;
-  flex-shrink: 0;
-  transition: transform 0.18s ease;
-}
-
-.sidebar-grupo[open] .sidebar-grupo-seta {
-  transform: rotate(90deg);
-}
-
 .sidebar-subnav {
   list-style: none;
   margin: 0;
-  padding: 4px 12px 0 26px;
+  padding: 0 12px 0 26px;
+  display: none;
+}
+
+.sidebar-subnav.aberto {
+  display: block;
+  margin-top: 4px;
 }
 
 .sidebar-subnav a {
@@ -419,6 +389,20 @@ a.stat-card:hover {
   background-color: var(--c360-cinza-claro);
 }
 
+.tabela-fixa {
+  table-layout: fixed;
+}
+
+.tabela-fixa td,
+.tabela-fixa th {
+  overflow-wrap: break-word;
+}
+
+.tabela-fixa td.text-nowrap,
+.tabela-fixa th.text-nowrap {
+  overflow-wrap: normal;
+}
+
 .table-hover tbody tr {
   transition: background-color 0.12s ease;
 }
@@ -428,7 +412,7 @@ a.stat-card:hover {
 }
 
 .linha-passada {
-  opacity: 0.82;
+  opacity: 1;
 }
 
 .table td.text-muted,

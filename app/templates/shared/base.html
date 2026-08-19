@@ -66,18 +66,16 @@
             </a>
         </li>
         <li>
-            <details class="sidebar-grupo" {% if caminho.startswith('/configuracoes') %}open{% endif %}>
-                <summary class="sidebar-grupo-titulo {% if caminho.startswith('/configuracoes') %}ativo{% endif %}">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
-                    Cadastros
-                    <svg class="sidebar-grupo-seta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"></path></svg>
-                </summary>
-                <ul class="sidebar-subnav">
-                    <li>
-                        <a href="/configuracoes/categorias" class="{% if caminho.startswith('/configuracoes') %}ativo{% endif %}">Categorias</a>
-                    </li>
-                </ul>
-            </details>
+            <a href="#" class="sidebar-toggle {% if caminho.startswith('/configuracoes') %}ativo aberto{% endif %}" data-sidebar-toggle="cadastros">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+                Cadastros
+                <svg class="sidebar-seta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"></path></svg>
+            </a>
+            <ul class="sidebar-subnav {% if caminho.startswith('/configuracoes') %}aberto{% endif %}" data-sidebar-submenu="cadastros">
+                <li>
+                    <a href="/configuracoes/categorias" class="{% if caminho.startswith('/configuracoes') %}ativo{% endif %}">Categorias</a>
+                </li>
+            </ul>
         </li>
     </ul>
     <div class="sidebar-rodape">conecta360</div>
@@ -98,5 +96,18 @@
 </main>
 </div>
 </div>
+<script>
+document.querySelectorAll('[data-sidebar-toggle]').forEach(function (toggle) {
+    toggle.addEventListener('click', function (evento) {
+        evento.preventDefault();
+        var chave = toggle.getAttribute('data-sidebar-toggle');
+        var submenu = document.querySelector('[data-sidebar-submenu="' + chave + '"]');
+        toggle.classList.toggle('aberto');
+        if (submenu) {
+            submenu.classList.toggle('aberto');
+        }
+    });
+});
+</script>
 </body>
 </html>
