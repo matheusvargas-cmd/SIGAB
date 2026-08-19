@@ -75,6 +75,19 @@ class AgendaService:
         return db.scalar(consulta) or 0
 
     @staticmethod
+    def contar_hoje(db: Session) -> int:
+        hoje = date.today()
+        inicio_dia = datetime.combine(hoje, time.min)
+        fim_dia = datetime.combine(hoje, time.max)
+        consulta = (
+            select(func.count())
+            .select_from(Agenda)
+            .where(Agenda.inicio >= inicio_dia)
+            .where(Agenda.inicio <= fim_dia)
+        )
+        return db.scalar(consulta) or 0
+
+    @staticmethod
     def listar_proximos(db: Session, limite: int = 5) -> list[Agenda]:
         agora = datetime.now()
         consulta = (

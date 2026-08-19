@@ -1,4 +1,4 @@
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from math import ceil
 from typing import Any
 
@@ -107,6 +107,36 @@ class DemandaService:
     def contar_concluidas(db: Session) -> int:
         consulta = (
             select(func.count()).select_from(Demanda).where(Demanda.status == "Concluída")
+        )
+        return db.scalar(consulta) or 0
+
+    @staticmethod
+    def contar_total(db: Session) -> int:
+        return db.scalar(select(func.count()).select_from(Demanda)) or 0
+
+    @staticmethod
+    def contar_atrasadas(db: Session) -> int:
+        hoje = date.today()
+        consulta = (
+            select(func.count())
+            .select_from(Demanda)
+            .where(Demanda.prazo.isnot(None))
+            .where(Demanda.prazo < hoje)
+            .where(Demanda.status.notin_(STATUS_FINALIZADOS))
+        )
+        return db.scalar(consulta) or 0
+
+    @staticmethod
+    def contar_prazo_proximo(db: Session, dias: int = 7) -> int:
+        hoje = date.today()
+        limite = hoje + timedelta(days=dias)
+        consulta = (
+            select(func.count())
+            .select_from(Demanda)
+            .where(Demanda.prazo.isnot(None))
+            .where(Demanda.prazo >= hoje)
+            .where(Demanda.prazo <= limite)
+            .where(Demanda.status.notin_(STATUS_FINALIZADOS))
         )
         return db.scalar(consulta) or 0
 

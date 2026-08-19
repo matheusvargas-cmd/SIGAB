@@ -20,30 +20,30 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"></rect><path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"></path><path d="M9 11h6M9 15h6M9 19h3"></path></svg>
             </div>
             <div>
-                <div class="stat-card-valor">{{ total_demandas_andamento }}</div>
-                <div class="stat-card-rotulo">Demandas em andamento</div>
+                <div class="stat-card-valor">{{ total_demandas }}</div>
+                <div class="stat-card-rotulo">Demandas</div>
             </div>
         </a>
     </div>
     <div class="col-sm-6 col-xl-3">
         <a class="stat-card" href="/demandas">
-            <div class="stat-card-icone bg-verde">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+            <div class="stat-card-icone bg-laranja">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"></path><path d="M12 17h.01"></path><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"></path></svg>
             </div>
             <div>
-                <div class="stat-card-valor">{{ total_demandas_concluidas }}</div>
-                <div class="stat-card-rotulo">Demandas concluídas</div>
+                <div class="stat-card-valor">{{ total_demandas_pendentes }}</div>
+                <div class="stat-card-rotulo">Pendências</div>
             </div>
         </a>
     </div>
     <div class="col-sm-6 col-xl-3">
         <a class="stat-card" href="/agenda">
-            <div class="stat-card-icone bg-laranja">
+            <div class="stat-card-icone bg-verde">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>
             </div>
             <div>
-                <div class="stat-card-valor">{{ total_compromissos }}</div>
-                <div class="stat-card-rotulo">Compromissos na agenda</div>
+                <div class="stat-card-valor">{{ total_compromissos_hoje }}</div>
+                <div class="stat-card-rotulo">Agenda de hoje</div>
             </div>
         </a>
     </div>
@@ -52,62 +52,60 @@
 <div class="row g-3 mt-1">
     <div class="col-lg-6">
         <div class="card h-100">
-            <div class="card-header">Eleitores</div>
-            <div class="card-body p-0">
-                {% if eleitores_recentes %}
-                <ul class="list-group list-group-flush">
-                    {% for eleitor in eleitores_recentes %}
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                        <div>
-                            <div class="fw-semibold">{{ eleitor.nome }}</div>
-                            <div class="text-muted small">{{ eleitor.telefone or eleitor.whatsapp or '-' }} · {{ eleitor.bairro or eleitor.cidade or '-' }}</div>
-                        </div>
-                        <a class="btn btn-sm btn-outline-secondary" href="/eleitores/{{ eleitor.id }}">Ver</a>
-                    </li>
-                    {% endfor %}
-                </ul>
+            <div class="card-header">Demandas por status</div>
+            <div class="card-body">
+                {% if total_demandas %}
+                {% set status_classes = {
+                    'Aberta': 'bg-primary',
+                    'Em andamento': 'bg-warning',
+                    'Aguardando terceiros': 'badge-laranja',
+                    'Concluída': 'bg-success',
+                    'Cancelada': 'bg-danger',
+                } %}
+                {% for item in demandas_por_status %}
+                <div class="{% if not loop.last %}mb-3{% endif %}">
+                    <div class="d-flex justify-content-between small mb-1">
+                        <span>{{ item.rotulo }}</span>
+                        <span class="fw-semibold">{{ item.quantidade }}</span>
+                    </div>
+                    <div class="progress" style="height: 8px;" role="progressbar" aria-valuenow="{{ item.quantidade }}" aria-valuemin="0" aria-valuemax="{{ total_demandas }}">
+                        <div class="progress-bar {{ status_classes.get(item.rotulo, 'bg-secondary') }}" style="width: {{ (item.quantidade / total_demandas * 100) | round(1) }}%;"></div>
+                    </div>
+                </div>
+                {% endfor %}
                 {% else %}
-                <p class="text-muted mb-0 p-3">Os cadastros mais recentes aparecerão aqui.</p>
+                <p class="text-muted mb-0">Nenhuma demanda cadastrada.</p>
                 {% endif %}
             </div>
         </div>
     </div>
     <div class="col-lg-6">
         <div class="card h-100">
-            <div class="card-header">Demandas</div>
-            <div class="card-body p-0">
-                {% if demandas_recentes %}
-                {% set status_classes = {
-                    'Aberta': 'text-bg-primary',
-                    'Em andamento': 'text-bg-warning',
-                    'Aguardando terceiros': 'badge-laranja',
-                    'Concluída': 'text-bg-success',
-                    'Cancelada': 'text-bg-danger',
-                } %}
-                {% set prioridade_classes = {
-                    'Baixa': 'text-bg-secondary',
-                    'Normal': 'text-bg-primary',
-                    'Alta': 'badge-laranja',
-                    'Urgente': 'text-bg-danger',
-                } %}
-                <ul class="list-group list-group-flush">
-                    {% for demanda in demandas_recentes %}
-                    <li class="list-group-item">
-                        <div class="d-flex justify-content-between align-items-start gap-2">
-                            <div>
-                                <div class="fw-semibold">{{ demanda.titulo }}</div>
-                                <div class="text-muted small">{{ demanda.eleitor.nome if demanda.eleitor else '-' }}{% if demanda.prazo %} · Prazo {{ demanda.prazo.strftime('%d/%m/%Y') }}{% endif %}</div>
-                            </div>
-                            <div class="text-end text-nowrap">
-                                <span class="badge {{ prioridade_classes.get(demanda.prioridade, 'text-bg-secondary') }}">{{ demanda.prioridade }}</span>
-                                <span class="badge {{ status_classes.get(demanda.status, 'text-bg-secondary') }}">{{ demanda.status }}</span>
-                            </div>
-                        </div>
+            <div class="card-header">Atenção do gabinete</div>
+            <div class="card-body">
+                {% if demandas_atrasadas or demandas_aguardando_terceiros or demandas_prazo_proximo %}
+                <ul class="list-unstyled mb-0">
+                    {% if demandas_atrasadas %}
+                    <li class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                        <span>🔴 Demandas atrasadas</span>
+                        <span class="fw-semibold">{{ demandas_atrasadas }}</span>
                     </li>
-                    {% endfor %}
+                    {% endif %}
+                    {% if demandas_aguardando_terceiros %}
+                    <li class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                        <span>🟠 Aguardando terceiros</span>
+                        <span class="fw-semibold">{{ demandas_aguardando_terceiros }}</span>
+                    </li>
+                    {% endif %}
+                    {% if demandas_prazo_proximo %}
+                    <li class="d-flex justify-content-between align-items-center py-2">
+                        <span>📅 Prazo nos próximos 7 dias</span>
+                        <span class="fw-semibold">{{ demandas_prazo_proximo }}</span>
+                    </li>
+                    {% endif %}
                 </ul>
                 {% else %}
-                <p class="text-muted mb-0 p-3">O acompanhamento das demandas mais recentes aparecerá aqui.</p>
+                <p class="text-success fw-semibold mb-0">✓ Nenhuma pendência crítica no momento.</p>
                 {% endif %}
             </div>
         </div>
@@ -117,29 +115,7 @@
 <div class="row g-3 mt-1">
     <div class="col-lg-6">
         <div class="card h-100">
-            <div class="card-header">Agenda</div>
-            <div class="card-body p-0">
-                {% if proximos_compromissos %}
-                <ul class="list-group list-group-flush">
-                    {% for compromisso in proximos_compromissos %}
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                        <div>
-                            <div class="fw-semibold">{{ compromisso.titulo }}</div>
-                            <div class="text-muted small">{{ compromisso.inicio.strftime('%d/%m/%Y às %H:%M') if compromisso.inicio else '-' }}{% if compromisso.local %} · {{ compromisso.local }}{% endif %}</div>
-                        </div>
-                        <a class="btn btn-sm btn-outline-secondary" href="/agenda/{{ compromisso.id }}">Ver</a>
-                    </li>
-                    {% endfor %}
-                </ul>
-                {% else %}
-                <p class="text-muted mb-0 p-3">Os próximos compromissos aparecerão aqui.</p>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-    <div class="col-lg-6">
-        <div class="card h-100">
-            <div class="card-header">Aniversariantes do dia</div>
+            <div class="card-header">🎂 Aniversariantes do dia</div>
             <div class="card-body p-0">
                 {% if aniversariantes_hoje %}
                 <ul class="list-group list-group-flush">
@@ -154,7 +130,29 @@
                     {% endfor %}
                 </ul>
                 {% else %}
-                <p class="text-muted mb-0 p-3">Nenhum aniversariante hoje.</p>
+                <p class="text-muted mb-0 p-3">🎂 Nenhum aniversariante hoje.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header">Próximos compromissos</div>
+            <div class="card-body p-0">
+                {% if proximos_compromissos %}
+                <ul class="list-group list-group-flush">
+                    {% for compromisso in proximos_compromissos %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="fw-semibold">{{ compromisso.titulo }}</div>
+                            <div class="text-muted small">{{ compromisso.inicio.strftime('%d/%m/%Y às %H:%M') if compromisso.inicio else '-' }}{% if compromisso.local %} · {{ compromisso.local }}{% endif %}{% if compromisso.status %} · {{ compromisso.status }}{% endif %}</div>
+                        </div>
+                        <a class="btn btn-sm btn-outline-secondary" href="/agenda/{{ compromisso.id }}">Ver</a>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted mb-0 p-3">Os próximos compromissos aparecerão aqui.</p>
                 {% endif %}
             </div>
         </div>
