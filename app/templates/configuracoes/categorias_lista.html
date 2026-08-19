@@ -30,7 +30,7 @@
                         <td class="ps-3">{{ categoria.nome }}</td>
                         <td><span class="badge {{ 'text-bg-success' if categoria.ativo else 'text-bg-secondary' }}">{{ 'Ativa' if categoria.ativo else 'Inativa' }}</span></td>
                         <td class="text-end pe-3 text-nowrap">
-                            <a class="btn btn-sm btn-outline-secondary" href="/configuracoes/categorias/{{ categoria.id }}">Visualizar</a>
+                            <a class="btn btn-sm btn-outline-secondary" href="/configuracoes/categorias/{{ categoria.id }}">Subcategorias</a>
                             <a class="btn btn-sm btn-outline-primary" href="/configuracoes/categorias/{{ categoria.id }}/editar">Editar</a>
                             <form class="d-inline" method="post" action="/configuracoes/categorias/{{ categoria.id }}/alternar">
                                 <button class="btn btn-sm btn-outline-warning" type="submit">{{ 'Desativar' if categoria.ativo else 'Ativar' }}</button>

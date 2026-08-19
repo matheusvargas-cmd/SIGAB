@@ -9,7 +9,7 @@ from app.core.database import get_db
 from app.services.categoria_service import CategoriaService
 from app.services.subcategoria_service import SubcategoriaService
 
-router = APIRouter(prefix="/configuracoes/categorias", tags=["Configurações"])
+router = APIRouter(prefix="/configuracoes/categorias", tags=["Cadastros"])
 templates = Jinja2Templates(directory="app/templates")
 
 
@@ -57,7 +57,7 @@ def novo(request: Request):
 @router.post("/novo")
 def criar(request: Request, nome: str = Form(...), db: Session = Depends(get_db)):
     try:
-        CategoriaService.criar(db, nome)
+        categoria = CategoriaService.criar(db, nome)
     except ValueError as error:
         categoria_preenchida = SimpleNamespace(id=None, nome=nome)
         return templates.TemplateResponse(
@@ -70,7 +70,11 @@ def criar(request: Request, nome: str = Form(...), db: Session = Depends(get_db)
             },
             status_code=400,
         )
-    return flash_message("/configuracoes/categorias", "Categoria cadastrada.", "success")
+    return flash_message(
+        f"/configuracoes/categorias/{categoria.id}",
+        "Categoria cadastrada. Cadastre as subcategorias abaixo.",
+        "success",
+    )
 
 
 @router.get("/{categoria_id}", response_class=HTMLResponse)

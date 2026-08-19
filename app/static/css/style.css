@@ -157,6 +157,53 @@ a:hover {
   transform: none;
 }
 
+.sidebar-grupo-titulo {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  color: rgba(255, 255, 255, 0.55);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.sidebar-grupo-titulo svg {
+  width: 21px;
+  height: 21px;
+  flex-shrink: 0;
+}
+
+.sidebar-subnav {
+  list-style: none;
+  margin: 0;
+  padding: 0 12px 0 26px;
+}
+
+.sidebar-subnav a {
+  display: block;
+  padding: 10px 14px;
+  border-radius: var(--c360-radius-sm);
+  color: rgba(255, 255, 255, 0.78);
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+.sidebar-subnav a:hover {
+  background: rgba(255, 255, 255, 0.10);
+  color: var(--c360-branco);
+}
+
+.sidebar-subnav a.ativo {
+  background: linear-gradient(135deg, var(--c360-azul-secundario), var(--c360-azul-secundario-escuro));
+  color: var(--c360-branco);
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
 .sidebar-rodape {
   padding: 16px 20px;
   color: rgba(255, 255, 255, 0.45);
@@ -206,26 +253,6 @@ a:hover {
   display: flex;
   align-items: center;
   gap: 14px;
-}
-
-.topbar-busca {
-  position: relative;
-}
-
-.topbar-busca input {
-  width: 220px;
-  border: 1px solid var(--c360-borda);
-  border-radius: 20px;
-  padding: 7px 14px 7px 34px;
-  font-size: 0.85rem;
-  background: var(--c360-cinza-claro) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%235F6B7A'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0'/%3E%3C/svg%3E") no-repeat 12px center;
-  background-size: 13px;
-}
-
-.topbar-busca input:focus {
-  outline: none;
-  border-color: var(--c360-azul-secundario);
-  box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.15);
 }
 
 .topbar-usuario {
@@ -324,6 +351,13 @@ a.stat-card:hover {
   text-transform: uppercase;
   letter-spacing: 0.03em;
   margin-top: 2px;
+}
+
+/* ---------- Paginação ---------- */
+
+.pagination {
+  flex-wrap: wrap;
+  row-gap: 8px;
 }
 
 /* ---------- Tabelas ---------- */
@@ -604,20 +638,12 @@ a.stat-card:hover {
   .topbar {
     align-items: flex-start;
   }
-
-  .topbar-busca input {
-    width: 160px;
-  }
 }
 
 @media (max-width: 767.98px) {
   .topbar-acoes {
     width: 100%;
-    justify-content: space-between;
-  }
-
-  .topbar-busca input {
-    width: 100%;
+    justify-content: flex-end;
   }
 }
 
