@@ -7,6 +7,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
+from app.core.config import TEMPLATES_DIR
 from app.core.database import get_db
 from app.models.categoria import Categoria
 from app.models.subcategoria import Subcategoria
@@ -22,7 +23,7 @@ from app.services.eleitor_service import EleitorService
 from app.services.subcategoria_service import SubcategoriaService
 
 router = APIRouter(prefix="/demandas", tags=["Demandas"])
-templates = Jinja2Templates(directory="app/templates")
+templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 
 def flash_message(

@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
+from app.core.config import TEMPLATES_DIR
 from app.core.database import get_db
 from app.services.agenda_service import STATUS_OPCOES as AGENDA_STATUS_OPCOES
 from app.services.agenda_service import AgendaService
@@ -18,7 +19,7 @@ from app.services.demanda_service import DemandaService
 from app.services.eleitor_service import EleitorService
 
 router = APIRouter(prefix="/relatorios", tags=["Relatórios"])
-templates = Jinja2Templates(directory="app/templates")
+templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 
 def _data(valor: str | None) -> date | None:

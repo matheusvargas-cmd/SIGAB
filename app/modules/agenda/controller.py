@@ -6,6 +6,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
+from app.core.config import TEMPLATES_DIR
 from app.core.database import get_db
 from app.models.agenda import Agenda
 from app.services.agenda_csv_service import AgendaCsvService
@@ -13,7 +14,7 @@ from app.services.agenda_service import STATUS_OPCOES, AgendaService
 from app.services.eleitor_service import EleitorService
 
 router = APIRouter(prefix="/agenda", tags=["Agenda"])
-templates = Jinja2Templates(directory="app/templates")
+templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 
 def flash_message(

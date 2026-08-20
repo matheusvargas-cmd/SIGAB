@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from app.core.config import APP_NAME
+from app.core.config import APP_NAME, STATIC_DIR
 from app.core.database import Base, engine
 from app.services.migration_service import MigrationService
 
@@ -22,7 +22,7 @@ MigrationService.semear_categorias_atendimento_historico()
 
 app = FastAPI(title=APP_NAME)
 
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 app.include_router(dashboard_router)
 app.include_router(eleitores_router)

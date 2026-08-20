@@ -4,13 +4,14 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
+from app.core.config import TEMPLATES_DIR
 from app.core.database import get_db
 from app.services.agenda_service import AgendaService
 from app.services.demanda_service import DemandaService
 from app.services.eleitor_service import EleitorService
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
+templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 LIMITE_RECENTES = 5
 
