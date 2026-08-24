@@ -9,6 +9,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.core.config import TEMPLATES_DIR
+from app.core.contexto import ContextoSessao, obter_contexto_atual
 from app.core.database import get_db
 from app.services.agenda_service import STATUS_OPCOES as AGENDA_STATUS_OPCOES
 from app.services.agenda_service import AgendaService
@@ -49,7 +50,7 @@ def _csv_response(cabecalho: list[str], linhas: list[list], nome_arquivo: str) -
 
 
 @router.get("", response_class=HTMLResponse)
-def landing(request: Request):
+def landing(request: Request, contexto: ContextoSessao = Depends(obter_contexto_atual)):
     return templates.TemplateResponse(
         request=request, name="relatorios/index.html", context={"titulo": "Relatórios"}
     )
@@ -66,9 +67,10 @@ def demandas_por_status(
     categoria: str | None = None,
     prioridade: str | None = None,
     db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
     inicio, fim = _data(data_inicio), _data(data_fim)
-    dados = DemandaService.relatorio_por_status(db, inicio, fim, categoria, prioridade)
+    dados = DemandaService.relatorio_por_status(db, contexto.gabinete_id, inicio, fim, categoria, prioridade)
     return templates.TemplateResponse(
         request=request,
         name="relatorios/demandas_por_status.html",
@@ -80,7 +82,7 @@ def demandas_por_status(
             "data_fim": fim,
             "categoria": categoria,
             "prioridade": prioridade,
-            "categorias": CategoriaService.listar_nomes_para_filtro(db, categoria),
+            "categorias": CategoriaService.listar_nomes_para_filtro(db, contexto.gabinete_id, categoria),
             "prioridades": PRIORIDADE_OPCOES,
             "query_export": _query_string(
                 data_inicio=inicio, data_fim=fim, categoria=categoria, prioridade=prioridade
@@ -96,9 +98,10 @@ def demandas_por_status_exportar(
     categoria: str | None = None,
     prioridade: str | None = None,
     db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
     dados = DemandaService.relatorio_por_status(
-        db, _data(data_inicio), _data(data_fim), categoria, prioridade
+        db, contexto.gabinete_id, _data(data_inicio), _data(data_fim), categoria, prioridade
     )
     linhas = [[item["rotulo"], item["quantidade"]] for item in dados]
     return _csv_response(["Status", "Quantidade"], linhas, "demandas_por_status.csv")
@@ -115,9 +118,10 @@ def demandas_por_categoria(
     status: str | None = None,
     prioridade: str | None = None,
     db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
     inicio, fim = _data(data_inicio), _data(data_fim)
-    dados = DemandaService.relatorio_por_categoria(db, inicio, fim, status, prioridade)
+    dados = DemandaService.relatorio_por_categoria(db, contexto.gabinete_id, inicio, fim, status, prioridade)
     return templates.TemplateResponse(
         request=request,
         name="relatorios/demandas_por_categoria.html",
@@ -145,9 +149,10 @@ def demandas_por_categoria_exportar(
     status: str | None = None,
     prioridade: str | None = None,
     db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
     dados = DemandaService.relatorio_por_categoria(
-        db, _data(data_inicio), _data(data_fim), status, prioridade
+        db, contexto.gabinete_id, _data(data_inicio), _data(data_fim), status, prioridade
     )
     linhas = [[item["rotulo"], item["quantidade"]] for item in dados]
     return _csv_response(["Categoria", "Quantidade"], linhas, "demandas_por_categoria.csv")
@@ -161,8 +166,9 @@ def eleitores_por_bairro(
     request: Request,
     cidade: str | None = None,
     db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
-    dados = EleitorService.relatorio_por_bairro(db, cidade)
+    dados = EleitorService.relatorio_por_bairro(db, contexto.gabinete_id, cidade)
     return templates.TemplateResponse(
         request=request,
         name="relatorios/eleitores_por_bairro.html",
@@ -171,15 +177,19 @@ def eleitores_por_bairro(
             "dados": dados,
             "total": sum(item["quantidade"] for item in dados),
             "cidade": cidade,
-            "cidades": EleitorService.listar_cidades(db),
+            "cidades": EleitorService.listar_cidades(db, contexto.gabinete_id),
             "query_export": _query_string(cidade=cidade),
         },
     )
 
 
 @router.get("/eleitores-por-bairro/exportar")
-def eleitores_por_bairro_exportar(cidade: str | None = None, db: Session = Depends(get_db)):
-    dados = EleitorService.relatorio_por_bairro(db, cidade)
+def eleitores_por_bairro_exportar(
+    cidade: str | None = None,
+    db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
+):
+    dados = EleitorService.relatorio_por_bairro(db, contexto.gabinete_id, cidade)
     linhas = [[item["rotulo"], item["quantidade"]] for item in dados]
     return _csv_response(["Bairro", "Quantidade"], linhas, "eleitores_por_bairro.csv")
 
@@ -195,9 +205,10 @@ def demandas_por_periodo(
     status: str | None = None,
     categoria: str | None = None,
     db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
     inicio, fim = _data(data_inicio), _data(data_fim)
-    dados = DemandaService.relatorio_por_periodo(db, inicio, fim, status, categoria)
+    dados = DemandaService.relatorio_por_periodo(db, contexto.gabinete_id, inicio, fim, status, categoria)
     return templates.TemplateResponse(
         request=request,
         name="relatorios/demandas_por_periodo.html",
@@ -210,7 +221,7 @@ def demandas_por_periodo(
             "status": status,
             "categoria": categoria,
             "status_opcoes": DEMANDA_STATUS_OPCOES,
-            "categorias": CategoriaService.listar_nomes_para_filtro(db, categoria),
+            "categorias": CategoriaService.listar_nomes_para_filtro(db, contexto.gabinete_id, categoria),
             "query_export": _query_string(
                 data_inicio=inicio, data_fim=fim, status=status, categoria=categoria
             ),
@@ -225,9 +236,10 @@ def demandas_por_periodo_exportar(
     status: str | None = None,
     categoria: str | None = None,
     db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
     dados = DemandaService.relatorio_por_periodo(
-        db, _data(data_inicio), _data(data_fim), status, categoria
+        db, contexto.gabinete_id, _data(data_inicio), _data(data_fim), status, categoria
     )
     linhas = [[item["rotulo"], item["quantidade"]] for item in dados]
     return _csv_response(["Mês", "Quantidade"], linhas, "demandas_por_periodo.csv")
@@ -243,9 +255,10 @@ def compromissos_por_periodo(
     data_fim: str | None = None,
     status: str | None = None,
     db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
     inicio, fim = _data(data_inicio), _data(data_fim)
-    compromissos = AgendaService.relatorio_por_periodo(db, inicio, fim, status)
+    compromissos = AgendaService.relatorio_por_periodo(db, contexto.gabinete_id, inicio, fim, status)
     return templates.TemplateResponse(
         request=request,
         name="relatorios/compromissos_por_periodo.html",
@@ -268,9 +281,10 @@ def compromissos_por_periodo_exportar(
     data_fim: str | None = None,
     status: str | None = None,
     db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
     compromissos = AgendaService.relatorio_por_periodo(
-        db, _data(data_inicio), _data(data_fim), status
+        db, contexto.gabinete_id, _data(data_inicio), _data(data_fim), status
     )
     linhas = [
         [
@@ -299,17 +313,18 @@ def demandas_por_eleitor(
     pesquisa: str = "",
     eleitor_id: int | None = None,
     db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
     eleitor = None
     demandas: list = []
     resultados_busca: list = []
 
     if eleitor_id is not None:
-        eleitor = EleitorService.obter_por_id(db, eleitor_id)
+        eleitor = EleitorService.obter_por_id(db, contexto.gabinete_id, eleitor_id)
         if eleitor is not None:
-            demandas = DemandaService.relatorio_por_eleitor(db, eleitor_id)
+            demandas = DemandaService.relatorio_por_eleitor(db, contexto.gabinete_id, eleitor_id)
     elif pesquisa.strip():
-        resultados_busca, _, _ = EleitorService.listar(db, pesquisa, 1)
+        resultados_busca, _, _ = EleitorService.listar(db, contexto.gabinete_id, pesquisa, 1)
 
     return templates.TemplateResponse(
         request=request,
@@ -325,8 +340,12 @@ def demandas_por_eleitor(
 
 
 @router.get("/demandas-por-eleitor/exportar")
-def demandas_por_eleitor_exportar(eleitor_id: int, db: Session = Depends(get_db)):
-    demandas = DemandaService.relatorio_por_eleitor(db, eleitor_id)
+def demandas_por_eleitor_exportar(
+    eleitor_id: int,
+    db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
+):
+    demandas = DemandaService.relatorio_por_eleitor(db, contexto.gabinete_id, eleitor_id)
     linhas = [
         [
             d.titulo,

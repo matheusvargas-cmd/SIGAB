@@ -358,3 +358,111 @@ class MigrationService:
         logger.info(
             "Coluna demandas.eleitor_id relaxada para permitir NULL (demanda sem eleitor vinculado)."
         )
+
+    @staticmethod
+    def adicionar_gabinete_id() -> None:
+        """Ponte de compatibilidade só para instalações SQLite locais que já
+        existiam antes desta fase multi-tenant: `Base.metadata.create_all()`
+        cria tabelas novas (gabinetes, membros_gabinete, usuarios) sozinho,
+        mas não adiciona coluna nova a uma tabela que já existe — por isso
+        cada tabela de negócio precisa desse ALTER TABLE explícito aqui.
+
+        Esta é a fronteira exata da separação adotada nesta fase: qualquer
+        evolução de schema *nova*, a partir de agora, é feita por migração
+        Alembic (ver migrations/) — inclusive esta mesma coluna, já
+        versionada lá para PostgreSQL. Este método só existe para o SQLite
+        local que roda fora do fluxo do Alembic (ver main.py) continuar
+        subindo sozinho sem exigir `alembic upgrade head` manual. Idempotente
+        e sempre nullable — nunca invalida dado existente.
+        """
+        inspector = inspect(engine)
+        tabelas_alvo = ["eleitores", "demandas", "agenda", "categorias"]
+
+        with engine.begin() as conexao:
+            for tabela in tabelas_alvo:
+                if tabela not in inspector.get_table_names():
+                    continue
+                colunas = {coluna["name"] for coluna in inspector.get_columns(tabela)}
+                if "gabinete_id" not in colunas:
+                    conexao.execute(text(f"ALTER TABLE {tabela} ADD COLUMN gabinete_id INTEGER"))
+                    logger.info("Coluna %s.gabinete_id adicionada (multi-tenant, nullable).", tabela)
+
+    @staticmethod
+    def garantir_gabinete_padrao_local() -> None:
+        """Só para SQLite local (instalação single-tenant já existente antes
+        da Fase 1): garante um Gabinete padrão e vincula a ele qualquer dado
+        com gabinete_id ainda nulo — tanto dado legado (importado antes desta
+        fase) quanto categoria global criada pelos métodos de seed acima
+        (que não atribuem gabinete_id, por serem anteriores ao conceito de
+        gabinete). Sem isso, todo esse dado ficaria invisível depois que os
+        serviços passaram a filtrar estritamente por gabinete_id.
+
+        Idempotente: só cria o gabinete se nenhum existir, e só atualiza
+        linhas com gabinete_id NULL — nunca toca dado já vinculado a outro
+        gabinete. Não roda em PostgreSQL: lá o primeiro gabinete/admin é
+        criado pelo script de bootstrap (scripts/criar_primeiro_admin.py),
+        nunca automaticamente no boot.
+        """
+        from app.models.gabinete import Gabinete
+
+        inspector = inspect(engine)
+        if "gabinetes" not in inspector.get_table_names():
+            return
+
+        with Session(engine) as sessao:
+            gabinete = sessao.query(Gabinete).order_by(Gabinete.id).first()
+            if gabinete is None:
+                gabinete = Gabinete(nome="Gabinete Principal", ativo=True)
+                sessao.add(gabinete)
+                sessao.flush()
+                logger.info("Gabinete padrão '%s' criado para a instalação local.", gabinete.nome)
+
+            tabelas_alvo = ["eleitores", "demandas", "agenda", "categorias"]
+            for tabela in tabelas_alvo:
+                if tabela not in inspector.get_table_names():
+                    continue
+                colunas = {coluna["name"] for coluna in inspector.get_columns(tabela)}
+                if "gabinete_id" not in colunas:
+                    continue
+                resultado = sessao.execute(
+                    text(f"UPDATE {tabela} SET gabinete_id = :gid WHERE gabinete_id IS NULL"),
+                    {"gid": gabinete.id},
+                )
+                if resultado.rowcount:
+                    logger.info(
+                        "%s linha(s) de %s vinculada(s) ao gabinete padrão.",
+                        resultado.rowcount,
+                        tabela,
+                    )
+
+            sessao.commit()
+
+    @staticmethod
+    def semear_categorias_para_gabinete(gabinete_id: int) -> None:
+        """Cria, para um gabinete específico, a lista fixa histórica de
+        categorias de Demanda (mesmo conjunto usado por
+        `semear_categorias_padrao` para instalações locais) — usado pelo
+        script de bootstrap ao criar um gabinete novo em PostgreSQL, já que
+        lá não existe seed automático no boot. Idempotente: só cria o nome
+        que ainda não existir nesse gabinete (comparação sem acento/caixa).
+        """
+        from app.core.busca import normalizar
+        from app.models.categoria import Categoria
+        from app.services.demanda_service import CATEGORIAS
+
+        inspector = inspect(engine)
+        if "categorias" not in inspector.get_table_names():
+            return
+
+        with Session(engine) as sessao:
+            existentes = {
+                normalizar(categoria.nome)
+                for categoria in sessao.query(Categoria)
+                .filter(Categoria.gabinete_id == gabinete_id)
+                .all()
+            }
+            for nome in CATEGORIAS:
+                if normalizar(nome) not in existentes:
+                    sessao.add(Categoria(gabinete_id=gabinete_id, nome=nome, ativo=True))
+                    existentes.add(normalizar(nome))
+            sessao.commit()

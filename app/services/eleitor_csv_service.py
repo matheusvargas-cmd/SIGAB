@@ -46,8 +46,8 @@ ALIASES_CABECALHO = {
 
 class EleitorCsvService:
     @staticmethod
-    def exportar(db: Session) -> bytes:
-        eleitores = EleitorService.listar_todos(db)
+    def exportar(db: Session, gabinete_id: int) -> bytes:
+        eleitores = EleitorService.listar_todos(db, gabinete_id)
         buffer = io.StringIO()
         escritor = csv.writer(buffer)
         escritor.writerow(CABECALHO_CSV)
@@ -73,7 +73,7 @@ class EleitorCsvService:
         return buffer.getvalue().encode("utf-8-sig")
 
     @staticmethod
-    def importar(db: Session, conteudo: bytes) -> dict:
+    def importar(db: Session, gabinete_id: int, conteudo: bytes) -> dict:
         resultado = {
             "processados": 0,
             "importados": 0,
@@ -125,6 +125,7 @@ class EleitorCsvService:
                 nascimento = EleitorCsvService._converter_data(dados.get("nascimento"))
                 EleitorService.criar(
                     db,
+                    gabinete_id,
                     nome=dados.get("nome") or "",
                     telefone=dados.get("telefone"),
                     whatsapp=dados.get("whatsapp"),
@@ -168,7 +169,7 @@ class EleitorCsvService:
     }
 
     @staticmethod
-    def importar_historico(db: Session, conteudo: bytes) -> dict:
+    def importar_historico(db: Session, gabinete_id: int, conteudo: bytes) -> dict:
         """Importa o CSV histórico (formato antigo, ex.: municipe.csv, ou o
         relatório real exportado pelo Meu Mandato, "listagem-eleitores-...").
 
@@ -234,12 +235,15 @@ class EleitorCsvService:
                 if not ref_historico_bruto:
                     raise ValueError("Ref Eleitor ausente.")
 
-                if EleitorService.obter_por_ref_historico(db, ref_historico_bruto) is not None:
+                if (
+                    EleitorService.obter_por_ref_historico(db, gabinete_id, ref_historico_bruto)
+                    is not None
+                ):
                     resultado["existentes"] += 1
                     continue
 
                 dados = EleitorCsvService._mapear_linha_historica(linha)
-                EleitorService.criar(db, **dados)
+                EleitorService.criar(db, gabinete_id, **dados)
                 resultado["novos"] += 1
             except ValueError as error:
                 db.rollback()

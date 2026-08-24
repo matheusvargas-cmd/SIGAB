@@ -7,6 +7,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.core.config import TEMPLATES_DIR
+from app.core.contexto import ContextoSessao, obter_contexto_atual
 from app.core.database import get_db
 from app.services.eleitor_csv_service import EleitorCsvService
 from app.services.eleitor_service import EleitorService
@@ -35,8 +36,11 @@ def listar(
     pesquisa: str = "",
     pagina: int = 1,
     db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
-    eleitores, pagina_atual, total_paginas = EleitorService.listar(db, pesquisa, pagina)
+    eleitores, pagina_atual, total_paginas = EleitorService.listar(
+        db, contexto.gabinete_id, pesquisa, pagina
+    )
     resposta = templates.TemplateResponse(
         request=request,
         name="eleitores/lista.html",
@@ -56,7 +60,7 @@ def listar(
 
 
 @router.get("/novo", response_class=HTMLResponse)
-def novo(request: Request):
+def novo(request: Request, contexto: ContextoSessao = Depends(obter_contexto_atual)):
     return templates.TemplateResponse(
         request=request,
         name="eleitores/formulario.html",
@@ -81,10 +85,12 @@ def criar(
     titulo_eleitor: str | None = Form(None),
     zona_eleitoral: str | None = Form(None),
     db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
     try:
         EleitorService.criar(
             db,
+            contexto.gabinete_id,
             nome,
             telefone,
             whatsapp,
@@ -126,8 +132,10 @@ def criar(
 
 
 @router.get("/exportar")
-def exportar_csv(db: Session = Depends(get_db)):
-    conteudo = EleitorCsvService.exportar(db)
+def exportar_csv(
+    db: Session = Depends(get_db), contexto: ContextoSessao = Depends(obter_contexto_atual)
+):
+    conteudo = EleitorCsvService.exportar(db, contexto.gabinete_id)
     nome_arquivo = f"eleitores_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
     return Response(
         content=conteudo,
@@ -137,7 +145,7 @@ def exportar_csv(db: Session = Depends(get_db)):
 
 
 @router.get("/importar/modelo")
-def modelo_csv():
+def modelo_csv(contexto: ContextoSessao = Depends(obter_contexto_atual)):
     conteudo = EleitorCsvService.modelo_vazio()
     return Response(
         content=conteudo,
@@ -147,7 +155,7 @@ def modelo_csv():
 
 
 @router.get("/importar", response_class=HTMLResponse)
-def importar_pagina(request: Request):
+def importar_pagina(request: Request, contexto: ContextoSessao = Depends(obter_contexto_atual)):
     return templates.TemplateResponse(
         request=request,
         name="eleitores/importar.html",
@@ -160,9 +168,10 @@ async def importar_csv(
     request: Request,
     arquivo: UploadFile = File(...),
     db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
     conteudo = await arquivo.read()
-    resultado = EleitorCsvService.importar(db, conteudo)
+    resultado = EleitorCsvService.importar(db, contexto.gabinete_id, conteudo)
     return templates.TemplateResponse(
         request=request,
         name="eleitores/importar.html",
@@ -175,9 +184,10 @@ async def importar_csv_historico(
     request: Request,
     arquivo: UploadFile = File(...),
     db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
     conteudo = await arquivo.read()
-    resultado = EleitorCsvService.importar_historico(db, conteudo)
+    resultado = EleitorCsvService.importar_historico(db, contexto.gabinete_id, conteudo)
     return templates.TemplateResponse(
         request=request,
         name="eleitores/importar.html",
@@ -186,8 +196,13 @@ async def importar_csv_historico(
 
 
 @router.get("/{eleitor_id}", response_class=HTMLResponse)
-def visualizar(request: Request, eleitor_id: int, db: Session = Depends(get_db)):
-    eleitor = EleitorService.obter_por_id(db, eleitor_id)
+def visualizar(
+    request: Request,
+    eleitor_id: int,
+    db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
+):
+    eleitor = EleitorService.obter_por_id(db, contexto.gabinete_id, eleitor_id)
     if eleitor is None:
         return flash_message("Eleitor não encontrado.")
     return templates.TemplateResponse(
@@ -198,8 +213,13 @@ def visualizar(request: Request, eleitor_id: int, db: Session = Depends(get_db))
 
 
 @router.get("/{eleitor_id}/editar", response_class=HTMLResponse)
-def editar(request: Request, eleitor_id: int, db: Session = Depends(get_db)):
-    eleitor = EleitorService.obter_por_id(db, eleitor_id)
+def editar(
+    request: Request,
+    eleitor_id: int,
+    db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
+):
+    eleitor = EleitorService.obter_por_id(db, contexto.gabinete_id, eleitor_id)
     if eleitor is None:
         return flash_message("Eleitor não encontrado.")
     return templates.TemplateResponse(
@@ -227,8 +247,9 @@ def atualizar(
     titulo_eleitor: str | None = Form(None),
     zona_eleitoral: str | None = Form(None),
     db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
-    eleitor = EleitorService.obter_por_id(db, eleitor_id)
+    eleitor = EleitorService.obter_por_id(db, contexto.gabinete_id, eleitor_id)
     if eleitor is None:
         return flash_message("Eleitor não encontrado.")
     try:
@@ -276,8 +297,12 @@ def atualizar(
 
 
 @router.post("/{eleitor_id}/excluir")
-def excluir(eleitor_id: int, db: Session = Depends(get_db)):
-    eleitor = EleitorService.obter_por_id(db, eleitor_id)
+def excluir(
+    eleitor_id: int,
+    db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
+):
+    eleitor = EleitorService.obter_por_id(db, contexto.gabinete_id, eleitor_id)
     if eleitor is None:
         return flash_message("Eleitor não encontrado.")
     try:

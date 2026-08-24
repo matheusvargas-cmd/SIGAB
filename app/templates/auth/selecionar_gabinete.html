@@ -1,0 +1,25 @@
+{% extends 'auth/base_auth.html' %}
+
+{% block conteudo_auth %}
+<h1 class="h5 text-center mb-1" style="color: var(--c360-azul-principal);">Selecione o gabinete</h1>
+<p class="text-muted small text-center mb-4">{{ usuario_nome }}, você tem acesso a mais de um gabinete.</p>
+
+{% if erro %}
+<div class="alert alert-danger py-2 small" role="alert">{{ erro }}</div>
+{% endif %}
+
+<form method="post" action="/selecionar-gabinete">
+    <div class="d-flex flex-column gap-2 mb-3">
+        {% for gabinete in gabinetes %}
+        <label class="border rounded p-2 d-flex align-items-center gap-2" style="cursor: pointer;">
+            <input type="radio" name="gabinete_id" value="{{ gabinete.id }}" required>
+            <span>{{ gabinete.nome }}</span>
+        </label>
+        {% endfor %}
+    </div>
+    <button class="btn btn-primary w-100" type="submit">Continuar</button>
+</form>
+<form method="post" action="/logout" class="mt-3">
+    <button class="btn btn-link w-100 text-muted small" type="submit">Sair</button>
+</form>
+{% endblock %}

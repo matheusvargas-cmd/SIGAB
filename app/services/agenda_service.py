@@ -17,21 +17,27 @@ STATUS_OPCOES = ["Agendado", "Confirmado", "Realizado", "Cancelado"]
 
 
 class AgendaService:
+    """Toda consulta/escrita aqui é sempre filtrada por gabinete_id — ver
+    app/core/contexto.py. Nunca aceitar gabinete_id vindo do cliente:
+    sempre o gabinete_id do ContextoSessao autenticado."""
+
     @staticmethod
     def listar(
-        db: Session, pesquisa: str | None = None, pagina: int = 1
+        db: Session, gabinete_id: int, pesquisa: str | None = None, pagina: int = 1
     ) -> tuple[list[Agenda], int, int]:
         agora = datetime.now()
         grupo_temporal = case((Agenda.inicio >= agora, 0), else_=1)
 
         consulta = (
             select(Agenda)
+            .where(Agenda.gabinete_id == gabinete_id)
             .outerjoin(Eleitor, Agenda.eleitor_id == Eleitor.id)
             .options(joinedload(Agenda.eleitor))
         )
         consulta_total = (
             select(func.count())
             .select_from(Agenda)
+            .where(Agenda.gabinete_id == gabinete_id)
             .outerjoin(Eleitor, Agenda.eleitor_id == Eleitor.id)
         )
 
@@ -61,38 +67,47 @@ class AgendaService:
         return compromissos, pagina_atual, total_paginas
 
     @staticmethod
-    def obter_por_id(db: Session, agenda_id: int) -> Agenda | None:
-        return db.get(Agenda, agenda_id)
+    def obter_por_id(db: Session, gabinete_id: int, agenda_id: int) -> Agenda | None:
+        compromisso = db.get(Agenda, agenda_id)
+        if compromisso is None or compromisso.gabinete_id != gabinete_id:
+            return None
+        return compromisso
 
     @staticmethod
-    def listar_eleitores_para_selecao(db: Session) -> list[Eleitor]:
-        return list(db.scalars(select(Eleitor).order_by(Eleitor.nome)).all())
+    def listar_eleitores_para_selecao(db: Session, gabinete_id: int) -> list[Eleitor]:
+        consulta = select(Eleitor).where(Eleitor.gabinete_id == gabinete_id).order_by(Eleitor.nome)
+        return list(db.scalars(consulta).all())
 
     @staticmethod
-    def contar_futuros(db: Session) -> int:
+    def contar_futuros(db: Session, gabinete_id: int) -> int:
         agora = datetime.now()
-        consulta = select(func.count()).select_from(Agenda).where(Agenda.inicio >= agora)
+        consulta = (
+            select(func.count())
+            .select_from(Agenda)
+            .where(Agenda.gabinete_id == gabinete_id, Agenda.inicio >= agora)
+        )
         return db.scalar(consulta) or 0
 
     @staticmethod
-    def contar_hoje(db: Session) -> int:
+    def contar_hoje(db: Session, gabinete_id: int) -> int:
         hoje = date.today()
         inicio_dia = datetime.combine(hoje, time.min)
         fim_dia = datetime.combine(hoje, time.max)
         consulta = (
             select(func.count())
             .select_from(Agenda)
+            .where(Agenda.gabinete_id == gabinete_id)
             .where(Agenda.inicio >= inicio_dia)
             .where(Agenda.inicio <= fim_dia)
         )
         return db.scalar(consulta) or 0
 
     @staticmethod
-    def listar_proximos(db: Session, limite: int = 5) -> list[Agenda]:
+    def listar_proximos(db: Session, gabinete_id: int, limite: int = 5) -> list[Agenda]:
         agora = datetime.now()
         consulta = (
             select(Agenda)
-            .where(Agenda.inicio >= agora)
+            .where(Agenda.gabinete_id == gabinete_id, Agenda.inicio >= agora)
             .order_by(Agenda.inicio)
             .limit(limite)
         )
@@ -101,11 +116,16 @@ class AgendaService:
     @staticmethod
     def relatorio_por_periodo(
         db: Session,
+        gabinete_id: int,
         data_inicio: date | None = None,
         data_fim: date | None = None,
         status: str | None = None,
     ) -> list[Agenda]:
-        consulta = select(Agenda).options(joinedload(Agenda.eleitor))
+        consulta = (
+            select(Agenda)
+            .where(Agenda.gabinete_id == gabinete_id)
+            .options(joinedload(Agenda.eleitor))
+        )
         if data_inicio:
             consulta = consulta.where(Agenda.inicio >= datetime.combine(data_inicio, time.min))
         if data_fim:
@@ -118,6 +138,7 @@ class AgendaService:
     @staticmethod
     def criar(
         db: Session,
+        gabinete_id: int,
         titulo: str,
         descricao: str | None,
         data: date | None,
@@ -130,9 +151,10 @@ class AgendaService:
         eleitor_id: str | None,
     ) -> Agenda:
         dados = AgendaService._validar_dados(
-            db, titulo, data, hora_inicio, hora_fim, status, eleitor_id
+            db, gabinete_id, titulo, data, hora_inicio, hora_fim, status, eleitor_id
         )
         compromisso = Agenda(
+            gabinete_id=gabinete_id,
             eleitor_id=dados["eleitor_id"],
             titulo=dados["titulo"],
             descricao=(descricao or "").strip() or None,
@@ -164,7 +186,7 @@ class AgendaService:
         eleitor_id: str | None,
     ) -> Agenda:
         dados = AgendaService._validar_dados(
-            db, titulo, data, hora_inicio, hora_fim, status, eleitor_id
+            db, compromisso.gabinete_id, titulo, data, hora_inicio, hora_fim, status, eleitor_id
         )
         compromisso.eleitor_id = dados["eleitor_id"]
         compromisso.titulo = dados["titulo"]
@@ -186,8 +208,15 @@ class AgendaService:
         db.commit()
 
     @staticmethod
-    def obter_por_demanda(db: Session, demanda_id: int) -> Agenda | None:
-        return db.scalar(select(Agenda).where(Agenda.demanda_id == demanda_id))
+    def obter_por_demanda(db: Session, gabinete_id: int, demanda_id: int) -> Agenda | None:
+        # Filtra por gabinete_id mesmo sendo hoje só chamado com um
+        # demanda_id já validado pelo chamador (defesa em profundidade: se
+        # algum controller futuro passar a chamar isto direto com um
+        # demanda_id vindo de URL, continua seguro sem depender de quem
+        # chama já ter checado o gabinete).
+        return db.scalar(
+            select(Agenda).where(Agenda.demanda_id == demanda_id, Agenda.gabinete_id == gabinete_id)
+        )
 
     @staticmethod
     def sincronizar_retorno_demanda(db: Session, demanda: Demanda) -> None:
@@ -198,7 +227,7 @@ class AgendaService:
         várias vezes com os mesmos dados não cria nem altera nada além do
         necessário.
         """
-        compromisso = AgendaService.obter_por_demanda(db, demanda.id)
+        compromisso = AgendaService.obter_por_demanda(db, demanda.gabinete_id, demanda.id)
 
         deve_existir = bool(demanda.eleitor_id) and demanda.prazo is not None
         if not deve_existir:
@@ -213,6 +242,7 @@ class AgendaService:
 
         if compromisso is None:
             compromisso = Agenda(
+                gabinete_id=demanda.gabinete_id,
                 demanda_id=demanda.id,
                 eleitor_id=demanda.eleitor_id,
                 titulo=titulo,
@@ -235,19 +265,24 @@ class AgendaService:
         db.commit()
 
     @staticmethod
-    def excluir_compromisso_da_demanda(db: Session, demanda_id: int) -> None:
-        compromisso = AgendaService.obter_por_demanda(db, demanda_id)
+    def excluir_compromisso_da_demanda(db: Session, gabinete_id: int, demanda_id: int) -> None:
+        compromisso = AgendaService.obter_por_demanda(db, gabinete_id, demanda_id)
         if compromisso is not None:
             db.delete(compromisso)
             db.commit()
 
     @staticmethod
-    def obter_por_ref_historico(db: Session, ref_historico: str) -> Agenda | None:
-        return db.scalar(select(Agenda).where(Agenda.ref_historico == ref_historico))
+    def obter_por_ref_historico(db: Session, gabinete_id: int, ref_historico: str) -> Agenda | None:
+        return db.scalar(
+            select(Agenda).where(
+                Agenda.gabinete_id == gabinete_id, Agenda.ref_historico == ref_historico
+            )
+        )
 
     @staticmethod
     def criar_historico(
         db: Session,
+        gabinete_id: int,
         titulo: str,
         descricao: str | None,
         local: str | None,
@@ -270,6 +305,7 @@ class AgendaService:
             raise ValueError("Status inválido.")
 
         compromisso = Agenda(
+            gabinete_id=gabinete_id,
             eleitor_id=None,
             demanda_id=None,
             titulo=titulo_normalizado,
@@ -289,6 +325,7 @@ class AgendaService:
     @staticmethod
     def _validar_dados(
         db: Session,
+        gabinete_id: int,
         titulo: str,
         data: date | None,
         hora_inicio: time | None,
@@ -322,8 +359,10 @@ class AgendaService:
         except (TypeError, ValueError):
             raise ValueError("Eleitor inválido.")
 
-        if eleitor_id_convertido is not None and db.get(Eleitor, eleitor_id_convertido) is None:
-            raise ValueError("Eleitor inválido.")
+        if eleitor_id_convertido is not None:
+            eleitor_obj = db.get(Eleitor, eleitor_id_convertido)
+            if eleitor_obj is None or eleitor_obj.gabinete_id != gabinete_id:
+                raise ValueError("Eleitor inválido.")
 
         return {
             "titulo": titulo_normalizado,

@@ -105,7 +105,7 @@ MAPEAMENTO_STATUS_LEGADO_PARA_OFICIAL: dict[str, str] = {
 
 class DemandaCsvService:
     @staticmethod
-    def importar_atendimento_historico(db: Session, conteudo: bytes) -> dict:
+    def importar_atendimento_historico(db: Session, gabinete_id: int, conteudo: bytes) -> dict:
         """Importa o CSV de atendimentos (histórico ou real do Meu Mandato).
 
         Usa `Ref` como identificador de idempotência (`Demanda.ref_historico`):
@@ -177,13 +177,14 @@ class DemandaCsvService:
                 if not ref:
                     raise ValueError("Ref ausente.")
 
-                if DemandaService.obter_por_ref_historico(db, ref) is not None:
+                if DemandaService.obter_por_ref_historico(db, gabinete_id, ref) is not None:
                     resultado["existentes"] += 1
                     continue
 
-                dados = DemandaCsvService._mapear_linha(db, linha)
+                dados = DemandaCsvService._mapear_linha(db, gabinete_id, linha)
                 DemandaService.criar(
                     db,
+                    gabinete_id,
                     eleitor_id=(str(dados["eleitor_id"]) if dados["eleitor_id"] else None),
                     titulo=dados["titulo"],
                     descricao=dados["descricao"],
@@ -251,7 +252,7 @@ class DemandaCsvService:
         return mapa
 
     @staticmethod
-    def _mapear_linha(db: Session, linha: dict) -> dict:
+    def _mapear_linha(db: Session, gabinete_id: int, linha: dict) -> dict:
         def valor(chave: str) -> str | None:
             bruto = linha.get(chave)
             if bruto is None:
@@ -267,7 +268,7 @@ class DemandaCsvService:
         if not ref_eleitor:
             vinculo_motivo = "Ref Eleitor vazio."
         else:
-            eleitor = EleitorService.obter_por_ref_historico(db, ref_eleitor)
+            eleitor = EleitorService.obter_por_ref_historico(db, gabinete_id, ref_eleitor)
             if eleitor is None:
                 vinculo_motivo = "Eleitor não encontrado para este Ref Eleitor."
             else:
@@ -292,14 +293,14 @@ class DemandaCsvService:
             raise ValueError(f"Categoria '{categoria_bruta}' sem mapeamento aprovado.")
         nome_categoria, nome_subcategoria = MAPEAMENTO_CATEGORIA[categoria_bruta]
 
-        categoria_obj = CategoriaService.obter_por_nome(db, nome_categoria)
+        categoria_obj = CategoriaService.obter_por_nome(db, gabinete_id, nome_categoria)
         if categoria_obj is None:
             raise ValueError(f"Categoria '{nome_categoria}' não encontrada no cadastro.")
 
         subcategoria_id = None
         if nome_subcategoria:
             subcategoria_obj = SubcategoriaService.obter_por_nome(
-                db, categoria_obj.id, nome_subcategoria
+                db, gabinete_id, categoria_obj.id, nome_subcategoria
             )
             if subcategoria_obj is not None:
                 subcategoria_id = subcategoria_obj.id

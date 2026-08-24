@@ -1,6 +1,9 @@
 import os
 import sys
 from pathlib import Path
+from typing import Literal
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Em desenvolvimento (ou rodando via "uvicorn main:app"), BASE_DIR é a raiz
 # do projeto, calculada a partir da localização deste arquivo — mesmo
@@ -15,15 +18,122 @@ else:
 TEMPLATES_DIR = BASE_DIR / "app" / "templates"
 STATIC_DIR = BASE_DIR / "app" / "static"
 
-# O banco nunca deve morar dentro do executável/pasta de instalação: no
-# empacotado ele fica em %PROGRAMDATA%\Conecta360 (dado do usuário,
+# O banco local nunca deve morar dentro do executável/pasta de instalação:
+# no empacotado ele fica em %PROGRAMDATA%\Conecta360 (dado do usuário,
 # sobrevive a reinstalações/atualizações do programa). Em desenvolvimento
-# continua em <raiz do projeto>/database, como sempre foi.
+# continua em <raiz do projeto>/database, como sempre foi. Isso só define
+# o caminho do banco SQLite *padrão* — se DATABASE_URL vier de variável de
+# ambiente (homologação/produção com PostgreSQL), esse caminho não é usado.
 if getattr(sys, "frozen", False):
     DATABASE_DIR = Path(os.environ.get("PROGRAMDATA", Path.home())) / "Conecta360"
 else:
     DATABASE_DIR = BASE_DIR / "database"
 DATABASE_DIR.mkdir(parents=True, exist_ok=True)
-DATABASE_URL = f"sqlite:///{DATABASE_DIR/'sigab.db'}"
+
+_DATABASE_URL_PADRAO_LOCAL = f"sqlite:///{DATABASE_DIR / 'sigab.db'}"
+
+
+class Settings(BaseSettings):
+    """Configuração por ambiente. Nenhum valor sensível tem default real —
+    só defaults seguros para rodar local sem precisar criar um .env.
+
+    Qualquer campo pode ser sobrescrito por variável de ambiente (mesmo
+    nome, maiúsculo ou minúsculo) ou por um arquivo .env na raiz do
+    projeto (nunca versionado — ver .env.example para o modelo).
+    """
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    ambiente: Literal["local", "homologacao", "producao"] = "local"
+
+    # Sem valor de ambiente definido, cai no SQLite local de sempre — o
+    # comportamento atual continua idêntico sem exigir nenhum .env.
+    database_url: str = _DATABASE_URL_PADRAO_LOCAL
+
+    # Usada para assinar cookies de sessão quando a autenticação existir.
+    # O valor abaixo só é seguro em ambiente=local; ver _validar_producao().
+    secret_key: str = "dev-insecure-change-me"
+
+    debug: bool = True
+    host: str = "127.0.0.1"
+    port: int = 8000
+
+    # Tempo de vida da sessão de login (cookie assinado) — passado direto
+    # como max_age do SessionMiddleware. 12h cobre um expediente sem exigir
+    # login de novo, sem deixar uma sessão válida por semanas num
+    # computador compartilhado do gabinete.
+    sessao_max_idade_horas: int = 12
+
+    @property
+    def sessao_max_idade_segundos(self) -> int:
+        return self.sessao_max_idade_horas * 3600
+
+    # Lista de origens permitidas para CORS, separadas por vírgula.
+    # Vazio (padrão) = nenhuma origem externa liberada — correto para um
+    # app renderizado no servidor, sem frontend separado consumindo API.
+    cors_origins: str = ""
+
+    log_level: str = "INFO"
+
+    @property
+    def cors_origins_lista(self) -> list[str]:
+        return [origem.strip() for origem in self.cors_origins.split(",") if origem.strip()]
+
+    @property
+    def is_sqlite(self) -> bool:
+        return self.database_url.startswith("sqlite")
+
+    @property
+    def cookie_secure(self) -> bool:
+        # Cookie "Secure" exige HTTPS — correto em homologação/produção
+        # (sempre atrás de HTTPS), mas local roda em http://127.0.0.1 sem
+        # TLS, então o cookie precisa aceitar HTTP aí ou o login nunca
+        # persistiria em desenvolvimento.
+        return self.ambiente != "local"
+
+    def validar_producao(self) -> list[str]:
+        """Checagens de sanidade para homologação/produção que não impedem
+        o boot por si só (avisos para o logger reportar alto e claro no
+        startup). A checagem de SECRET_KEY é tratada à parte, em
+        `exigir_secret_key_segura()` — essa sim derruba o boot, porque uma
+        SECRET_KEY previsível permite forjar sessão de qualquer usuário."""
+        avisos = []
+        if self.ambiente != "local":
+            if self.is_sqlite:
+                avisos.append(
+                    f"ambiente={self.ambiente!r} está usando SQLite — configure "
+                    "DATABASE_URL apontando para o PostgreSQL do ambiente."
+                )
+            if self.debug:
+                avisos.append(f"DEBUG=true em ambiente={self.ambiente!r} — desative fora de local.")
+        return avisos
+
+    def exigir_secret_key_segura(self) -> None:
+        """Fora de ambiente=local, uma SECRET_KEY previsível (o valor de
+        desenvolvimento, ou vazia) permite a qualquer um forjar um cookie de
+        sessão assinado — login como qualquer usuário, em qualquer gabinete,
+        sem senha. Isso é grave o bastante para interromper o boot em vez de
+        só avisar (diferente de validar_producao() acima)."""
+        if self.ambiente == "local":
+            return
+        if not self.secret_key or self.secret_key == "dev-insecure-change-me":
+            raise RuntimeError(
+                f"SECRET_KEY ainda é o valor de desenvolvimento em ambiente={self.ambiente!r}. "
+                "Defina uma chave própria (ex.: `python -c \"import secrets; "
+                'print(secrets.token_hex(32))"`) na variável de ambiente SECRET_KEY '
+                "antes de subir este ambiente — a aplicação não inicia sem isso."
+            )
+
+
+settings = Settings()
+
+# Mantidos como constantes de nível de módulo por compatibilidade com todo
+# o código existente (controllers, database.py, launcher) que já importa
+# esses nomes diretamente — nenhum import precisa mudar.
+DATABASE_URL = settings.database_url
 APP_NAME = "Conecta 360"
 APP_TAGLINE = "Gestão Inteligente de Gabinetes"

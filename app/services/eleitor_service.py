@@ -3,7 +3,7 @@ from datetime import date
 from math import ceil
 from typing import Any
 
-from sqlalchemy import exists, func, or_, select
+from sqlalchemy import exists, extract, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.busca import normalizar
@@ -15,12 +15,20 @@ NOME_MINIMO_CARACTERES = 3
 
 
 class EleitorService:
+    """Toda consulta/escrita aqui é sempre filtrada por gabinete_id — é a
+    fronteira de isolamento multi-tenant (ver app/core/contexto.py). Um
+    controller nunca deve montar sua própria query em Eleitor; sempre
+    passar pelo método correspondente aqui, com o gabinete_id do
+    ContextoSessao autenticado — nunca um valor vindo do cliente."""
+
     @staticmethod
     def listar(
-        db: Session, pesquisa: str | None = None, pagina: int = 1
+        db: Session, gabinete_id: int, pesquisa: str | None = None, pagina: int = 1
     ) -> tuple[list[Eleitor], int, int]:
-        consulta = select(Eleitor).order_by(Eleitor.nome)
-        consulta_total = select(func.count()).select_from(Eleitor)
+        consulta = select(Eleitor).where(Eleitor.gabinete_id == gabinete_id).order_by(Eleitor.nome)
+        consulta_total = (
+            select(func.count()).select_from(Eleitor).where(Eleitor.gabinete_id == gabinete_id)
+        )
 
         if pesquisa and pesquisa.strip():
             termo = f"%{normalizar(pesquisa.strip())}%"
@@ -45,16 +53,24 @@ class EleitorService:
         return eleitores, pagina_atual, total_paginas
 
     @staticmethod
-    def obter_por_id(db: Session, eleitor_id: int) -> Eleitor | None:
-        return db.get(Eleitor, eleitor_id)
+    def obter_por_id(db: Session, gabinete_id: int, eleitor_id: int) -> Eleitor | None:
+        eleitor = db.get(Eleitor, eleitor_id)
+        if eleitor is None or eleitor.gabinete_id != gabinete_id:
+            return None
+        return eleitor
 
     @staticmethod
-    def obter_por_ref_historico(db: Session, ref_historico: str) -> Eleitor | None:
-        return db.scalar(select(Eleitor).where(Eleitor.ref_historico == ref_historico))
+    def obter_por_ref_historico(db: Session, gabinete_id: int, ref_historico: str) -> Eleitor | None:
+        return db.scalar(
+            select(Eleitor).where(
+                Eleitor.gabinete_id == gabinete_id, Eleitor.ref_historico == ref_historico
+            )
+        )
 
     @staticmethod
     def resolver_selecao(
         db: Session,
+        gabinete_id: int,
         selecionar_eleitor_id: int | None,
         eleitor_id_atual: int | None = None,
         trocar: bool = False,
@@ -69,47 +85,61 @@ class EleitorService:
         busca a cada vez que a tela é aberta.
         """
         if selecionar_eleitor_id is not None:
-            eleitor = EleitorService.obter_por_id(db, selecionar_eleitor_id)
+            eleitor = EleitorService.obter_por_id(db, gabinete_id, selecionar_eleitor_id)
             return eleitor, eleitor is not None
         if trocar:
             return None, False
         if sem_eleitor:
             return None, True
         if eleitor_id_atual:
-            eleitor = EleitorService.obter_por_id(db, eleitor_id_atual)
+            eleitor = EleitorService.obter_por_id(db, gabinete_id, eleitor_id_atual)
             return eleitor, True
         if ja_existe:
             return None, True
         return None, False
 
     @staticmethod
-    def contar(db: Session) -> int:
-        return db.scalar(select(func.count()).select_from(Eleitor)) or 0
+    def contar(db: Session, gabinete_id: int) -> int:
+        consulta = select(func.count()).select_from(Eleitor).where(Eleitor.gabinete_id == gabinete_id)
+        return db.scalar(consulta) or 0
 
     @staticmethod
-    def listar_recentes(db: Session, limite: int = 5) -> list[Eleitor]:
-        consulta = select(Eleitor).order_by(Eleitor.id.desc()).limit(limite)
+    def listar_recentes(db: Session, gabinete_id: int, limite: int = 5) -> list[Eleitor]:
+        consulta = (
+            select(Eleitor)
+            .where(Eleitor.gabinete_id == gabinete_id)
+            .order_by(Eleitor.id.desc())
+            .limit(limite)
+        )
         return list(db.scalars(consulta).all())
 
     @staticmethod
-    def listar_todos(db: Session) -> list[Eleitor]:
-        return list(db.scalars(select(Eleitor).order_by(Eleitor.nome)).all())
+    def listar_todos(db: Session, gabinete_id: int) -> list[Eleitor]:
+        consulta = select(Eleitor).where(Eleitor.gabinete_id == gabinete_id).order_by(Eleitor.nome)
+        return list(db.scalars(consulta).all())
 
     @staticmethod
-    def listar_aniversariantes_hoje(db: Session) -> list[Eleitor]:
+    def listar_aniversariantes_hoje(db: Session, gabinete_id: int) -> list[Eleitor]:
+        # extract() é traduzido pelo próprio SQLAlchemy para a função nativa
+        # de cada dialeto (STRFTIME no SQLite, EXTRACT no PostgreSQL) — só
+        # comparar mês e dia diretamente, sem depender de função específica
+        # de um banco só.
         hoje = date.today()
         consulta = (
             select(Eleitor)
+            .where(Eleitor.gabinete_id == gabinete_id)
             .where(Eleitor.nascimento.isnot(None))
-            .where(func.strftime("%m-%d", Eleitor.nascimento) == hoje.strftime("%m-%d"))
+            .where(extract("month", Eleitor.nascimento) == hoje.month)
+            .where(extract("day", Eleitor.nascimento) == hoje.day)
             .order_by(Eleitor.nome)
         )
         return list(db.scalars(consulta).all())
 
     @staticmethod
-    def listar_cidades(db: Session) -> list[str]:
+    def listar_cidades(db: Session, gabinete_id: int) -> list[str]:
         consulta = (
             select(Eleitor.cidade)
+            .where(Eleitor.gabinete_id == gabinete_id)
             .where(Eleitor.cidade.isnot(None))
             .distinct()
             .order_by(Eleitor.cidade)
@@ -117,8 +147,12 @@ class EleitorService:
         return [cidade for cidade in db.scalars(consulta).all() if cidade]
 
     @staticmethod
-    def relatorio_por_bairro(db: Session, cidade: str | None = None) -> list[dict]:
-        consulta = select(Eleitor.bairro, func.count()).group_by(Eleitor.bairro)
+    def relatorio_por_bairro(db: Session, gabinete_id: int, cidade: str | None = None) -> list[dict]:
+        consulta = (
+            select(Eleitor.bairro, func.count())
+            .where(Eleitor.gabinete_id == gabinete_id)
+            .group_by(Eleitor.bairro)
+        )
         if cidade:
             consulta = consulta.where(Eleitor.cidade == cidade)
 
@@ -133,6 +167,7 @@ class EleitorService:
     @staticmethod
     def criar(
         db: Session,
+        gabinete_id: int,
         nome: str,
         telefone: str | None = None,
         whatsapp: str | None = None,
@@ -164,8 +199,8 @@ class EleitorService:
             zona_eleitoral=zona_eleitoral,
             ref_historico=ref_historico,
         )
-        EleitorService._validar_duplicidade(db, dados["nome"], dados["telefone"])
-        eleitor = Eleitor(**dados)
+        EleitorService._validar_duplicidade(db, gabinete_id, dados["nome"], dados["telefone"])
+        eleitor = Eleitor(gabinete_id=gabinete_id, **dados)
         db.add(eleitor)
         db.commit()
         db.refresh(eleitor)
@@ -192,7 +227,9 @@ class EleitorService:
         # ref_historico não faz parte do formulário de edição (é um
         # identificador interno de importação) e por isso não é aceito nem
         # sobrescrito aqui — evita apagar o vínculo com o CSV histórico ao
-        # editar um eleitor pela tela normal.
+        # editar um eleitor pela tela normal. gabinete_id também não muda
+        # aqui — o eleitor já foi resolvido via obter_por_id() (que só
+        # retorna um eleitor do gabinete atual), então não há o que mudar.
         dados = EleitorService._normalizar_dados(
             nome=nome,
             telefone=telefone,
@@ -209,7 +246,7 @@ class EleitorService:
             zona_eleitoral=zona_eleitoral,
         )
         EleitorService._validar_duplicidade(
-            db, dados["nome"], dados["telefone"], ignorar_id=eleitor.id
+            db, eleitor.gabinete_id, dados["nome"], dados["telefone"], ignorar_id=eleitor.id
         )
         for campo, valor in dados.items():
             setattr(eleitor, campo, valor)
@@ -241,15 +278,23 @@ class EleitorService:
 
     @staticmethod
     def _validar_duplicidade(
-        db: Session, nome: str, telefone: str | None, ignorar_id: int | None = None
+        db: Session,
+        gabinete_id: int,
+        nome: str,
+        telefone: str | None,
+        ignorar_id: int | None = None,
     ) -> None:
         # Duplicidade só é verificada quando há telefone, pois é a combinação
-        # Nome + Telefone que caracteriza o mesmo cadastro (regra da Release 0.2).
+        # Nome + Telefone que caracteriza o mesmo cadastro (regra da Release
+        # 0.2) — e só dentro do mesmo gabinete: duas pessoas com o mesmo
+        # nome em gabinetes diferentes não são o mesmo cadastro.
         digitos_telefone = re.sub(r"\D", "", telefone or "")
         if not digitos_telefone:
             return
 
-        consulta = select(Eleitor).where(func.lower(Eleitor.nome) == nome.lower())
+        consulta = select(Eleitor).where(
+            Eleitor.gabinete_id == gabinete_id, func.lower(Eleitor.nome) == nome.lower()
+        )
         if ignorar_id is not None:
             consulta = consulta.where(Eleitor.id != ignorar_id)
 

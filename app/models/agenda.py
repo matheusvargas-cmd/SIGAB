@@ -9,6 +9,10 @@ class Agenda(Base):
 
     id = Column(Integer, primary_key=True)
 
+    # Nullable por enquanto: dado existente (local, pré multi-tenant) não
+    # tem gabinete atribuído ainda. Ver documento de arquitetura, seção 8.
+    gabinete_id = Column(Integer, ForeignKey("gabinetes.id"), nullable=True, index=True)
+
     eleitor_id = Column(Integer, ForeignKey("eleitores.id"), nullable=True)
     eleitor = relationship("Eleitor")
 
@@ -27,7 +31,9 @@ class Agenda(Base):
 
     responsavel = Column(String(150))
 
-    telefone_contato = Column(String(30))
+    # Mesmo achado de app/models/eleitor.py: telefone de contato pode vir
+    # com mais de um número concatenado nos dados reais do gabinete.
+    telefone_contato = Column(String(60))
 
     status = Column(String(30), default="Agendado")
 

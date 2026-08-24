@@ -89,7 +89,23 @@
             <h1 class="topbar-titulo">{{ titulo }}</h1>
         </div>
         <div class="topbar-acoes">
-            <div class="topbar-usuario" title="Área do usuário (em breve)">U</div>
+        {% set contexto = request.state.contexto %}
+        {% if contexto %}
+            <div class="usuario-area">
+                <button class="topbar-usuario" type="button" data-usuario-toggle
+                        title="{{ contexto.usuario.nome }} · {{ contexto.gabinete.nome }}">
+                    {{ contexto.usuario.nome[:1]|upper }}
+                </button>
+                <div class="usuario-menu" data-usuario-menu>
+                    <div class="usuario-menu-nome">{{ contexto.usuario.nome }}</div>
+                    <div class="usuario-menu-gabinete">{{ contexto.gabinete.nome }}</div>
+                    <a class="usuario-menu-item" href="/selecionar-gabinete">Trocar gabinete</a>
+                    <form method="post" action="/logout">
+                        <button class="usuario-menu-item usuario-menu-sair" type="submit">Sair</button>
+                    </form>
+                </div>
+            </div>
+        {% endif %}
         </div>
     </header>
 {% block conteudo %}{% endblock %}
@@ -108,6 +124,25 @@ document.querySelectorAll('[data-sidebar-toggle]').forEach(function (toggle) {
         }
     });
 });
+</script>
+<script>
+(function () {
+    var botao = document.querySelector('[data-usuario-toggle]');
+    var menu = document.querySelector('[data-usuario-menu]');
+    if (!botao || !menu) {
+        return;
+    }
+    botao.addEventListener('click', function (evento) {
+        evento.preventDefault();
+        evento.stopPropagation();
+        menu.classList.toggle('aberto');
+    });
+    document.addEventListener('click', function (evento) {
+        if (!menu.contains(evento.target) && evento.target !== botao) {
+            menu.classList.remove('aberto');
+        }
+    });
+})();
 </script>
 <script>
 (function () {

@@ -7,6 +7,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.core.config import TEMPLATES_DIR
+from app.core.contexto import ContextoSessao, obter_contexto_atual
 from app.core.database import get_db
 from app.models.agenda import Agenda
 from app.services.agenda_csv_service import AgendaCsvService
@@ -59,8 +60,11 @@ def listar(
     pesquisa: str = "",
     pagina: int = 1,
     db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
-    compromissos, pagina_atual, total_paginas = AgendaService.listar(db, pesquisa, pagina)
+    compromissos, pagina_atual, total_paginas = AgendaService.listar(
+        db, contexto.gabinete_id, pesquisa, pagina
+    )
     resposta = templates.TemplateResponse(
         request=request,
         name="agenda/lista.html",
@@ -81,7 +85,7 @@ def listar(
 
 
 @router.get("/importar", response_class=HTMLResponse)
-def importar_pagina(request: Request):
+def importar_pagina(request: Request, contexto: ContextoSessao = Depends(obter_contexto_atual)):
     return templates.TemplateResponse(
         request=request,
         name="agenda/importar.html",
@@ -94,9 +98,10 @@ async def importar_csv(
     request: Request,
     arquivo: UploadFile = File(...),
     db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
     conteudo = await arquivo.read()
-    resultado = AgendaCsvService.importar_compromisso_historico(db, conteudo)
+    resultado = AgendaCsvService.importar_compromisso_historico(db, contexto.gabinete_id, conteudo)
     return templates.TemplateResponse(
         request=request,
         name="agenda/importar.html",
@@ -111,13 +116,16 @@ def novo(
     selecionar_eleitor_id: int | None = None,
     sem_eleitor: bool = False,
     db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
     eleitor_atual, eleitor_resolvido = EleitorService.resolver_selecao(
-        db, selecionar_eleitor_id, sem_eleitor=sem_eleitor
+        db, contexto.gabinete_id, selecionar_eleitor_id, sem_eleitor=sem_eleitor
     )
     resultados_busca_eleitor = []
     if not eleitor_resolvido and pesquisa_eleitor.strip():
-        resultados_busca_eleitor, _, _ = EleitorService.listar(db, pesquisa_eleitor, 1)
+        resultados_busca_eleitor, _, _ = EleitorService.listar(
+            db, contexto.gabinete_id, pesquisa_eleitor, 1
+        )
 
     return templates.TemplateResponse(
         request=request,
@@ -150,10 +158,12 @@ def criar(
     telefone_contato: str | None = Form(None),
     status: str | None = Form(None),
     db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
     try:
         AgendaService.criar(
             db,
+            contexto.gabinete_id,
             titulo,
             descricao,
             data,
@@ -180,7 +190,7 @@ def criar(
             status=status,
         )
         eleitor_atual = (
-            EleitorService.obter_por_id(db, compromisso_preenchido.eleitor_id)
+            EleitorService.obter_por_id(db, contexto.gabinete_id, compromisso_preenchido.eleitor_id)
             if compromisso_preenchido.eleitor_id
             else None
         )
@@ -205,8 +215,13 @@ def criar(
 
 
 @router.get("/{agenda_id}", response_class=HTMLResponse)
-def visualizar(request: Request, agenda_id: int, db: Session = Depends(get_db)):
-    compromisso = AgendaService.obter_por_id(db, agenda_id)
+def visualizar(
+    request: Request,
+    agenda_id: int,
+    db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
+):
+    compromisso = AgendaService.obter_por_id(db, contexto.gabinete_id, agenda_id)
     if compromisso is None:
         return flash_message("Compromisso não encontrado.")
     return templates.TemplateResponse(
@@ -225,17 +240,26 @@ def editar(
     trocar_eleitor: bool = False,
     sem_eleitor: bool = False,
     db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
-    compromisso = AgendaService.obter_por_id(db, agenda_id)
+    compromisso = AgendaService.obter_por_id(db, contexto.gabinete_id, agenda_id)
     if compromisso is None:
         return flash_message("Compromisso não encontrado.")
 
     eleitor_atual, eleitor_resolvido = EleitorService.resolver_selecao(
-        db, selecionar_eleitor_id, compromisso.eleitor_id, trocar_eleitor, sem_eleitor, ja_existe=True
+        db,
+        contexto.gabinete_id,
+        selecionar_eleitor_id,
+        compromisso.eleitor_id,
+        trocar_eleitor,
+        sem_eleitor,
+        ja_existe=True,
     )
     resultados_busca_eleitor = []
     if not eleitor_resolvido and pesquisa_eleitor.strip():
-        resultados_busca_eleitor, _, _ = EleitorService.listar(db, pesquisa_eleitor, 1)
+        resultados_busca_eleitor, _, _ = EleitorService.listar(
+            db, contexto.gabinete_id, pesquisa_eleitor, 1
+        )
 
     return templates.TemplateResponse(
         request=request,
@@ -269,8 +293,9 @@ def atualizar(
     telefone_contato: str | None = Form(None),
     status: str | None = Form(None),
     db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
-    compromisso = AgendaService.obter_por_id(db, agenda_id)
+    compromisso = AgendaService.obter_por_id(db, contexto.gabinete_id, agenda_id)
     if compromisso is None:
         return flash_message("Compromisso não encontrado.")
     try:
@@ -303,7 +328,7 @@ def atualizar(
             status=status,
         )
         eleitor_atual = (
-            EleitorService.obter_por_id(db, compromisso_preenchido.eleitor_id)
+            EleitorService.obter_por_id(db, contexto.gabinete_id, compromisso_preenchido.eleitor_id)
             if compromisso_preenchido.eleitor_id
             else None
         )
@@ -328,8 +353,12 @@ def atualizar(
 
 
 @router.post("/{agenda_id}/excluir")
-def excluir(agenda_id: int, db: Session = Depends(get_db)):
-    compromisso = AgendaService.obter_por_id(db, agenda_id)
+def excluir(
+    agenda_id: int,
+    db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
+):
+    compromisso = AgendaService.obter_por_id(db, contexto.gabinete_id, agenda_id)
     if compromisso is None:
         return flash_message("Compromisso não encontrado.")
     AgendaService.excluir(db, compromisso)

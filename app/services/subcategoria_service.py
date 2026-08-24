@@ -2,14 +2,32 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.busca import normalizar
+from app.models.categoria import Categoria
 from app.models.subcategoria import Subcategoria
 
 NOME_MINIMO_CARACTERES = 2
 
 
 class SubcategoriaService:
+    """Subcategoria não tem gabinete_id próprio — herda o isolamento por
+    tenant através da Categoria pai (ver app/models/subcategoria.py e a
+    decisão de Fase 1). Por isso todo método aqui recebe gabinete_id e
+    primeiro confirma que a categoria_id informada pertence a esse
+    gabinete antes de consultar/gravar qualquer Subcategoria — do
+    contrário seria possível acessar subcategorias de outro gabinete
+    apenas conhecendo o categoria_id."""
+
     @staticmethod
-    def listar_por_categoria(db: Session, categoria_id: int) -> list[Subcategoria]:
+    def _categoria_do_gabinete(db: Session, gabinete_id: int, categoria_id: int) -> Categoria | None:
+        categoria = db.get(Categoria, categoria_id)
+        if categoria is None or categoria.gabinete_id != gabinete_id:
+            return None
+        return categoria
+
+    @staticmethod
+    def listar_por_categoria(db: Session, gabinete_id: int, categoria_id: int) -> list[Subcategoria]:
+        if SubcategoriaService._categoria_do_gabinete(db, gabinete_id, categoria_id) is None:
+            return []
         consulta = (
             select(Subcategoria)
             .where(Subcategoria.categoria_id == categoria_id)
@@ -18,7 +36,11 @@ class SubcategoriaService:
         return list(db.scalars(consulta).all())
 
     @staticmethod
-    def obter_por_nome(db: Session, categoria_id: int, nome: str) -> Subcategoria | None:
+    def obter_por_nome(
+        db: Session, gabinete_id: int, categoria_id: int, nome: str
+    ) -> Subcategoria | None:
+        if SubcategoriaService._categoria_do_gabinete(db, gabinete_id, categoria_id) is None:
+            return None
         alvo = normalizar(nome)
         consulta = select(Subcategoria).where(Subcategoria.categoria_id == categoria_id)
         for subcategoria in db.scalars(consulta).all():
@@ -27,20 +49,28 @@ class SubcategoriaService:
         return None
 
     @staticmethod
-    def listar_ativas(db: Session) -> list[Subcategoria]:
+    def listar_ativas(db: Session, gabinete_id: int) -> list[Subcategoria]:
         consulta = (
             select(Subcategoria)
-            .where(Subcategoria.ativo.is_(True))
+            .join(Categoria, Categoria.id == Subcategoria.categoria_id)
+            .where(Categoria.gabinete_id == gabinete_id, Subcategoria.ativo.is_(True))
             .order_by(Subcategoria.categoria_id, Subcategoria.nome)
         )
         return list(db.scalars(consulta).all())
 
     @staticmethod
-    def obter_por_id(db: Session, subcategoria_id: int) -> Subcategoria | None:
-        return db.get(Subcategoria, subcategoria_id)
+    def obter_por_id(db: Session, gabinete_id: int, subcategoria_id: int) -> Subcategoria | None:
+        subcategoria = db.get(Subcategoria, subcategoria_id)
+        if subcategoria is None:
+            return None
+        if SubcategoriaService._categoria_do_gabinete(db, gabinete_id, subcategoria.categoria_id) is None:
+            return None
+        return subcategoria
 
     @staticmethod
-    def criar(db: Session, categoria_id: int, nome: str) -> Subcategoria:
+    def criar(db: Session, gabinete_id: int, categoria_id: int, nome: str) -> Subcategoria:
+        if SubcategoriaService._categoria_do_gabinete(db, gabinete_id, categoria_id) is None:
+            raise ValueError("Categoria inválida.")
         nome_normalizado = SubcategoriaService._validar_nome(db, categoria_id, nome)
         subcategoria = Subcategoria(categoria_id=categoria_id, nome=nome_normalizado, ativo=True)
         db.add(subcategoria)

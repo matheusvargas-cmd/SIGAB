@@ -9,6 +9,10 @@ class Demanda(Base):
 
     id = Column(Integer, primary_key=True)
 
+    # Nullable por enquanto: dado existente (local, pré multi-tenant) não
+    # tem gabinete atribuído ainda. Ver documento de arquitetura, seção 8.
+    gabinete_id = Column(Integer, ForeignKey("gabinetes.id"), nullable=True, index=True)
+
     # nullable: o sistema de origem (Meu Mandato) permite demanda sem
     # eleitor vinculado (ex.: "Ref. eleitor" vazio, ou "Eleitor" = nome do
     # próprio gabinete) — ver DemandaCsvService.importar_atendimento_historico.

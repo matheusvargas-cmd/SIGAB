@@ -8,6 +8,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.core.config import TEMPLATES_DIR
+from app.core.contexto import ContextoSessao, obter_contexto_atual
 from app.core.database import get_db
 from app.models.categoria import Categoria
 from app.models.subcategoria import Subcategoria
@@ -42,17 +43,18 @@ def flash_message(
 
 def _opcoes_formulario(
     db: Session,
+    gabinete_id: int,
     categoria_atual: Categoria | None = None,
     subcategoria_atual: Subcategoria | None = None,
 ) -> dict:
-    categorias = CategoriaService.listar_ativas(db)
+    categorias = CategoriaService.listar_ativas(db, gabinete_id)
     if categoria_atual and not categoria_atual.ativo and categoria_atual.id not in {
         categoria.id for categoria in categorias
     }:
         categorias = categorias + [categoria_atual]
 
     subcategoria_por_categoria: dict[int, list[dict]] = {}
-    for subcategoria in SubcategoriaService.listar_ativas(db):
+    for subcategoria in SubcategoriaService.listar_ativas(db, gabinete_id):
         subcategoria_por_categoria.setdefault(subcategoria.categoria_id, []).append(
             {"id": subcategoria.id, "nome": subcategoria.nome}
         )
@@ -75,8 +77,11 @@ def listar(
     pesquisa: str = "",
     pagina: int = 1,
     db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
-    demandas, pagina_atual, total_paginas = DemandaService.listar(db, pesquisa, pagina)
+    demandas, pagina_atual, total_paginas = DemandaService.listar(
+        db, contexto.gabinete_id, pesquisa, pagina
+    )
     resposta = templates.TemplateResponse(
         request=request,
         name="demandas/lista.html",
@@ -96,7 +101,7 @@ def listar(
 
 
 @router.get("/importar", response_class=HTMLResponse)
-def importar_pagina(request: Request):
+def importar_pagina(request: Request, contexto: ContextoSessao = Depends(obter_contexto_atual)):
     return templates.TemplateResponse(
         request=request,
         name="demandas/importar.html",
@@ -109,9 +114,10 @@ async def importar_csv(
     request: Request,
     arquivo: UploadFile = File(...),
     db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
     conteudo = await arquivo.read()
-    resultado = DemandaCsvService.importar_atendimento_historico(db, conteudo)
+    resultado = DemandaCsvService.importar_atendimento_historico(db, contexto.gabinete_id, conteudo)
     return templates.TemplateResponse(
         request=request,
         name="demandas/importar.html",
@@ -125,11 +131,16 @@ def novo(
     pesquisa_eleitor: str = "",
     selecionar_eleitor_id: int | None = None,
     db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
-    eleitor_atual, eleitor_resolvido = EleitorService.resolver_selecao(db, selecionar_eleitor_id)
+    eleitor_atual, eleitor_resolvido = EleitorService.resolver_selecao(
+        db, contexto.gabinete_id, selecionar_eleitor_id
+    )
     resultados_busca_eleitor = []
     if not eleitor_resolvido and pesquisa_eleitor.strip():
-        resultados_busca_eleitor, _, _ = EleitorService.listar(db, pesquisa_eleitor, 1)
+        resultados_busca_eleitor, _, _ = EleitorService.listar(
+            db, contexto.gabinete_id, pesquisa_eleitor, 1
+        )
 
     return templates.TemplateResponse(
         request=request,
@@ -143,7 +154,7 @@ def novo(
             "acao_busca": "/demandas/novo",
             "pesquisa_eleitor": pesquisa_eleitor,
             "resultados_busca_eleitor": resultados_busca_eleitor,
-            **_opcoes_formulario(db),
+            **_opcoes_formulario(db, contexto.gabinete_id),
         },
     )
 
@@ -162,10 +173,12 @@ def criar(
     prazo: date | None = Form(None),
     observacoes_internas: str | None = Form(None),
     db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
     try:
         DemandaService.criar(
             db,
+            contexto.gabinete_id,
             eleitor_id,
             titulo,
             descricao,
@@ -194,17 +207,19 @@ def criar(
             observacoes_internas=observacoes_internas,
         )
         eleitor_atual = (
-            EleitorService.obter_por_id(db, demanda_preenchida.eleitor_id)
+            EleitorService.obter_por_id(db, contexto.gabinete_id, demanda_preenchida.eleitor_id)
             if demanda_preenchida.eleitor_id
             else None
         )
         categoria_atual = (
-            CategoriaService.obter_por_id(db, demanda_preenchida.categoria_id)
+            CategoriaService.obter_por_id(db, contexto.gabinete_id, demanda_preenchida.categoria_id)
             if demanda_preenchida.categoria_id
             else None
         )
         subcategoria_atual = (
-            SubcategoriaService.obter_por_id(db, demanda_preenchida.subcategoria_id)
+            SubcategoriaService.obter_por_id(
+                db, contexto.gabinete_id, demanda_preenchida.subcategoria_id
+            )
             if demanda_preenchida.subcategoria_id
             else None
         )
@@ -221,7 +236,7 @@ def criar(
                 "pesquisa_eleitor": "",
                 "resultados_busca_eleitor": [],
                 "erro": str(error),
-                **_opcoes_formulario(db, categoria_atual, subcategoria_atual),
+                **_opcoes_formulario(db, contexto.gabinete_id, categoria_atual, subcategoria_atual),
             },
             status_code=400,
         )
@@ -229,12 +244,21 @@ def criar(
 
 
 @router.get("/{demanda_id}", response_class=HTMLResponse)
-def visualizar(request: Request, demanda_id: int, db: Session = Depends(get_db)):
-    demanda = DemandaService.obter_por_id(db, demanda_id)
+def visualizar(
+    request: Request,
+    demanda_id: int,
+    db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
+):
+    demanda = DemandaService.obter_por_id(db, contexto.gabinete_id, demanda_id)
     if demanda is None:
         return flash_message("Demanda não encontrada.")
-    eleitor = EleitorService.obter_por_id(db, demanda.eleitor_id) if demanda.eleitor_id else None
-    compromisso_retorno = AgendaService.obter_por_demanda(db, demanda.id)
+    eleitor = (
+        EleitorService.obter_por_id(db, contexto.gabinete_id, demanda.eleitor_id)
+        if demanda.eleitor_id
+        else None
+    )
+    compromisso_retorno = AgendaService.obter_por_demanda(db, contexto.gabinete_id, demanda.id)
     return templates.TemplateResponse(
         request=request,
         name="demandas/visualizar.html",
@@ -255,17 +279,20 @@ def editar(
     selecionar_eleitor_id: int | None = None,
     trocar_eleitor: bool = False,
     db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
-    demanda = DemandaService.obter_por_id(db, demanda_id)
+    demanda = DemandaService.obter_por_id(db, contexto.gabinete_id, demanda_id)
     if demanda is None:
         return flash_message("Demanda não encontrada.")
 
     eleitor_atual, eleitor_resolvido = EleitorService.resolver_selecao(
-        db, selecionar_eleitor_id, demanda.eleitor_id, trocar_eleitor
+        db, contexto.gabinete_id, selecionar_eleitor_id, demanda.eleitor_id, trocar_eleitor
     )
     resultados_busca_eleitor = []
     if not eleitor_resolvido and pesquisa_eleitor.strip():
-        resultados_busca_eleitor, _, _ = EleitorService.listar(db, pesquisa_eleitor, 1)
+        resultados_busca_eleitor, _, _ = EleitorService.listar(
+            db, contexto.gabinete_id, pesquisa_eleitor, 1
+        )
 
     return templates.TemplateResponse(
         request=request,
@@ -279,7 +306,9 @@ def editar(
             "acao_busca": f"/demandas/{demanda_id}/editar",
             "pesquisa_eleitor": pesquisa_eleitor,
             "resultados_busca_eleitor": resultados_busca_eleitor,
-            **_opcoes_formulario(db, demanda.categoria_vinculada, demanda.subcategoria_vinculada),
+            **_opcoes_formulario(
+                db, contexto.gabinete_id, demanda.categoria_vinculada, demanda.subcategoria_vinculada
+            ),
         },
     )
 
@@ -299,8 +328,9 @@ def atualizar(
     prazo: date | None = Form(None),
     observacoes_internas: str | None = Form(None),
     db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
-    demanda = DemandaService.obter_por_id(db, demanda_id)
+    demanda = DemandaService.obter_por_id(db, contexto.gabinete_id, demanda_id)
     if demanda is None:
         return flash_message("Demanda não encontrada.")
 
@@ -337,17 +367,19 @@ def atualizar(
             observacoes_internas=observacoes_internas,
         )
         eleitor_atual = (
-            EleitorService.obter_por_id(db, demanda_preenchida.eleitor_id)
+            EleitorService.obter_por_id(db, contexto.gabinete_id, demanda_preenchida.eleitor_id)
             if demanda_preenchida.eleitor_id
             else None
         )
         categoria_atual = (
-            CategoriaService.obter_por_id(db, demanda_preenchida.categoria_id)
+            CategoriaService.obter_por_id(db, contexto.gabinete_id, demanda_preenchida.categoria_id)
             if demanda_preenchida.categoria_id
             else None
         )
         subcategoria_atual = (
-            SubcategoriaService.obter_por_id(db, demanda_preenchida.subcategoria_id)
+            SubcategoriaService.obter_por_id(
+                db, contexto.gabinete_id, demanda_preenchida.subcategoria_id
+            )
             if demanda_preenchida.subcategoria_id
             else None
         )
@@ -364,7 +396,7 @@ def atualizar(
                 "pesquisa_eleitor": "",
                 "resultados_busca_eleitor": [],
                 "erro": str(error),
-                **_opcoes_formulario(db, categoria_atual, subcategoria_atual),
+                **_opcoes_formulario(db, contexto.gabinete_id, categoria_atual, subcategoria_atual),
             },
             status_code=400,
         )
@@ -375,8 +407,12 @@ def atualizar(
 
 
 @router.post("/{demanda_id}/excluir")
-def excluir(demanda_id: int, db: Session = Depends(get_db)):
-    demanda = DemandaService.obter_por_id(db, demanda_id)
+def excluir(
+    demanda_id: int,
+    db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
+):
+    demanda = DemandaService.obter_por_id(db, contexto.gabinete_id, demanda_id)
     if demanda is None:
         return flash_message("Demanda não encontrada.")
     DemandaService.excluir(db, demanda)

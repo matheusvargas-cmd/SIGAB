@@ -53,7 +53,7 @@ ALIASES_CABECALHO = {
 
 class AgendaCsvService:
     @staticmethod
-    def importar_compromisso_historico(db: Session, conteudo: bytes) -> dict:
+    def importar_compromisso_historico(db: Session, gabinete_id: int, conteudo: bytes) -> dict:
         """Importa o CSV de compromissos, aceitando dois formatos:
 
         - Histórico (ex.: compromisso.csv): sem identificador próprio, então
@@ -130,7 +130,10 @@ class AgendaCsvService:
                     if not ref_historico:
                         raise ValueError("Ref ausente.")
 
-                if AgendaService.obter_por_ref_historico(db, ref_historico) is not None:
+                if (
+                    AgendaService.obter_por_ref_historico(db, gabinete_id, ref_historico)
+                    is not None
+                ):
                     resultado["existentes"] += 1
                     continue
 
@@ -140,6 +143,7 @@ class AgendaCsvService:
 
                 AgendaService.criar_historico(
                     db,
+                    gabinete_id,
                     titulo=dados["titulo"],
                     descricao=dados["descricao"],
                     local=dados["local"],

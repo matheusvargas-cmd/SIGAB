@@ -270,6 +270,67 @@ a:hover {
   color: var(--c360-branco);
   font-weight: 700;
   font-size: 0.85rem;
+  border: none;
+  cursor: pointer;
+}
+
+.usuario-area {
+  position: relative;
+}
+
+.usuario-menu {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  min-width: 200px;
+  background: var(--c360-branco);
+  border: 1px solid var(--c360-borda);
+  border-radius: var(--c360-radius);
+  box-shadow: var(--c360-sombra-forte);
+  padding: 10px 0;
+  z-index: 20;
+}
+
+.usuario-menu.aberto {
+  display: block;
+}
+
+.usuario-menu-nome {
+  padding: 2px 16px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--c360-azul-principal);
+}
+
+.usuario-menu-gabinete {
+  padding: 0 16px 8px;
+  font-size: 0.78rem;
+  color: var(--c360-cinza-texto);
+  border-bottom: 1px solid var(--c360-borda);
+  margin-bottom: 6px;
+}
+
+.usuario-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  color: var(--c360-cinza-texto);
+  background: none;
+  border: none;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.usuario-menu-item:hover {
+  background: var(--c360-cinza-claro);
+  color: var(--c360-azul-principal);
+}
+
+.usuario-menu-sair {
+  color: var(--c360-vermelho);
 }
 
 /* ---------- Cards ---------- */

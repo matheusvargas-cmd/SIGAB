@@ -12,6 +12,11 @@ __pycache__/
 *.db
 *.sqlite3
 
+# Configuração local/segredos por ambiente (ver .env.example para o modelo)
+.env
+.env.*
+!.env.example
+
 # VS Code
 .vscode/
 

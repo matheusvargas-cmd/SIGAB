@@ -54,21 +54,27 @@ _ORDEM_PRIORIDADE = case(
 
 
 class DemandaService:
+    """Toda consulta/escrita aqui é sempre filtrada por gabinete_id — ver
+    app/core/contexto.py. Nunca aceitar gabinete_id vindo do cliente:
+    sempre o gabinete_id do ContextoSessao autenticado."""
+
     @staticmethod
     def listar(
-        db: Session, pesquisa: str | None = None, pagina: int = 1
+        db: Session, gabinete_id: int, pesquisa: str | None = None, pagina: int = 1
     ) -> tuple[list[Demanda], int, int]:
         # outerjoin (não join): uma demanda sem eleitor vinculado
         # (eleitor_id nulo — CSV real do Meu Mandato permite isso) precisa
         # continuar aparecendo na listagem normal, não só quando tem eleitor.
         consulta = (
             select(Demanda)
+            .where(Demanda.gabinete_id == gabinete_id)
             .outerjoin(Eleitor, Demanda.eleitor_id == Eleitor.id)
             .options(joinedload(Demanda.eleitor))
         )
         consulta_total = (
             select(func.count())
             .select_from(Demanda)
+            .where(Demanda.gabinete_id == gabinete_id)
             .outerjoin(Eleitor, Demanda.eleitor_id == Eleitor.id)
         )
 
@@ -98,43 +104,57 @@ class DemandaService:
         return demandas, pagina_atual, total_paginas
 
     @staticmethod
-    def obter_por_id(db: Session, demanda_id: int) -> Demanda | None:
-        return db.get(Demanda, demanda_id)
+    def obter_por_id(db: Session, gabinete_id: int, demanda_id: int) -> Demanda | None:
+        demanda = db.get(Demanda, demanda_id)
+        if demanda is None or demanda.gabinete_id != gabinete_id:
+            return None
+        return demanda
 
     @staticmethod
-    def obter_por_ref_historico(db: Session, ref_historico: str) -> Demanda | None:
-        return db.scalar(select(Demanda).where(Demanda.ref_historico == ref_historico))
+    def obter_por_ref_historico(db: Session, gabinete_id: int, ref_historico: str) -> Demanda | None:
+        return db.scalar(
+            select(Demanda).where(
+                Demanda.gabinete_id == gabinete_id, Demanda.ref_historico == ref_historico
+            )
+        )
 
     @staticmethod
-    def listar_eleitores_para_selecao(db: Session) -> list[Eleitor]:
-        return list(db.scalars(select(Eleitor).order_by(Eleitor.nome)).all())
+    def listar_eleitores_para_selecao(db: Session, gabinete_id: int) -> list[Eleitor]:
+        consulta = select(Eleitor).where(Eleitor.gabinete_id == gabinete_id).order_by(Eleitor.nome)
+        return list(db.scalars(consulta).all())
 
     @staticmethod
-    def contar_em_andamento(db: Session) -> int:
+    def contar_em_andamento(db: Session, gabinete_id: int) -> int:
         consulta = (
             select(func.count())
             .select_from(Demanda)
+            .where(Demanda.gabinete_id == gabinete_id)
             .where(Demanda.status.notin_(STATUS_FINALIZADOS))
         )
         return db.scalar(consulta) or 0
 
     @staticmethod
-    def contar_concluidas(db: Session) -> int:
+    def contar_concluidas(db: Session, gabinete_id: int) -> int:
         consulta = (
-            select(func.count()).select_from(Demanda).where(Demanda.status == "Concluído")
+            select(func.count())
+            .select_from(Demanda)
+            .where(Demanda.gabinete_id == gabinete_id)
+            .where(Demanda.status == "Concluído")
         )
         return db.scalar(consulta) or 0
 
     @staticmethod
-    def contar_total(db: Session) -> int:
-        return db.scalar(select(func.count()).select_from(Demanda)) or 0
+    def contar_total(db: Session, gabinete_id: int) -> int:
+        consulta = select(func.count()).select_from(Demanda).where(Demanda.gabinete_id == gabinete_id)
+        return db.scalar(consulta) or 0
 
     @staticmethod
-    def contar_atrasadas(db: Session) -> int:
+    def contar_atrasadas(db: Session, gabinete_id: int) -> int:
         hoje = date.today()
         consulta = (
             select(func.count())
             .select_from(Demanda)
+            .where(Demanda.gabinete_id == gabinete_id)
             .where(Demanda.prazo.isnot(None))
             .where(Demanda.prazo < hoje)
             .where(Demanda.status.notin_(STATUS_FINALIZADOS))
@@ -142,12 +162,13 @@ class DemandaService:
         return db.scalar(consulta) or 0
 
     @staticmethod
-    def contar_prazo_proximo(db: Session, dias: int = 7) -> int:
+    def contar_prazo_proximo(db: Session, gabinete_id: int, dias: int = 7) -> int:
         hoje = date.today()
         limite = hoje + timedelta(days=dias)
         consulta = (
             select(func.count())
             .select_from(Demanda)
+            .where(Demanda.gabinete_id == gabinete_id)
             .where(Demanda.prazo.isnot(None))
             .where(Demanda.prazo >= hoje)
             .where(Demanda.prazo <= limite)
@@ -156,9 +177,10 @@ class DemandaService:
         return db.scalar(consulta) or 0
 
     @staticmethod
-    def listar_recentes(db: Session, limite: int = 5) -> list[Demanda]:
+    def listar_recentes(db: Session, gabinete_id: int, limite: int = 5) -> list[Demanda]:
         consulta = (
             select(Demanda)
+            .where(Demanda.gabinete_id == gabinete_id)
             .options(joinedload(Demanda.eleitor))
             .order_by(Demanda.data_abertura.desc())
             .limit(limite)
@@ -168,12 +190,17 @@ class DemandaService:
     @staticmethod
     def relatorio_por_status(
         db: Session,
+        gabinete_id: int,
         data_inicio: date | None = None,
         data_fim: date | None = None,
         categoria: str | None = None,
         prioridade: str | None = None,
     ) -> list[dict]:
-        consulta = select(Demanda.status, func.count()).group_by(Demanda.status)
+        consulta = (
+            select(Demanda.status, func.count())
+            .where(Demanda.gabinete_id == gabinete_id)
+            .group_by(Demanda.status)
+        )
         consulta = DemandaService._aplicar_filtros_relatorio(
             consulta, data_inicio, data_fim, categoria=categoria, prioridade=prioridade
         )
@@ -186,17 +213,24 @@ class DemandaService:
     @staticmethod
     def relatorio_por_categoria(
         db: Session,
+        gabinete_id: int,
         data_inicio: date | None = None,
         data_fim: date | None = None,
         status: str | None = None,
         prioridade: str | None = None,
     ) -> list[dict]:
-        consulta = select(Demanda.categoria_id, func.count()).group_by(Demanda.categoria_id)
+        consulta = (
+            select(Demanda.categoria_id, func.count())
+            .where(Demanda.gabinete_id == gabinete_id)
+            .group_by(Demanda.categoria_id)
+        )
         consulta = DemandaService._aplicar_filtros_relatorio(
             consulta, data_inicio, data_fim, status=status, prioridade=prioridade
         )
         contagem = dict(db.execute(consulta).all())
-        categorias = db.scalars(select(Categoria).order_by(Categoria.nome)).all()
+        categorias = db.scalars(
+            select(Categoria).where(Categoria.gabinete_id == gabinete_id).order_by(Categoria.nome)
+        ).all()
         resultado = [
             {"rotulo": categoria.nome, "quantidade": contagem.get(categoria.id, 0)}
             for categoria in categorias
@@ -207,12 +241,13 @@ class DemandaService:
     @staticmethod
     def relatorio_por_periodo(
         db: Session,
+        gabinete_id: int,
         data_inicio: date | None = None,
         data_fim: date | None = None,
         status: str | None = None,
         categoria: str | None = None,
     ) -> list[dict]:
-        consulta = select(Demanda.data_abertura)
+        consulta = select(Demanda.data_abertura).where(Demanda.gabinete_id == gabinete_id)
         consulta = DemandaService._aplicar_filtros_relatorio(
             consulta, data_inicio, data_fim, status=status, categoria=categoria
         )
@@ -228,10 +263,10 @@ class DemandaService:
         ]
 
     @staticmethod
-    def relatorio_por_eleitor(db: Session, eleitor_id: int) -> list[Demanda]:
+    def relatorio_por_eleitor(db: Session, gabinete_id: int, eleitor_id: int) -> list[Demanda]:
         consulta = (
             select(Demanda)
-            .where(Demanda.eleitor_id == eleitor_id)
+            .where(Demanda.gabinete_id == gabinete_id, Demanda.eleitor_id == eleitor_id)
             .order_by(Demanda.data_abertura.desc())
         )
         return list(db.scalars(consulta).all())
@@ -260,6 +295,7 @@ class DemandaService:
     @staticmethod
     def criar(
         db: Session,
+        gabinete_id: int,
         eleitor_id: str | None,
         titulo: str,
         descricao: str | None,
@@ -288,6 +324,7 @@ class DemandaService:
         # vocabulário paralelo gravado no banco.
         dados = DemandaService._validar_dados(
             db,
+            gabinete_id,
             eleitor_id,
             titulo,
             descricao,
@@ -298,6 +335,7 @@ class DemandaService:
             eleitor_obrigatorio=eleitor_obrigatorio,
         )
         demanda = Demanda(
+            gabinete_id=gabinete_id,
             eleitor_id=dados["eleitor_id"],
             titulo=dados["titulo"],
             descricao=dados["descricao"],
@@ -338,7 +376,15 @@ class DemandaService:
         observacoes_internas: str | None = None,
     ) -> Demanda:
         dados = DemandaService._validar_dados(
-            db, eleitor_id, titulo, descricao, categoria_id, subcategoria_id, status, prioridade
+            db,
+            demanda.gabinete_id,
+            eleitor_id,
+            titulo,
+            descricao,
+            categoria_id,
+            subcategoria_id,
+            status,
+            prioridade,
         )
 
         if demanda.status == "Concluído" and dados["status"] == "Protocolado":
@@ -368,13 +414,14 @@ class DemandaService:
 
     @staticmethod
     def excluir(db: Session, demanda: Demanda) -> None:
-        AgendaService.excluir_compromisso_da_demanda(db, demanda.id)
+        AgendaService.excluir_compromisso_da_demanda(db, demanda.gabinete_id, demanda.id)
         db.delete(demanda)
         db.commit()
 
     @staticmethod
     def _validar_dados(
         db: Session,
+        gabinete_id: int,
         eleitor_id: str | None,
         titulo: str,
         descricao: str | None,
@@ -389,8 +436,13 @@ class DemandaService:
         except (TypeError, ValueError):
             eleitor_id_convertido = None
 
-        if eleitor_id_convertido is not None and db.get(Eleitor, eleitor_id_convertido) is None:
-            raise ValueError("Eleitor não encontrado.")
+        if eleitor_id_convertido is not None:
+            # Nunca confiar num eleitor_id só porque é um inteiro válido —
+            # tem que existir E pertencer ao mesmo gabinete da demanda,
+            # senão um ID adivinhado vincularia dado de outro gabinete.
+            eleitor_obj = db.get(Eleitor, eleitor_id_convertido)
+            if eleitor_obj is None or eleitor_obj.gabinete_id != gabinete_id:
+                raise ValueError("Eleitor não encontrado.")
         if eleitor_id_convertido is None and eleitor_obrigatorio:
             raise ValueError("Eleitor obrigatório.")
 
@@ -410,7 +462,7 @@ class DemandaService:
         categoria_obj = (
             db.get(Categoria, categoria_id_convertido) if categoria_id_convertido else None
         )
-        if categoria_obj is None:
+        if categoria_obj is None or categoria_obj.gabinete_id != gabinete_id:
             raise ValueError("Categoria obrigatória.")
 
         subcategoria_id_convertido = None

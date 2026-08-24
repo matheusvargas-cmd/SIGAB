@@ -6,12 +6,18 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.core.config import TEMPLATES_DIR
+from app.core.contexto import ContextoSessao, exigir_perfil
 from app.core.database import get_db
 from app.services.categoria_service import CategoriaService
 from app.services.subcategoria_service import SubcategoriaService
 
 router = APIRouter(prefix="/configuracoes/categorias", tags=["Cadastros"])
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+# Gestão de categorias/subcategorias é administrativa (afeta a
+# classificação de dados de todo o gabinete) — só ADMIN, conforme a
+# autorização mínima definida na Fase 1.
+_exigir_admin = exigir_perfil("ADMIN")
 
 
 def flash_message(
@@ -29,8 +35,10 @@ def flash_message(
 
 
 @router.get("", response_class=HTMLResponse)
-def listar(request: Request, db: Session = Depends(get_db)):
-    categorias = CategoriaService.listar(db)
+def listar(
+    request: Request, db: Session = Depends(get_db), contexto: ContextoSessao = Depends(_exigir_admin)
+):
+    categorias = CategoriaService.listar(db, contexto.gabinete_id)
     resposta = templates.TemplateResponse(
         request=request,
         name="configuracoes/categorias_lista.html",
@@ -47,7 +55,7 @@ def listar(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/novo", response_class=HTMLResponse)
-def novo(request: Request):
+def novo(request: Request, contexto: ContextoSessao = Depends(_exigir_admin)):
     return templates.TemplateResponse(
         request=request,
         name="configuracoes/categoria_formulario.html",
@@ -56,9 +64,14 @@ def novo(request: Request):
 
 
 @router.post("/novo")
-def criar(request: Request, nome: str = Form(...), db: Session = Depends(get_db)):
+def criar(
+    request: Request,
+    nome: str = Form(...),
+    db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(_exigir_admin),
+):
     try:
-        categoria = CategoriaService.criar(db, nome)
+        categoria = CategoriaService.criar(db, contexto.gabinete_id, nome)
     except ValueError as error:
         categoria_preenchida = SimpleNamespace(id=None, nome=nome)
         return templates.TemplateResponse(
@@ -79,11 +92,16 @@ def criar(request: Request, nome: str = Form(...), db: Session = Depends(get_db)
 
 
 @router.get("/{categoria_id}", response_class=HTMLResponse)
-def visualizar(request: Request, categoria_id: int, db: Session = Depends(get_db)):
-    categoria = CategoriaService.obter_por_id(db, categoria_id)
+def visualizar(
+    request: Request,
+    categoria_id: int,
+    db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(_exigir_admin),
+):
+    categoria = CategoriaService.obter_por_id(db, contexto.gabinete_id, categoria_id)
     if categoria is None:
         return flash_message("/configuracoes/categorias", "Categoria não encontrada.")
-    subcategorias = SubcategoriaService.listar_por_categoria(db, categoria_id)
+    subcategorias = SubcategoriaService.listar_por_categoria(db, contexto.gabinete_id, categoria_id)
     resposta = templates.TemplateResponse(
         request=request,
         name="configuracoes/categoria_detalhe.html",
@@ -101,8 +119,13 @@ def visualizar(request: Request, categoria_id: int, db: Session = Depends(get_db
 
 
 @router.get("/{categoria_id}/editar", response_class=HTMLResponse)
-def editar(request: Request, categoria_id: int, db: Session = Depends(get_db)):
-    categoria = CategoriaService.obter_por_id(db, categoria_id)
+def editar(
+    request: Request,
+    categoria_id: int,
+    db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(_exigir_admin),
+):
+    categoria = CategoriaService.obter_por_id(db, contexto.gabinete_id, categoria_id)
     if categoria is None:
         return flash_message("/configuracoes/categorias", "Categoria não encontrada.")
     return templates.TemplateResponse(
@@ -114,9 +137,13 @@ def editar(request: Request, categoria_id: int, db: Session = Depends(get_db)):
 
 @router.post("/{categoria_id}/editar")
 def atualizar(
-    request: Request, categoria_id: int, nome: str = Form(...), db: Session = Depends(get_db)
+    request: Request,
+    categoria_id: int,
+    nome: str = Form(...),
+    db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(_exigir_admin),
 ):
-    categoria = CategoriaService.obter_por_id(db, categoria_id)
+    categoria = CategoriaService.obter_por_id(db, contexto.gabinete_id, categoria_id)
     if categoria is None:
         return flash_message("/configuracoes/categorias", "Categoria não encontrada.")
     try:
@@ -137,8 +164,12 @@ def atualizar(
 
 
 @router.post("/{categoria_id}/alternar")
-def alternar(categoria_id: int, db: Session = Depends(get_db)):
-    categoria = CategoriaService.obter_por_id(db, categoria_id)
+def alternar(
+    categoria_id: int,
+    db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(_exigir_admin),
+):
+    categoria = CategoriaService.obter_por_id(db, contexto.gabinete_id, categoria_id)
     if categoria is None:
         return flash_message("/configuracoes/categorias", "Categoria não encontrada.")
     CategoriaService.alternar_ativo(db, categoria)
@@ -147,8 +178,13 @@ def alternar(categoria_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{categoria_id}/subcategorias/novo", response_class=HTMLResponse)
-def nova_subcategoria(request: Request, categoria_id: int, db: Session = Depends(get_db)):
-    categoria = CategoriaService.obter_por_id(db, categoria_id)
+def nova_subcategoria(
+    request: Request,
+    categoria_id: int,
+    db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(_exigir_admin),
+):
+    categoria = CategoriaService.obter_por_id(db, contexto.gabinete_id, categoria_id)
     if categoria is None:
         return flash_message("/configuracoes/categorias", "Categoria não encontrada.")
     return templates.TemplateResponse(
@@ -160,13 +196,17 @@ def nova_subcategoria(request: Request, categoria_id: int, db: Session = Depends
 
 @router.post("/{categoria_id}/subcategorias/novo")
 def criar_subcategoria(
-    request: Request, categoria_id: int, nome: str = Form(...), db: Session = Depends(get_db)
+    request: Request,
+    categoria_id: int,
+    nome: str = Form(...),
+    db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(_exigir_admin),
 ):
-    categoria = CategoriaService.obter_por_id(db, categoria_id)
+    categoria = CategoriaService.obter_por_id(db, contexto.gabinete_id, categoria_id)
     if categoria is None:
         return flash_message("/configuracoes/categorias", "Categoria não encontrada.")
     try:
-        SubcategoriaService.criar(db, categoria_id, nome)
+        SubcategoriaService.criar(db, contexto.gabinete_id, categoria_id, nome)
     except ValueError as error:
         subcategoria_preenchida = SimpleNamespace(id=None, nome=nome)
         return templates.TemplateResponse(
@@ -187,12 +227,16 @@ def criar_subcategoria(
 
 @router.get("/{categoria_id}/subcategorias/{subcategoria_id}/editar", response_class=HTMLResponse)
 def editar_subcategoria(
-    request: Request, categoria_id: int, subcategoria_id: int, db: Session = Depends(get_db)
+    request: Request,
+    categoria_id: int,
+    subcategoria_id: int,
+    db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(_exigir_admin),
 ):
-    categoria = CategoriaService.obter_por_id(db, categoria_id)
+    categoria = CategoriaService.obter_por_id(db, contexto.gabinete_id, categoria_id)
     if categoria is None:
         return flash_message("/configuracoes/categorias", "Categoria não encontrada.")
-    subcategoria = SubcategoriaService.obter_por_id(db, subcategoria_id)
+    subcategoria = SubcategoriaService.obter_por_id(db, contexto.gabinete_id, subcategoria_id)
     if subcategoria is None or subcategoria.categoria_id != categoria_id:
         return flash_message(
             f"/configuracoes/categorias/{categoria_id}", "Subcategoria não encontrada."
@@ -211,11 +255,12 @@ def atualizar_subcategoria(
     subcategoria_id: int,
     nome: str = Form(...),
     db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(_exigir_admin),
 ):
-    categoria = CategoriaService.obter_por_id(db, categoria_id)
+    categoria = CategoriaService.obter_por_id(db, contexto.gabinete_id, categoria_id)
     if categoria is None:
         return flash_message("/configuracoes/categorias", "Categoria não encontrada.")
-    subcategoria = SubcategoriaService.obter_por_id(db, subcategoria_id)
+    subcategoria = SubcategoriaService.obter_por_id(db, contexto.gabinete_id, subcategoria_id)
     if subcategoria is None or subcategoria.categoria_id != categoria_id:
         return flash_message(
             f"/configuracoes/categorias/{categoria_id}", "Subcategoria não encontrada."
@@ -241,8 +286,13 @@ def atualizar_subcategoria(
 
 
 @router.post("/{categoria_id}/subcategorias/{subcategoria_id}/alternar")
-def alternar_subcategoria(categoria_id: int, subcategoria_id: int, db: Session = Depends(get_db)):
-    subcategoria = SubcategoriaService.obter_por_id(db, subcategoria_id)
+def alternar_subcategoria(
+    categoria_id: int,
+    subcategoria_id: int,
+    db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(_exigir_admin),
+):
+    subcategoria = SubcategoriaService.obter_por_id(db, contexto.gabinete_id, subcategoria_id)
     if subcategoria is None or subcategoria.categoria_id != categoria_id:
         return flash_message(
             f"/configuracoes/categorias/{categoria_id}", "Subcategoria não encontrada."
