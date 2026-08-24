@@ -109,5 +109,21 @@ document.querySelectorAll('[data-sidebar-toggle]').forEach(function (toggle) {
     });
 });
 </script>
+<script>
+(function () {
+    // Só é lido pelo build standalone (Conecta360.exe), que encerra o
+    // servidor sozinho quando nenhuma aba envia heartbeat por um tempo.
+    // Em desenvolvimento o endpoint existe mas nada consome esse estado.
+    function enviarHeartbeat() {
+        if (navigator.sendBeacon) {
+            navigator.sendBeacon('/_heartbeat');
+        } else {
+            fetch('/_heartbeat', {method: 'POST', keepalive: true}).catch(function () {});
+        }
+    }
+    enviarHeartbeat();
+    setInterval(enviarHeartbeat, 15000);
+})();
+</script>
 </body>
 </html>

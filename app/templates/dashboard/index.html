@@ -56,11 +56,13 @@
             <div class="card-body">
                 {% if total_demandas %}
                 {% set status_classes = {
-                    'Aberta': 'bg-primary',
+                    'Protocolado': 'bg-primary',
+                    'A fazer': 'badge-laranja',
                     'Em andamento': 'bg-warning',
-                    'Aguardando terceiros': 'badge-laranja',
-                    'Concluída': 'bg-success',
-                    'Cancelada': 'bg-danger',
+                    'Em análise': 'bg-info',
+                    'Não realizado': 'bg-danger',
+                    'Concluído': 'bg-success',
+                    'Cancelada': 'bg-secondary',
                 } %}
                 {% for item in demandas_por_status %}
                 <div class="{% if not loop.last %}mb-3{% endif %}">
@@ -83,18 +85,12 @@
         <div class="card h-100">
             <div class="card-header">Atenção do gabinete</div>
             <div class="card-body">
-                {% if demandas_atrasadas or demandas_aguardando_terceiros or demandas_prazo_proximo %}
+                {% if demandas_atrasadas or demandas_prazo_proximo %}
                 <ul class="list-unstyled mb-0">
                     {% if demandas_atrasadas %}
                     <li class="d-flex justify-content-between align-items-center py-2 border-bottom">
                         <span>🔴 Demandas atrasadas</span>
                         <span class="fw-semibold">{{ demandas_atrasadas }}</span>
-                    </li>
-                    {% endif %}
-                    {% if demandas_aguardando_terceiros %}
-                    <li class="d-flex justify-content-between align-items-center py-2 border-bottom">
-                        <span>🟠 Aguardando terceiros</span>
-                        <span class="fw-semibold">{{ demandas_aguardando_terceiros }}</span>
                     </li>
                     {% endif %}
                     {% if demandas_prazo_proximo %}

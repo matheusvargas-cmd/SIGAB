@@ -10,7 +10,9 @@ from app.services.agenda_service import AgendaService
 
 logger = logging.getLogger(__name__)
 
-CABECALHO_OBRIGATORIO = {
+# Formato histórico (compromisso.csv, sem coluna de identificador próprio —
+# ref_historico é um hash das 7 colunas). Inalterado.
+CABECALHO_OBRIGATORIO_HISTORICO = {
     "Data inicio",
     "Data fim",
     "Assunto",
@@ -20,8 +22,13 @@ CABECALHO_OBRIGATORIO = {
     "Telefone solicitante",
 }
 
-# Ordem fixa usada tanto para o hash de idempotência quanto para a leitura
-# dos campos — mudar a ordem mudaria os hashes de uma importação já feita.
+# Formato real exportado pelo Meu Mandato (relatório de listagem de
+# compromissos): tem identificador próprio ("Ref") mas não tem solicitante.
+CABECALHO_OBRIGATORIO_REAL = {"Ref", "Assunto", "Data inicio", "Data fim", "Descrição", "Local"}
+
+# Ordem fixa usada tanto para o hash de idempotência do formato histórico
+# quanto para a leitura dos campos — mudar a ordem mudaria os hashes de uma
+# importação já feita.
 CAMPOS_HASH = [
     "Data inicio",
     "Data fim",
@@ -32,15 +39,32 @@ CAMPOS_HASH = [
     "Telefone solicitante",
 ]
 
+# Aliases explícitos (sem fuzzy matching) de cabeçalho real do Meu Mandato ->
+# nome canônico já usado pelo formato histórico. Comparação sempre por
+# igualdade de string após strip().lower(). Um cabeçalho que já vem no nome
+# canônico (ex.: "Assunto", "Descrição", "Local") não precisa de entrada
+# aqui — fica de fora do dicionário e é mantido como está.
+ALIASES_CABECALHO = {
+    "ref.": "Ref",
+    "data início": "Data inicio",
+    "data fim": "Data fim",
+}
+
 
 class AgendaCsvService:
     @staticmethod
     def importar_compromisso_historico(db: Session, conteudo: bytes) -> dict:
-        """Importa o CSV histórico de compromissos (ex.: compromisso.csv).
+        """Importa o CSV de compromissos, aceitando dois formatos:
 
-        O arquivo não tem um identificador próprio, então `ref_historico` é
-        um hash SHA-256 determinístico dos 7 campos originais da linha
-        (mesmo arquivo → mesmo hash, sempre). Nunca associa eleitor nem
+        - Histórico (ex.: compromisso.csv): sem identificador próprio, então
+          `ref_historico` é um hash SHA-256 determinístico dos 7 campos
+          originais da linha (mesmo arquivo → mesmo hash, sempre).
+        - Real do Meu Mandato (relatório "listagem-compromissos-..."): tem
+          coluna própria de identificador ("Ref"/"Ref."), usada diretamente
+          como `ref_historico`; não tem Nome/Telefone do solicitante, então
+          esses campos ficam opcionais nesse formato.
+
+        Em nenhum dos dois formatos o compromisso é associado a eleitor ou
         demanda — todo compromisso importado nasce com `eleitor_id` e
         `demanda_id` nulos, e nunca aciona a sincronização Demanda→Agenda.
         """
@@ -66,25 +90,45 @@ class AgendaCsvService:
             resultado["erro_arquivo"] = "Arquivo CSV vazio."
             return resultado
 
-        leitor = csv.DictReader(io.StringIO(texto))
+        delimitador = AgendaCsvService._detectar_delimitador(texto)
+        leitor = csv.DictReader(io.StringIO(texto), delimiter=delimitador)
         if not leitor.fieldnames:
             resultado["erro_arquivo"] = "Arquivo CSV sem cabeçalho."
             return resultado
 
-        colunas = {coluna.strip() for coluna in leitor.fieldnames if coluna}
-        faltantes = CABECALHO_OBRIGATORIO - colunas
+        mapa_cabecalho = AgendaCsvService._normalizar_cabecalho(leitor.fieldnames)
+        colunas = set(mapa_cabecalho.values())
+
+        # Se o CSV tem as colunas de solicitante, é o formato histórico
+        # completo (validação e comportamento inalterados). Caso contrário,
+        # só pode ser o formato real do Meu Mandato — exige "Ref" no lugar.
+        formato_historico = {"Nome solicitante", "Telefone solicitante"} <= colunas
+        cabecalho_exigido = (
+            CABECALHO_OBRIGATORIO_HISTORICO if formato_historico else CABECALHO_OBRIGATORIO_REAL
+        )
+        faltantes = cabecalho_exigido - colunas
         if faltantes:
             resultado["erro_arquivo"] = (
                 f"O CSV precisa ter as colunas {', '.join(sorted(faltantes))}."
             )
             return resultado
 
-        for numero, linha in enumerate(leitor, start=2):
+        for numero, linha_bruta in enumerate(leitor, start=2):
             resultado["processados"] += 1
+            linha = {
+                mapa_cabecalho[chave]: valor
+                for chave, valor in linha_bruta.items()
+                if chave is not None
+            }
             assunto = (linha.get("Assunto") or "").strip()
 
             try:
-                ref_historico = AgendaCsvService._gerar_ref_historico(linha)
+                if formato_historico:
+                    ref_historico = AgendaCsvService._gerar_ref_historico(linha)
+                else:
+                    ref_historico = (linha.get("Ref") or "").strip()
+                    if not ref_historico:
+                        raise ValueError("Ref ausente.")
 
                 if AgendaService.obter_por_ref_historico(db, ref_historico) is not None:
                     resultado["existentes"] += 1
@@ -121,6 +165,46 @@ class AgendaCsvService:
         return resultado
 
     @staticmethod
+    def _detectar_delimitador(texto: str) -> str:
+        """CSVs históricos usam vírgula; o relatório real do Meu Mandato usa
+        ponto e vírgula. Detecta pela amostra do cabeçalho, sem depender de
+        um formato fixo — mesma lógica já usada por EleitorCsvService."""
+        amostra = "\n".join(texto.splitlines()[:5])
+        try:
+            return csv.Sniffer().sniff(amostra, delimiters=",;").delimiter
+        except csv.Error:
+            primeira_linha = texto.splitlines()[0] if texto.splitlines() else ""
+            return ";" if primeira_linha.count(";") > primeira_linha.count(",") else ","
+
+    @staticmethod
+    def _normalizar_cabecalho(fieldnames) -> dict[str, str]:
+        """Mapeia cada cabeçalho bruto do CSV para o nome canônico interno
+        usando ALIASES_CABECALHO (comparação por strip().lower(), sem fuzzy
+        matching). Cabeçalho sem alias conhecido é mantido como está."""
+        mapa: dict[str, str] = {}
+        for bruto in fieldnames:
+            if bruto is None:
+                continue
+            canonico = ALIASES_CABECALHO.get(bruto.strip().lower())
+            mapa[bruto] = canonico or bruto.strip()
+        return mapa
+
+    @staticmethod
+    def _converter_data_hora(valor_bruto: str) -> datetime:
+        """Aceita tanto o formato ISO do histórico (`2025-05-22 17:00:00`)
+        quanto o formato do relatório real do Meu Mandato
+        (`21/08/2026 15:00`, sem segundos). Sem fuzzy matching — só essas
+        duas formas exatas."""
+        try:
+            return datetime.fromisoformat(valor_bruto)
+        except ValueError:
+            pass
+        try:
+            return datetime.strptime(valor_bruto, "%d/%m/%Y %H:%M")
+        except ValueError:
+            raise ValueError("Data inválida.")
+
+    @staticmethod
     def _gerar_ref_historico(linha: dict) -> str:
         partes = []
         for campo in CAMPOS_HASH:
@@ -151,7 +235,7 @@ class AgendaCsvService:
         if not inicio_bruto:
             raise ValueError("Data de início ausente.")
         try:
-            inicio = datetime.fromisoformat(inicio_bruto)
+            inicio = AgendaCsvService._converter_data_hora(inicio_bruto)
         except ValueError:
             raise ValueError("Data de início inválida.")
 
@@ -160,7 +244,7 @@ class AgendaCsvService:
         fim_bruto = valor("Data fim")
         if fim_bruto:
             try:
-                fim_convertido = datetime.fromisoformat(fim_bruto)
+                fim_convertido = AgendaCsvService._converter_data_hora(fim_bruto)
             except ValueError:
                 raise ValueError("Data de término inválida.")
             if fim_convertido <= inicio:

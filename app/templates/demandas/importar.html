@@ -12,7 +12,7 @@
         <ul class="text-muted small mb-3">
             <li>Formato próprio do sistema anterior (colunas "Ref", "Ref Eleitor", "Data Solicitação", "Descrição", "Status", "Categoria", "Secretaria" etc.).</li>
             <li>Usa a coluna <strong>Ref</strong> para identificar demandas já importadas — executar novamente não duplica.</li>
-            <li>Só cria a demanda quando o eleitor (<strong>Ref Eleitor</strong>) já estiver cadastrado — nenhum eleitor genérico é criado.</li>
+            <li>Vínculo com eleitor (<strong>Ref Eleitor</strong>) não é obrigatório — o sistema de origem permite demanda sem eleitor associado. Quando o eleitor não é encontrado, a demanda é importada mesmo assim, sem vínculo; nenhum eleitor genérico é criado a partir do nome.</li>
             <li>Categoria e status seguem uma tabela de conversão aprovada; valores fora dela viram erro (nada é classificado por suposição).</li>
         </ul>
         <form method="post" action="/demandas/importar" enctype="multipart/form-data" class="d-flex flex-wrap gap-2 align-items-center">
@@ -32,8 +32,9 @@
         <p class="mb-0">
             <strong>{{ resultado.processados }}</strong> linhas processadas ·
             <strong>{{ resultado.importadas }}</strong> importadas ·
+            <strong>{{ resultado.vinculadas }}</strong> vinculadas a eleitor ·
+            <strong>{{ resultado.sem_vinculo }}</strong> importadas sem vínculo ·
             <strong>{{ resultado.existentes }}</strong> já existentes ·
-            <strong>{{ resultado.sem_eleitor }}</strong> sem eleitor ·
             <strong>{{ resultado.erros|length }}</strong> com erro
         </p>
         {% endif %}
@@ -60,9 +61,9 @@
 </div>
 {% endif %}
 
-{% if resultado.detalhes_sem_eleitor %}
+{% if resultado.detalhes_sem_vinculo %}
 <div class="card">
-    <div class="card-header">Registros sem eleitor correspondente (não importados)</div>
+    <div class="card-header">Demandas importadas sem vínculo com eleitor</div>
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-sm mb-0">
@@ -70,7 +71,7 @@
                     <tr><th>Linha</th><th>Ref</th><th>Ref Eleitor</th><th>Motivo</th></tr>
                 </thead>
                 <tbody>
-                    {% for numero, ref, ref_eleitor, motivo in resultado.detalhes_sem_eleitor %}
+                    {% for numero, ref, ref_eleitor, motivo in resultado.detalhes_sem_vinculo %}
                     <tr><td>{{ numero }}</td><td>{{ ref or '-' }}</td><td>{{ ref_eleitor or '-' }}</td><td>{{ motivo }}</td></tr>
                     {% endfor %}
                 </tbody>

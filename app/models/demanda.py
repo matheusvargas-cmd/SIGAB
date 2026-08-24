@@ -9,7 +9,12 @@ class Demanda(Base):
 
     id = Column(Integer, primary_key=True)
 
-    eleitor_id = Column(Integer, ForeignKey("eleitores.id"), nullable=False)
+    # nullable: o sistema de origem (Meu Mandato) permite demanda sem
+    # eleitor vinculado (ex.: "Ref. eleitor" vazio, ou "Eleitor" = nome do
+    # próprio gabinete) — ver DemandaCsvService.importar_atendimento_historico.
+    # O formulário manual continua exigindo eleitor (DemandaService.criar
+    # valida isso por padrão; só a importação histórica passa eleitor_obrigatorio=False).
+    eleitor_id = Column(Integer, ForeignKey("eleitores.id"), nullable=True)
     eleitor = relationship("Eleitor")
 
     titulo = Column(String(150), nullable=False)
@@ -24,7 +29,7 @@ class Demanda(Base):
     subcategoria_id = Column(Integer, ForeignKey("subcategorias.id"), nullable=True)
     subcategoria_vinculada = relationship("Subcategoria")
 
-    status = Column(String(40), default="Aberta")
+    status = Column(String(40), default="Protocolado")
 
     secretaria = Column(String(100))
 

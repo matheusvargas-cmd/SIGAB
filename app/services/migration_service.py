@@ -249,3 +249,112 @@ class MigrationService:
                     )
 
             sessao.commit()
+
+    @staticmethod
+    def semear_categorias_demandas_reais() -> None:
+        """Cria as categorias/subcategorias necessárias para o mapeamento
+        aprovado das 18 categorias do CSV real de demandas do gabinete
+        (mapeamento categoria-a-categoria confirmado pelo usuário). Reaproveita
+        categoria/subcategoria já existente (ex.: Transportes, Esporte /
+        Patrocínio Esportivo, Trânsito / Placas, Lombadas e Sinais) — só cria
+        o que realmente não existe ainda. Idempotente, mesmo padrão de
+        `semear_categorias_atendimento_historico`.
+        """
+        from app.core.busca import normalizar
+        from app.models.categoria import Categoria
+        from app.models.subcategoria import Subcategoria
+
+        inspector = inspect(engine)
+        if "categorias" not in inspector.get_table_names() or "subcategorias" not in inspector.get_table_names():
+            return
+
+        novas_categorias = ["Segurança Pública"]
+        novas_subcategorias = [
+            ("Obras", "Manutenção de áreas públicas"),
+            ("Outros", "Informações na Prefeitura"),
+            ("Saúde", "Atendimento médico"),
+            ("Educação", "Material Escolar"),
+            ("Saúde", "Medicamentos e exames"),
+        ]
+
+        with Session(engine) as sessao:
+            categorias_existentes = {
+                normalizar(categoria.nome): categoria for categoria in sessao.query(Categoria).all()
+            }
+
+            for nome in novas_categorias:
+                if normalizar(nome) not in categorias_existentes:
+                    categoria = Categoria(nome=nome, ativo=True)
+                    sessao.add(categoria)
+                    sessao.flush()
+                    categorias_existentes[normalizar(nome)] = categoria
+                    logger.info("Categoria '%s' criada (mapeamento de demandas reais).", nome)
+
+            for nome_categoria, nome_subcategoria in novas_subcategorias:
+                categoria = categorias_existentes.get(normalizar(nome_categoria))
+                if categoria is None:
+                    logger.warning(
+                        "Categoria '%s' não encontrada; subcategoria '%s' não pôde ser criada.",
+                        nome_categoria,
+                        nome_subcategoria,
+                    )
+                    continue
+
+                existentes_sub = {
+                    normalizar(subcategoria.nome)
+                    for subcategoria in sessao.query(Subcategoria)
+                    .filter(Subcategoria.categoria_id == categoria.id)
+                    .all()
+                }
+                if normalizar(nome_subcategoria) not in existentes_sub:
+                    sessao.add(
+                        Subcategoria(categoria_id=categoria.id, nome=nome_subcategoria, ativo=True)
+                    )
+                    logger.info(
+                        "Subcategoria '%s' criada em '%s' (mapeamento de demandas reais).",
+                        nome_subcategoria,
+                        nome_categoria,
+                    )
+
+            sessao.commit()
+
+    @staticmethod
+    def relaxar_eleitor_obrigatorio_demandas() -> None:
+        """A partir desta etapa, uma Demanda pode existir sem eleitor
+        vinculado — o sistema de origem (Meu Mandato) permite "Ref. eleitor"
+        vazio ou não encontrado (ex.: demandas do próprio gabinete, sem
+        munícipe associado). O schema original declarava `eleitor_id` como
+        NOT NULL; SQLite não tem um `ALTER TABLE` que remova essa
+        constraint, então quando necessário a tabela é reconstruída pelo
+        procedimento padrão do próprio SQLite para isso: renomeia a tabela
+        atual, recria "demandas" a partir do model atual (já com
+        `eleitor_id` nullable), copia os dados linha a linha preservando
+        todas as colunas, descarta a tabela renomeada. Idempotente: só
+        executa se a coluna ainda estiver NOT NULL (banco novo já nasce
+        nullable via `Base.metadata.create_all`, então não entra aqui).
+        """
+        from app.models.demanda import Demanda
+
+        inspector = inspect(engine)
+        if "demandas" not in inspector.get_table_names():
+            return
+
+        colunas = {coluna["name"]: coluna for coluna in inspector.get_columns("demandas")}
+        coluna_eleitor = colunas.get("eleitor_id")
+        if coluna_eleitor is None or coluna_eleitor["nullable"]:
+            return
+
+        nomes_colunas = ", ".join(colunas.keys())
+        with engine.begin() as conexao:
+            conexao.execute(text("ALTER TABLE demandas RENAME TO demandas_migracao_antiga"))
+            Demanda.__table__.create(bind=conexao)
+            conexao.execute(
+                text(
+                    f"INSERT INTO demandas ({nomes_colunas}) "
+                    f"SELECT {nomes_colunas} FROM demandas_migracao_antiga"
+                )
+            )
+            conexao.execute(text("DROP TABLE demandas_migracao_antiga"))
+        logger.info(
+            "Coluna demandas.eleitor_id relaxada para permitir NULL (demanda sem eleitor vinculado)."
+        )

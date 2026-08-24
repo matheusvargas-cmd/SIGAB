@@ -29,11 +29,13 @@
 </form>
 
 {% set status_classes = {
-    'Aberta': 'text-bg-primary',
+    'Protocolado': 'text-bg-primary',
+    'A fazer': 'badge-laranja',
     'Em andamento': 'text-bg-warning',
-    'Aguardando terceiros': 'badge-laranja',
-    'Concluída': 'text-bg-success',
-    'Cancelada': 'text-bg-danger',
+    'Em análise': 'text-bg-info',
+    'Não realizado': 'text-bg-danger',
+    'Concluído': 'text-bg-success',
+    'Cancelada': 'text-bg-secondary',
 } %}
 {% set prioridade_classes = {
     'Baixa': 'text-bg-secondary',
@@ -47,23 +49,23 @@
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0 tabela-fixa">
                 <colgroup>
-                    <col style="width: 9%">
-                    <col style="width: 15%">
-                    <col style="width: 16%">
                     <col style="width: 12%">
+                    <col style="width: 14%">
+                    <col style="width: 15%">
+                    <col style="width: 11%">
                     <col style="width: 10%">
-                    <col style="width: 10%">
+                    <col style="width: 13%">
                     <col style="width: 6%">
-                    <col style="width: 22%">
+                    <col style="width: 19%">
                 </colgroup>
                 <thead>
                     <tr>
-                        <th class="ps-3">Prioridade</th>
+                        <th class="ps-3 text-nowrap">Prioridade</th>
                         <th>Status</th>
                         <th>Título</th>
                         <th>Eleitor</th>
                         <th>Categoria</th>
-                        <th>Responsável</th>
+                        <th class="text-nowrap">Responsável</th>
                         <th>Prazo</th>
                         <th class="text-end pe-3">Ações</th>
                     </tr>

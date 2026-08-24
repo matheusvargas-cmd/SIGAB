@@ -20,6 +20,29 @@ CABECALHO_CSV = [
     "observacoes",
 ]
 
+# Aliases explícitos (sem fuzzy matching) de cabeçalho de CSV -> campo
+# interno aceito por EleitorService.criar(). Cobre tanto os nomes já
+# usados no modelo de exportação (CABECALHO_CSV, tudo minúsculo) quanto
+# variações reais observadas em CSVs de gabinete (ex.: "Telefone(s)").
+# Comparação sempre por igualdade de string após strip().lower() — nunca
+# por aproximação/similaridade.
+ALIASES_CABECALHO = {
+    "nome": "nome",
+    "apelido": "apelido",
+    "telefone": "telefone",
+    "telefone(s)": "telefone",
+    "telefones": "telefone",
+    "whatsapp": "whatsapp",
+    "cpf": "cpf",
+    "nascimento": "nascimento",
+    "endereco": "endereco",
+    "endereço": "endereco",
+    "bairro": "bairro",
+    "cidade": "cidade",
+    "observacoes": "observacoes",
+    "observações": "observacoes",
+}
+
 
 class EleitorCsvService:
     @staticmethod
@@ -79,18 +102,25 @@ class EleitorCsvService:
             resultado["erro_arquivo"] = "Arquivo CSV sem cabeçalho."
             return resultado
 
-        colunas = {coluna.strip().lower() for coluna in leitor.fieldnames if coluna}
-        if "nome" not in colunas:
+        colunas_brutas = {coluna.strip().lower() for coluna in leitor.fieldnames if coluna}
+        if "nome" not in colunas_brutas:
             resultado["erro_arquivo"] = "O CSV precisa ter uma coluna 'nome'."
             return resultado
 
         for numero, linha in enumerate(leitor, start=2):
             resultado["processados"] += 1
-            dados = {
-                chave.strip().lower(): (valor.strip() if valor else valor)
-                for chave, valor in linha.items()
-                if chave is not None
-            }
+            # Mapeia cada cabeçalho do CSV para o campo interno via alias
+            # explícito; colunas sem alias conhecido (ex.: "Genero",
+            # "Grupo(s)") são ignoradas aqui — não há campo correspondente
+            # no cadastro de eleitor para recebê-las.
+            dados: dict[str, str | None] = {}
+            for chave, valor in linha.items():
+                if chave is None:
+                    continue
+                campo_interno = ALIASES_CABECALHO.get(chave.strip().lower())
+                if campo_interno is None:
+                    continue
+                dados[campo_interno] = valor.strip() if valor else valor
             try:
                 nascimento = EleitorCsvService._converter_data(dados.get("nascimento"))
                 EleitorService.criar(
@@ -103,6 +133,8 @@ class EleitorCsvService:
                     bairro=dados.get("bairro"),
                     cidade=dados.get("cidade"),
                     observacoes=dados.get("observacoes"),
+                    apelido=dados.get("apelido"),
+                    cpf=dados.get("cpf"),
                 )
                 resultado["importados"] += 1
             except ValueError as error:
@@ -120,9 +152,25 @@ class EleitorCsvService:
 
     CABECALHO_HISTORICO_OBRIGATORIO = {"Ref Eleitor", "Nome"}
 
+    # Aliases explícitos (sem fuzzy matching) do cabeçalho real exportado
+    # pelo Meu Mandato ("listagem-eleitores-...") -> nome canônico já lido
+    # por `_mapear_linha_historica`. Comparação por strip().lower(). Um
+    # cabeçalho sem alias conhecido (ex.: "Genero", "Grupo(s)", "Estado",
+    # "CEP", "Status") é mantido como está — não tem campo correspondente
+    # no cadastro de eleitor para recebê-lo, mesma decisão já tomada para
+    # o importador genérico.
+    ALIASES_CABECALHO_HISTORICO = {
+        "ref. eleitor": "Ref Eleitor",
+        "nascimento": "Data Nascimento",
+        "telefone(s)": "Telefones",
+        "logradouro": "Endereço",
+        "observações": "Observação",
+    }
+
     @staticmethod
     def importar_historico(db: Session, conteudo: bytes) -> dict:
-        """Importa o CSV histórico do sistema anterior (ex.: municipe.csv).
+        """Importa o CSV histórico (formato antigo, ex.: municipe.csv, ou o
+        relatório real exportado pelo Meu Mandato, "listagem-eleitores-...").
 
         Usa `Ref Eleitor` como identificador de idempotência: se já existir
         um eleitor com o mesmo `ref_historico`, a linha é só contada como
@@ -153,12 +201,14 @@ class EleitorCsvService:
             resultado["erro_arquivo"] = "Arquivo CSV vazio."
             return resultado
 
-        leitor = csv.DictReader(io.StringIO(texto))
+        delimitador = EleitorCsvService._detectar_delimitador(texto)
+        leitor = csv.DictReader(io.StringIO(texto), delimiter=delimitador)
         if not leitor.fieldnames:
             resultado["erro_arquivo"] = "Arquivo CSV sem cabeçalho."
             return resultado
 
-        colunas = {coluna.strip() for coluna in leitor.fieldnames if coluna}
+        mapa_cabecalho = EleitorCsvService._normalizar_cabecalho_historico(leitor.fieldnames)
+        colunas = set(mapa_cabecalho.values())
         faltantes = EleitorCsvService.CABECALHO_HISTORICO_OBRIGATORIO - colunas
         if faltantes:
             resultado["erro_arquivo"] = (
@@ -166,8 +216,13 @@ class EleitorCsvService:
             )
             return resultado
 
-        for numero, linha in enumerate(leitor, start=2):
+        for numero, linha_bruta in enumerate(leitor, start=2):
             resultado["processados"] += 1
+            linha = {
+                mapa_cabecalho[chave]: valor
+                for chave, valor in linha_bruta.items()
+                if chave is not None
+            }
 
             if not any((valor or "").strip() for valor in linha.values() if valor):
                 resultado["ignorados"] += 1
@@ -197,6 +252,21 @@ class EleitorCsvService:
                 resultado["erros"].append((numero, "Erro inesperado ao processar esta linha."))
 
         return resultado
+
+    @staticmethod
+    def _normalizar_cabecalho_historico(fieldnames) -> dict[str, str]:
+        """Mapeia cada cabeçalho bruto do CSV histórico para o nome canônico
+        interno, usando ALIASES_CABECALHO_HISTORICO (comparação por
+        strip().lower(), sem fuzzy matching). Cabeçalho sem alias conhecido
+        é mantido como está (já canônico, ex.: "Nome", "Bairro", ou sem
+        campo correspondente, ex.: "Genero")."""
+        mapa: dict[str, str] = {}
+        for bruto in fieldnames:
+            if bruto is None:
+                continue
+            canonico = EleitorCsvService.ALIASES_CABECALHO_HISTORICO.get(bruto.strip().lower())
+            mapa[bruto] = canonico or bruto.strip()
+        return mapa
 
     @staticmethod
     def _mapear_linha_historica(linha: dict) -> dict:
@@ -229,6 +299,7 @@ class EleitorCsvService:
             "ref_historico": ref_historico,
             "nome": nome,
             "apelido": valor("Apelido"),
+            "cpf": valor("CPF"),
             "endereco": endereco,
             "bairro": valor("Bairro"),
             "cidade": valor("Cidade"),

@@ -69,13 +69,13 @@
                 <label class="form-label" for="status">Status *</label>
                 <select class="form-select" id="status" name="status" required>
                     {% for opcao in status_opcoes %}
-                    {% if not (demanda and demanda.status == 'Concluída' and opcao == 'Aberta') %}
-                    <option value="{{ opcao }}" {% if (demanda and demanda.status == opcao) or (not demanda and opcao == 'Aberta') %}selected{% endif %}>{{ opcao }}</option>
+                    {% if not (demanda and demanda.status == 'Concluído' and opcao == 'Protocolado') %}
+                    <option value="{{ opcao }}" {% if (demanda and demanda.status == opcao) or (not demanda and opcao == 'Protocolado') %}selected{% endif %}>{{ opcao }}</option>
                     {% endif %}
                     {% endfor %}
                 </select>
-                {% if demanda and demanda.status == 'Concluída' %}
-                <div class="form-text">Uma demanda concluída não pode voltar para "Aberta".</div>
+                {% if demanda and demanda.status == 'Concluído' %}
+                <div class="form-text">Uma demanda concluída não pode voltar para "Protocolado".</div>
                 {% endif %}
             </div>
             <div class="col-md-3">

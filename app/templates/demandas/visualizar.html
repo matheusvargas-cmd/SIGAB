@@ -2,11 +2,13 @@
 
 {% block conteudo %}
 {% set status_classes = {
-    'Aberta': 'text-bg-primary',
+    'Protocolado': 'text-bg-primary',
+    'A fazer': 'badge-laranja',
     'Em andamento': 'text-bg-warning',
-    'Aguardando terceiros': 'badge-laranja',
-    'Concluída': 'text-bg-success',
-    'Cancelada': 'text-bg-danger',
+    'Em análise': 'text-bg-info',
+    'Não realizado': 'text-bg-danger',
+    'Concluído': 'text-bg-success',
+    'Cancelada': 'text-bg-secondary',
 } %}
 {% set prioridade_classes = {
     'Baixa': 'text-bg-secondary',

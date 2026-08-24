@@ -233,7 +233,7 @@ def visualizar(request: Request, demanda_id: int, db: Session = Depends(get_db))
     demanda = DemandaService.obter_por_id(db, demanda_id)
     if demanda is None:
         return flash_message("Demanda não encontrada.")
-    eleitor = EleitorService.obter_por_id(db, demanda.eleitor_id)
+    eleitor = EleitorService.obter_por_id(db, demanda.eleitor_id) if demanda.eleitor_id else None
     compromisso_retorno = AgendaService.obter_por_demanda(db, demanda.id)
     return templates.TemplateResponse(
         request=request,
@@ -369,7 +369,7 @@ def atualizar(
             status_code=400,
         )
 
-    if status_anterior != "Concluída" and demanda.status == "Concluída":
+    if status_anterior != "Concluído" and demanda.status == "Concluído":
         return flash_message("Demanda concluída.", "success")
     return flash_message("Demanda atualizada.", "success")
 

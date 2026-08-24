@@ -27,10 +27,22 @@ CATEGORIAS = [
     "Habitação",
     "Outros",
 ]
-STATUS_OPCOES = ["Aberta", "Em andamento", "Aguardando terceiros", "Concluída", "Cancelada"]
+STATUS_OPCOES = [
+    "Protocolado",
+    "A fazer",
+    "Em andamento",
+    "Em análise",
+    "Não realizado",
+    "Concluído",
+    "Cancelada",
+]
 PRIORIDADE_OPCOES = ["Baixa", "Normal", "Alta", "Urgente"]
 
-STATUS_FINALIZADOS = ("Concluída", "Cancelada")
+# Status considerados finalizados para fins de "pendência em aberto"
+# (atrasadas, prazo próximo, em andamento): uma demanda Cancelada não é
+# "concluída" (contar_concluidas checa só "Concluído"), mas também não é
+# mais um trabalho pendente — por isso entra aqui, e não em contar_concluidas.
+STATUS_FINALIZADOS = ("Concluído", "Não realizado", "Cancelada")
 
 _ORDEM_PRIORIDADE = case(
     (Demanda.prioridade == "Urgente", 0),
@@ -46,15 +58,18 @@ class DemandaService:
     def listar(
         db: Session, pesquisa: str | None = None, pagina: int = 1
     ) -> tuple[list[Demanda], int, int]:
+        # outerjoin (não join): uma demanda sem eleitor vinculado
+        # (eleitor_id nulo — CSV real do Meu Mandato permite isso) precisa
+        # continuar aparecendo na listagem normal, não só quando tem eleitor.
         consulta = (
             select(Demanda)
-            .join(Eleitor, Demanda.eleitor_id == Eleitor.id)
+            .outerjoin(Eleitor, Demanda.eleitor_id == Eleitor.id)
             .options(joinedload(Demanda.eleitor))
         )
         consulta_total = (
             select(func.count())
             .select_from(Demanda)
-            .join(Eleitor, Demanda.eleitor_id == Eleitor.id)
+            .outerjoin(Eleitor, Demanda.eleitor_id == Eleitor.id)
         )
 
         if pesquisa and pesquisa.strip():
@@ -106,7 +121,7 @@ class DemandaService:
     @staticmethod
     def contar_concluidas(db: Session) -> int:
         consulta = (
-            select(func.count()).select_from(Demanda).where(Demanda.status == "Concluída")
+            select(func.count()).select_from(Demanda).where(Demanda.status == "Concluído")
         )
         return db.scalar(consulta) or 0
 
@@ -259,14 +274,28 @@ class DemandaService:
         ref_historico: str | None = None,
         data_abertura: datetime | None = None,
         fechar_automaticamente: bool = True,
+        eleitor_obrigatorio: bool = True,
     ) -> Demanda:
-        # secretaria/ref_historico/data_abertura/fechar_automaticamente existem
-        # para a importação histórica (atendimento.csv): permitem gravar a
-        # data original do atendimento e desligar o fechamento automático,
-        # sem alterar o comportamento do formulário normal (que não passa
-        # esses argumentos).
+        # secretaria/ref_historico/data_abertura/fechar_automaticamente/
+        # eleitor_obrigatorio existem para a importação histórica
+        # (atendimento.csv): permitem gravar a data original do atendimento,
+        # desligar o fechamento automático e aceitar demanda sem eleitor
+        # vinculado (o CSV real do Meu Mandato permite "Ref. eleitor" vazio
+        # ou não encontrado), sem alterar o comportamento do formulário
+        # normal (que não passa esses argumentos e continua exigindo
+        # eleitor). O status já chega traduzido para o vocabulário oficial
+        # (STATUS_OPCOES) antes de chegar aqui — não existe mais um
+        # vocabulário paralelo gravado no banco.
         dados = DemandaService._validar_dados(
-            db, eleitor_id, titulo, descricao, categoria_id, subcategoria_id, status, prioridade
+            db,
+            eleitor_id,
+            titulo,
+            descricao,
+            categoria_id,
+            subcategoria_id,
+            status,
+            prioridade,
+            eleitor_obrigatorio=eleitor_obrigatorio,
         )
         demanda = Demanda(
             eleitor_id=dados["eleitor_id"],
@@ -284,7 +313,7 @@ class DemandaService:
             ref_historico=ref_historico,
             data_abertura=data_abertura or datetime.now(),
             data_fechamento=(
-                datetime.now() if fechar_automaticamente and dados["status"] == "Concluída" else None
+                datetime.now() if fechar_automaticamente and dados["status"] == "Concluído" else None
             ),
         )
         db.add(demanda)
@@ -312,12 +341,12 @@ class DemandaService:
             db, eleitor_id, titulo, descricao, categoria_id, subcategoria_id, status, prioridade
         )
 
-        if demanda.status == "Concluída" and dados["status"] == "Aberta":
+        if demanda.status == "Concluído" and dados["status"] == "Protocolado":
             raise ValueError("Não é possível reabrir uma demanda concluída.")
 
-        if dados["status"] == "Concluída" and demanda.status != "Concluída":
+        if dados["status"] == "Concluído" and demanda.status != "Concluído":
             demanda.data_fechamento = datetime.now()
-        elif dados["status"] != "Concluída" and demanda.status == "Concluída":
+        elif dados["status"] != "Concluído" and demanda.status == "Concluído":
             demanda.data_fechamento = None
 
         demanda.eleitor_id = dados["eleitor_id"]
@@ -353,13 +382,16 @@ class DemandaService:
         subcategoria_id: str | None,
         status: str | None,
         prioridade: str | None,
+        eleitor_obrigatorio: bool = True,
     ) -> dict[str, Any]:
         try:
             eleitor_id_convertido = int(eleitor_id) if eleitor_id else None
         except (TypeError, ValueError):
             eleitor_id_convertido = None
 
-        if eleitor_id_convertido is None or db.get(Eleitor, eleitor_id_convertido) is None:
+        if eleitor_id_convertido is not None and db.get(Eleitor, eleitor_id_convertido) is None:
+            raise ValueError("Eleitor não encontrado.")
+        if eleitor_id_convertido is None and eleitor_obrigatorio:
             raise ValueError("Eleitor obrigatório.")
 
         titulo_normalizado = (titulo or "").strip()

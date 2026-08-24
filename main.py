@@ -1,3 +1,5 @@
+import time
+
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
@@ -15,12 +17,27 @@ from app.modules.relatorios.controller import router as relatorios_router
 Base.metadata.create_all(bind=engine)
 MigrationService.atualizar_schema_eleitores()
 MigrationService.atualizar_schema_demandas()
+MigrationService.relaxar_eleitor_obrigatorio_demandas()
 MigrationService.atualizar_schema_agenda()
 MigrationService.semear_categorias_padrao()
 MigrationService.vincular_categoria_id_demandas()
 MigrationService.semear_categorias_atendimento_historico()
+MigrationService.semear_categorias_demandas_reais()
 
 app = FastAPI(title=APP_NAME)
+
+# Usado só pelo build standalone (launcher/conecta360_standalone.py) para
+# encerrar o servidor automaticamente quando nenhuma aba do navegador está
+# mais aberta. Em desenvolvimento (uvicorn main:app) esse estado existe mas
+# não é lido por ninguém — não altera nenhum comportamento existente.
+app.state.ultimo_heartbeat = time.time()
+
+
+@app.post("/_heartbeat")
+def heartbeat() -> dict:
+    app.state.ultimo_heartbeat = time.time()
+    return {"ok": True}
+
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
