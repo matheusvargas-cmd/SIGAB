@@ -2,14 +2,15 @@ import logging
 import time
 
 from fastapi import FastAPI, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 from starlette.middleware.sessions import SessionMiddleware
 
 import app.models  # noqa: F401 — garante que todo model é conhecido por Base.metadata
 from app.core.config import APP_NAME, STATIC_DIR, settings
 from app.core.contexto import GabineteNaoSelecionado, NaoAutenticado, SemPermissao
-from app.core.database import Base, engine
+from app.core.database import Base, SessionLocal, engine
 from app.services.migration_service import MigrationService
 
 from app.modules.agenda.controller import router as agenda_router
@@ -25,9 +26,11 @@ from app.modules.usuarios.controller import router as usuarios_router
 logger = logging.getLogger(__name__)
 
 # Interrompe o boot fora de ambiente=local se a SECRET_KEY ainda for o valor
-# de desenvolvimento — ver docstring de exigir_secret_key_segura(). As
-# demais checagens (DEBUG, SQLite fora de local) continuam só como aviso.
+# de desenvolvimento, ou se o banco ainda for o SQLite padrão — ver
+# docstrings de exigir_secret_key_segura()/exigir_banco_gerenciado_fora_de_local().
+# A checagem restante (DEBUG) continua só como aviso.
 settings.exigir_secret_key_segura()
+settings.exigir_banco_gerenciado_fora_de_local()
 for aviso in settings.validar_producao():
     logger.warning(aviso)
 
@@ -114,6 +117,25 @@ app.state.ultimo_heartbeat = time.time()
 def heartbeat() -> dict:
     app.state.ultimo_heartbeat = time.time()
     return {"ok": True}
+
+
+@app.get("/health")
+def health() -> JSONResponse:
+    """Health check para orquestração de deploy (Render ou similar) — não
+    exige autenticação de propósito, é chamado pela infraestrutura, não por
+    um usuário logado. Não retorna nada além de "ok"/"erro": nunca
+    DATABASE_URL, hostname, SECRET_KEY ou stack trace, mesmo quando o banco
+    está fora do ar. Distinto de /_heartbeat (que é só do launcher desktop
+    e não verifica banco nenhum) — este endpoint prova que a aplicação
+    consegue de fato consultar o banco, não só que o processo está de pé.
+    """
+    try:
+        with SessionLocal() as db:
+            db.execute(text("SELECT 1"))
+    except Exception:
+        logger.exception("Health check: banco de dados inacessível.")
+        return JSONResponse({"status": "erro"}, status_code=503)
+    return JSONResponse({"status": "ok"})
 
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")

@@ -1,0 +1,36 @@
+# Blueprint do Render para o SIGAB/Conecta 360 — ver
+# docs/DEPLOY.md para o passo a passo completo (criar o banco Neon,
+# gerar SECRET_KEY, rodar o bootstrap do primeiro admin, etc.).
+#
+# O banco é o Neon PostgreSQL (externo ao Render, por isso não há uma
+# seção "databases:" aqui) — DATABASE_URL é definida manualmente no
+# dashboard do Render (sync: false), nunca neste arquivo.
+#
+# alembic upgrade head roda dentro do buildCommand (não em
+# preDeployCommand) de propósito: preDeployCommand exige instância paga,
+# e esta fase ainda usa o tier gratuito para homologação. Como
+# `alembic upgrade head` é idempotente, rodar a cada build é seguro —
+# não faz nada se o schema já estiver atualizado.
+services:
+  - type: web
+    name: sigab-homologacao
+    runtime: python
+    plan: free
+    region: oregon
+    branch: main
+    buildCommand: "pip install -r requirements.txt && alembic upgrade head"
+    startCommand: "uvicorn main:app --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /health
+    envVars:
+      - key: AMBIENTE
+        value: homologacao
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "false"
+      - key: SESSAO_MAX_IDADE_HORAS
+        value: "12"
+      - key: LOG_LEVEL
+        value: INFO

@@ -98,16 +98,11 @@ class Settings(BaseSettings):
     def validar_producao(self) -> list[str]:
         """Checagens de sanidade para homologação/produção que não impedem
         o boot por si só (avisos para o logger reportar alto e claro no
-        startup). A checagem de SECRET_KEY é tratada à parte, em
-        `exigir_secret_key_segura()` — essa sim derruba o boot, porque uma
-        SECRET_KEY previsível permite forjar sessão de qualquer usuário."""
+        startup). As checagens que realmente impedem o boot — SECRET_KEY
+        insegura e SQLite fora de local — estão em `exigir_secret_key_segura()`
+        e `exigir_banco_gerenciado_fora_de_local()`, chamadas antes desta."""
         avisos = []
         if self.ambiente != "local":
-            if self.is_sqlite:
-                avisos.append(
-                    f"ambiente={self.ambiente!r} está usando SQLite — configure "
-                    "DATABASE_URL apontando para o PostgreSQL do ambiente."
-                )
             if self.debug:
                 avisos.append(f"DEBUG=true em ambiente={self.ambiente!r} — desative fora de local.")
         return avisos
@@ -125,6 +120,24 @@ class Settings(BaseSettings):
                 f"SECRET_KEY ainda é o valor de desenvolvimento em ambiente={self.ambiente!r}. "
                 "Defina uma chave própria (ex.: `python -c \"import secrets; "
                 'print(secrets.token_hex(32))"`) na variável de ambiente SECRET_KEY '
+                "antes de subir este ambiente — a aplicação não inicia sem isso."
+            )
+
+    def exigir_banco_gerenciado_fora_de_local(self) -> None:
+        """Fora de ambiente=local, DATABASE_URL tem que apontar para o
+        PostgreSQL do ambiente (Fase 3: 'PostgreSQL obrigatório' em
+        homologação e produção) — nunca cair de volta no SQLite padrão só
+        porque a variável de ambiente foi esquecida. Interrompe o boot pelo
+        mesmo motivo que a SECRET_KEY: rodar homologação/produção sem o
+        banco certo não é um detalhe de configuração, é usar a infraestrutura
+        errada por engano."""
+        if self.ambiente == "local":
+            return
+        if self.is_sqlite:
+            raise RuntimeError(
+                f"ambiente={self.ambiente!r} está usando SQLite — defina DATABASE_URL "
+                "apontando para o PostgreSQL do ambiente (ex.: "
+                "postgresql+psycopg://usuario:senha@host/banco?sslmode=require) "
                 "antes de subir este ambiente — a aplicação não inicia sem isso."
             )
 

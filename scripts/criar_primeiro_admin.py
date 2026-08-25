@@ -64,6 +64,11 @@ def _obter(variavel_ambiente: str, pergunta: str, oculto: bool = False) -> str:
 def main() -> int:
     print("=== SIGAB — criação do primeiro administrador ===\n")
 
+    # Mesma trava do main.py: fora de ambiente=local, DATABASE_URL tem que
+    # apontar para o PostgreSQL do ambiente — evita bootstrapar um SQLite
+    # esquecido por engano quando a intenção era homologação/produção.
+    settings.exigir_banco_gerenciado_fora_de_local()
+
     nome_gabinete = _obter("SIGAB_BOOTSTRAP_GABINETE", "Nome do gabinete: ")
     if len(nome_gabinete) < 2:
         print("Nome do gabinete inválido.")
