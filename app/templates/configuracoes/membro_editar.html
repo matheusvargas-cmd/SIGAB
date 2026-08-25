@@ -1,0 +1,51 @@
+{% extends 'shared/base.html' %}
+
+{% block conteudo %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">{{ titulo }}</h2>
+    <a class="btn btn-outline-secondary" href="/configuracoes/usuarios">Voltar</a>
+</div>
+
+{% if erro %}
+<div class="alert alert-danger" role="alert">{{ erro }}</div>
+{% endif %}
+
+<form class="card" method="post" action="/configuracoes/usuarios/{{ membro.id }}/editar">
+    <div class="card-body p-4">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label">Nome</label>
+                <input class="form-control" value="{{ membro.usuario.nome }}" disabled>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">E-mail</label>
+                <input class="form-control" value="{{ membro.usuario.email }}" disabled>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="perfil">Perfil neste gabinete *</label>
+                <select class="form-select" id="perfil" name="perfil" required>
+                    {% for opcao in perfis_opcoes %}
+                    <option value="{{ opcao }}" {% if membro.perfil == opcao %}selected{% endif %}>{{ opcao }}</option>
+                    {% endfor %}
+                </select>
+                {% if membro.perfil != 'ADMIN' %}
+                <div class="form-text">O perfil ADMIN não é atribuído por aqui.</div>
+                {% endif %}
+            </div>
+            <div class="col-md-6 d-flex align-items-end">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="ativo" name="ativo" {% if membro.ativo %}checked{% endif %}>
+                    <label class="form-check-label" for="ativo">Vínculo ativo neste gabinete</label>
+                </div>
+            </div>
+        </div>
+        {% if eh_o_proprio %}
+        <div class="alert alert-warning mt-3 mb-0 py-2 small" role="alert">Você está editando seu próprio acesso a este gabinete.</div>
+        {% endif %}
+    </div>
+    <div class="card-footer bg-white text-end">
+        <a class="btn btn-outline-secondary" href="/configuracoes/usuarios">Cancelar</a>
+        <button class="btn btn-primary" type="submit">Salvar</button>
+    </div>
+</form>
+{% endblock %}

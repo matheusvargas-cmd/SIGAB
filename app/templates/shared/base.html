@@ -28,6 +28,7 @@
 {% else %}
 {% set modulo_atual = titulo %}
 {% endif %}
+{% set contexto = request.state.contexto %}
 <div class='container-fluid'>
 <div class='row'>
 <nav class='col-md-3 col-lg-2 sidebar px-0'>
@@ -65,6 +66,7 @@
                 Relatórios
             </a>
         </li>
+        {% if contexto and contexto.perfil == 'ADMIN' %}
         <li>
             <a href="#" class="sidebar-toggle {% if caminho.startswith('/configuracoes') %}ativo aberto{% endif %}" data-sidebar-toggle="cadastros">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
@@ -73,10 +75,17 @@
             </a>
             <ul class="sidebar-subnav {% if caminho.startswith('/configuracoes') %}aberto{% endif %}" data-sidebar-submenu="cadastros">
                 <li>
-                    <a href="/configuracoes/categorias" class="{% if caminho.startswith('/configuracoes') %}ativo{% endif %}">Categorias</a>
+                    <a href="/configuracoes/categorias" class="{% if caminho.startswith('/configuracoes/categorias') %}ativo{% endif %}">Categorias</a>
+                </li>
+                <li>
+                    <a href="/configuracoes/usuarios" class="{% if caminho.startswith('/configuracoes/usuarios') %}ativo{% endif %}">Usuários</a>
+                </li>
+                <li>
+                    <a href="/configuracoes/gabinete" class="{% if caminho.startswith('/configuracoes/gabinete') %}ativo{% endif %}">Gabinete</a>
                 </li>
             </ul>
         </li>
+        {% endif %}
     </ul>
     <div class="sidebar-rodape">conecta360</div>
 </nav>
@@ -89,7 +98,6 @@
             <h1 class="topbar-titulo">{{ titulo }}</h1>
         </div>
         <div class="topbar-acoes">
-        {% set contexto = request.state.contexto %}
         {% if contexto %}
             <div class="usuario-area">
                 <button class="topbar-usuario" type="button" data-usuario-toggle

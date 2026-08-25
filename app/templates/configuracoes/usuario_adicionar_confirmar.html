@@ -1,0 +1,38 @@
+{% extends 'shared/base.html' %}
+
+{% block conteudo %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">{{ titulo }}</h2>
+    <a class="btn btn-outline-secondary" href="/configuracoes/usuarios">Voltar</a>
+</div>
+
+{% if erro %}
+<div class="alert alert-danger" role="alert">{{ erro }}</div>
+{% endif %}
+
+<form class="card" method="post" action="/configuracoes/usuarios/adicionar/confirmar">
+    <div class="card-body p-4">
+        <p>Este usuário já possui uma conta:</p>
+        <ul>
+            <li><strong>{{ usuario_encontrado.nome }}</strong></li>
+            <li>{{ usuario_encontrado.email }}</li>
+        </ul>
+        <p class="text-muted">Deseja adicioná-lo a este gabinete? Os vínculos dele em outros gabinetes não serão alterados.</p>
+        <input type="hidden" name="email" value="{{ usuario_encontrado.email }}">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label" for="perfil">Perfil neste gabinete *</label>
+                <select class="form-select" id="perfil" name="perfil" required>
+                    {% for opcao in perfis_opcoes %}
+                    <option value="{{ opcao }}">{{ opcao }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    </div>
+    <div class="card-footer bg-white text-end">
+        <a class="btn btn-outline-secondary" href="/configuracoes/usuarios">Cancelar</a>
+        <button class="btn btn-primary" type="submit">Adicionar ao gabinete</button>
+    </div>
+</form>
+{% endblock %}

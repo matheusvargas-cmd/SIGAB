@@ -1,0 +1,44 @@
+{% extends 'shared/base.html' %}
+
+{% block conteudo %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">{{ titulo }}</h2>
+    <a class="btn btn-outline-secondary" href="/configuracoes/usuarios">Voltar</a>
+</div>
+
+{% if erro %}
+<div class="alert alert-danger" role="alert">{{ erro }}</div>
+{% endif %}
+
+<form class="card" method="post" action="/configuracoes/usuarios/{{ membro.id }}/senha">
+    <div class="card-body p-4">
+        <p class="text-muted">Nova senha para <strong>{{ membro.usuario.nome }}</strong> ({{ membro.usuario.email }}).</p>
+        {% if multi_gabinete %}
+        <div class="alert alert-warning py-2 small" role="alert">
+            Este usuário pertence a mais de um gabinete. A nova senha valerá para a conta inteira — inclusive nos outros gabinetes.
+        </div>
+        {% endif %}
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label" for="nova_senha">Nova senha *</label>
+                <input class="form-control" type="password" id="nova_senha" name="nova_senha" minlength="8" required autofocus>
+                <div class="form-text">Mínimo 8 caracteres.</div>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="confirmar_senha">Confirmar senha *</label>
+                <input class="form-control" type="password" id="confirmar_senha" name="confirmar_senha" minlength="8" required>
+            </div>
+        </div>
+        {% if multi_gabinete %}
+        <div class="form-check mt-3">
+            <input class="form-check-input" type="checkbox" id="confirmo" name="confirmo" required>
+            <label class="form-check-label" for="confirmo">Entendo que isso altera a senha da conta em todos os gabinetes dela.</label>
+        </div>
+        {% endif %}
+    </div>
+    <div class="card-footer bg-white text-end">
+        <a class="btn btn-outline-secondary" href="/configuracoes/usuarios">Cancelar</a>
+        <button class="btn btn-primary" type="submit">Definir senha</button>
+    </div>
+</form>
+{% endblock %}
