@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 from typing import Literal
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Em desenvolvimento (ou rodando via "uvicorn main:app"), BASE_DIR é a raiz
@@ -53,6 +54,29 @@ class Settings(BaseSettings):
     # Sem valor de ambiente definido, cai no SQLite local de sempre — o
     # comportamento atual continua idêntico sem exigir nenhum .env.
     database_url: str = _DATABASE_URL_PADRAO_LOCAL
+
+    @field_validator("database_url", mode="after")
+    @classmethod
+    def _normalizar_dialeto_postgres(cls, valor: str) -> str:
+        """Provedores gerenciados (Neon via Render, entre outros) entregam a
+        DATABASE_URL como "postgresql://..." ou "postgres://..." — o formato
+        genérico do protocolo, sem indicar driver. Sem o "+psycopg" depois do
+        dialeto, o SQLAlchemy assume psycopg2 (o driver padrão histórico de
+        "postgresql://"), que este projeto nunca instala de propósito — usa
+        psycopg 3 (pacote "psycopg[binary]"). Normalizar aqui, uma vez, no
+        carregamento da configuração, evita reescrever a URL em cada lugar
+        que abre conexão (database.py, migrations/env.py) e evita adicionar
+        psycopg2 só para mascarar o formato que a infraestrutura entrega.
+        Só reescreve o prefixo genérico exato — uma URL que já diz o driver
+        (ex.: "postgresql+psycopg://", ou qualquer outro "postgresql+...://")
+        passa direto, sem alteração; usuário, senha, host e parâmetros nunca
+        são tocados.
+        """
+        if valor.startswith("postgres://"):
+            return "postgresql+psycopg://" + valor[len("postgres://") :]
+        if valor.startswith("postgresql://"):
+            return "postgresql+psycopg://" + valor[len("postgresql://") :]
+        return valor
 
     # Usada para assinar cookies de sessão quando a autenticação existir.
     # O valor abaixo só é seguro em ambiente=local; ver _validar_producao().
