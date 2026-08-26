@@ -172,5 +172,5 @@ settings = Settings()
 # o código existente (controllers, database.py, launcher) que já importa
 # esses nomes diretamente — nenhum import precisa mudar.
 DATABASE_URL = settings.database_url
-APP_NAME = "Conecta 360"
+APP_NAME = "Gabinete 360"
 APP_TAGLINE = "Gestão Inteligente de Gabinetes"

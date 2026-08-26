@@ -79,7 +79,7 @@
                         <td>{{ demanda.eleitor.nome if demanda.eleitor else '-' }}</td>
                         <td>{{ demanda.categoria or '-' }}</td>
                         <td>{{ demanda.responsavel or '-' }}</td>
-                        <td>{{ demanda.prazo.strftime('%d/%m/%Y') if demanda.prazo else '-' }}</td>
+                        <td class="text-nowrap">{{ demanda.prazo.strftime('%d/%m/%Y') if demanda.prazo else '-' }}</td>
                         <td class="text-end pe-3 text-nowrap">
                             <div class="acoes-compactas">
                                 <a class="btn btn-sm btn-outline-secondary" href="/demandas/{{ demanda.id }}">Visualizar</a>

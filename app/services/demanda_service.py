@@ -26,6 +26,9 @@ CATEGORIAS = [
     "Assistência Social",
     "Habitação",
     "Outros",
+    "Saneamento",
+    "Transportes",
+    "Cultura",
 ]
 STATUS_OPCOES = [
     "Protocolado",
