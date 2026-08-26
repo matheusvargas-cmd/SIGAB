@@ -182,7 +182,14 @@ class EleitorService:
         titulo_eleitor: str | None = None,
         zona_eleitoral: str | None = None,
         ref_historico: str | None = None,
+        commit: bool = True,
     ) -> Eleitor:
+        """`commit=False` é usado só pelos importadores de CSV, que fazem
+        commit em lote (a cada N linhas) em vez de um commit por linha —
+        essencial para uma importação de milhares de linhas não bloquear o
+        event loop nem gerar uma ida ao banco por registro. Todo outro
+        chamador (cadastro manual pela tela) continua com commit imediato,
+        comportamento inalterado."""
         dados = EleitorService._normalizar_dados(
             nome=nome,
             telefone=telefone,
@@ -202,6 +209,9 @@ class EleitorService:
         EleitorService._validar_duplicidade(db, gabinete_id, dados["nome"], dados["telefone"])
         eleitor = Eleitor(gabinete_id=gabinete_id, **dados)
         db.add(eleitor)
+        if not commit:
+            db.flush()
+            return eleitor
         db.commit()
         db.refresh(eleitor)
         return eleitor

@@ -314,6 +314,7 @@ class DemandaService:
         data_abertura: datetime | None = None,
         fechar_automaticamente: bool = True,
         eleitor_obrigatorio: bool = True,
+        commit: bool = True,
     ) -> Demanda:
         # secretaria/ref_historico/data_abertura/fechar_automaticamente/
         # eleitor_obrigatorio existem para a importação histórica
@@ -358,6 +359,14 @@ class DemandaService:
             ),
         )
         db.add(demanda)
+        if not commit:
+            # commit=False é usado só pelo importador de CSV (commit em
+            # lote, não por linha) — flush() já basta para popular
+            # demanda.id, que sincronizar_retorno_demanda precisa para
+            # consultar um eventual compromisso já vinculado.
+            db.flush()
+            AgendaService.sincronizar_retorno_demanda(db, demanda)
+            return demanda
         db.commit()
         db.refresh(demanda)
         AgendaService.sincronizar_retorno_demanda(db, demanda)

@@ -164,13 +164,20 @@ def importar_pagina(request: Request, contexto: ContextoSessao = Depends(obter_c
 
 
 @router.post("/importar", response_class=HTMLResponse)
-async def importar_csv(
+def importar_csv(
     request: Request,
     arquivo: UploadFile = File(...),
     db: Session = Depends(get_db),
     contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
-    conteudo = await arquivo.read()
+    # Rota síncrona (não "async def") de propósito: a importação processa o
+    # CSV inteiro e faz várias consultas/escritas no banco de forma
+    # bloqueante. Numa rota "async def" isso trava o único event loop do
+    # Uvicorn — inclusive o /health, que passa a não responder durante toda
+    # a importação. Como rota síncrona, o Starlette já executa isso numa
+    # threadpool automaticamente, sem bloquear o loop. arquivo.file.read()
+    # (não arquivo.read(), que é async) porque não há mais await aqui.
+    conteudo = arquivo.file.read()
     resultado = EleitorCsvService.importar(db, contexto.gabinete_id, conteudo)
     return templates.TemplateResponse(
         request=request,
@@ -180,13 +187,14 @@ async def importar_csv(
 
 
 @router.post("/importar-historico", response_class=HTMLResponse)
-async def importar_csv_historico(
+def importar_csv_historico(
     request: Request,
     arquivo: UploadFile = File(...),
     db: Session = Depends(get_db),
     contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
-    conteudo = await arquivo.read()
+    # Ver comentário em importar_csv() acima — mesmo motivo.
+    conteudo = arquivo.file.read()
     resultado = EleitorCsvService.importar_historico(db, contexto.gabinete_id, conteudo)
     return templates.TemplateResponse(
         request=request,

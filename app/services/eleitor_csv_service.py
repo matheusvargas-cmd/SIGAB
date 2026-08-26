@@ -9,6 +9,10 @@ from app.services.eleitor_service import EleitorService
 
 logger = logging.getLogger(__name__)
 
+# Commit a cada N linhas em vez de uma por linha — mesma lógica usada em
+# DemandaCsvService/AgendaCsvService, ver comentário lá.
+TAMANHO_LOTE = 100
+
 CABECALHO_CSV = [
     "nome",
     "telefone",
@@ -217,6 +221,7 @@ class EleitorCsvService:
             )
             return resultado
 
+        pendentes_no_lote = 0
         for numero, linha_bruta in enumerate(leitor, start=2):
             resultado["processados"] += 1
             linha = {
@@ -242,18 +247,27 @@ class EleitorCsvService:
                     resultado["existentes"] += 1
                     continue
 
-                dados = EleitorCsvService._mapear_linha_historica(linha)
-                EleitorService.criar(db, gabinete_id, **dados)
+                # SAVEPOINT por linha — ver comentário equivalente em
+                # DemandaCsvService.importar_atendimento_historico.
+                with db.begin_nested():
+                    dados = EleitorCsvService._mapear_linha_historica(linha)
+                    EleitorService.criar(db, gabinete_id, commit=False, **dados)
+
                 resultado["novos"] += 1
+                pendentes_no_lote += 1
+                if pendentes_no_lote >= TAMANHO_LOTE:
+                    db.commit()
+                    pendentes_no_lote = 0
             except ValueError as error:
-                db.rollback()
                 resultado["erros"].append((numero, str(error)))
             except Exception:
-                db.rollback()
                 logger.exception(
                     "Erro inesperado ao importar a linha %s do CSV histórico de eleitores.", numero
                 )
                 resultado["erros"].append((numero, "Erro inesperado ao processar esta linha."))
+
+        if pendentes_no_lote:
+            db.commit()
 
         return resultado
 

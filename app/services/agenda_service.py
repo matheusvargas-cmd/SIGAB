@@ -291,6 +291,7 @@ class AgendaService:
         fim: datetime | None,
         status: str,
         ref_historico: str,
+        commit: bool = True,
     ) -> Agenda:
         # Caminho dedicado para a importação de compromisso.csv: os dados já
         # chegam como datetime combinado (não data+hora separados) e não
@@ -318,6 +319,9 @@ class AgendaService:
             ref_historico=ref_historico,
         )
         db.add(compromisso)
+        if not commit:
+            db.flush()
+            return compromisso
         db.commit()
         db.refresh(compromisso)
         return compromisso

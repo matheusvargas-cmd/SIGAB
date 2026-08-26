@@ -12,6 +12,10 @@ logger = logging.getLogger(__name__)
 
 # Formato histórico (compromisso.csv, sem coluna de identificador próprio —
 # ref_historico é um hash das 7 colunas). Inalterado.
+# Commit a cada N linhas em vez de uma por linha — mesma lógica usada em
+# DemandaCsvService/EleitorCsvService, ver comentário lá.
+TAMANHO_LOTE = 100
+
 CABECALHO_OBRIGATORIO_HISTORICO = {
     "Data inicio",
     "Data fim",
@@ -113,6 +117,7 @@ class AgendaCsvService:
             )
             return resultado
 
+        pendentes_no_lote = 0
         for numero, linha_bruta in enumerate(leitor, start=2):
             resultado["processados"] += 1
             linha = {
@@ -141,30 +146,40 @@ class AgendaCsvService:
                 if dados["fim_ajustado"]:
                     resultado["fim_invalido_ajustado"] += 1
 
-                AgendaService.criar_historico(
-                    db,
-                    gabinete_id,
-                    titulo=dados["titulo"],
-                    descricao=dados["descricao"],
-                    local=dados["local"],
-                    telefone_contato=dados["telefone_contato"],
-                    inicio=dados["inicio"],
-                    fim=dados["fim"],
-                    status=dados["status"],
-                    ref_historico=ref_historico,
-                )
+                # SAVEPOINT por linha — ver comentário equivalente em
+                # DemandaCsvService.importar_atendimento_historico.
+                with db.begin_nested():
+                    AgendaService.criar_historico(
+                        db,
+                        gabinete_id,
+                        titulo=dados["titulo"],
+                        descricao=dados["descricao"],
+                        local=dados["local"],
+                        telefone_contato=dados["telefone_contato"],
+                        inicio=dados["inicio"],
+                        fim=dados["fim"],
+                        status=dados["status"],
+                        ref_historico=ref_historico,
+                        commit=False,
+                    )
+
                 resultado["importados"] += 1
+                pendentes_no_lote += 1
+                if pendentes_no_lote >= TAMANHO_LOTE:
+                    db.commit()
+                    pendentes_no_lote = 0
             except ValueError as error:
-                db.rollback()
                 resultado["erros"].append((numero, assunto, str(error)))
             except Exception:
-                db.rollback()
                 logger.exception(
                     "Erro inesperado ao importar a linha %s do CSV de compromissos.", numero
                 )
                 resultado["erros"].append(
                     (numero, assunto, "Erro inesperado ao processar esta linha.")
                 )
+
+        if pendentes_no_lote:
+            db.commit()
 
         return resultado
 

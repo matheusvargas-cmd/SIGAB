@@ -14,6 +14,12 @@ logger = logging.getLogger(__name__)
 
 CABECALHO_OBRIGATORIO = {"Ref", "Ref Eleitor", "Data Solicitação", "Descrição", "Status", "Categoria"}
 
+# Commit a cada N linhas em vez de uma por linha — reduz drasticamente as
+# idas e vindas ao banco numa importação de milhares de registros. Ver
+# SAVEPOINT por linha no laço de importação: erro numa linha não afeta as
+# demais já acumuladas no lote.
+TAMANHO_LOTE = 100
+
 # Aliases explícitos (sem fuzzy matching) de cabeçalho real de CSV de
 # gabinete -> cabeçalho canônico usado internamente por este arquivo (o
 # mesmo já usado pelo CSV histórico original: "Ref", "Ref Eleitor",
@@ -163,6 +169,7 @@ class DemandaCsvService:
             )
             return resultado
 
+        pendentes_no_lote = 0
         for numero, linha_bruta in enumerate(leitor, start=2):
             resultado["processados"] += 1
             linha = {
@@ -181,25 +188,34 @@ class DemandaCsvService:
                     resultado["existentes"] += 1
                     continue
 
-                dados = DemandaCsvService._mapear_linha(db, gabinete_id, linha)
-                DemandaService.criar(
-                    db,
-                    gabinete_id,
-                    eleitor_id=(str(dados["eleitor_id"]) if dados["eleitor_id"] else None),
-                    titulo=dados["titulo"],
-                    descricao=dados["descricao"],
-                    categoria_id=str(dados["categoria_id"]),
-                    subcategoria_id=(
-                        str(dados["subcategoria_id"]) if dados["subcategoria_id"] else None
-                    ),
-                    status=dados["status"],
-                    prioridade="Normal",
-                    secretaria=dados["secretaria"],
-                    ref_historico=ref,
-                    data_abertura=dados["data_abertura"],
-                    fechar_automaticamente=False,
-                    eleitor_obrigatorio=False,
-                )
+                # SAVEPOINT por linha: se esta linha falhar (ValueError ou
+                # erro inesperado), só o trabalho dela é desfeito — as linhas
+                # anteriores já processadas neste mesmo lote (ainda não
+                # commitadas) continuam intactas. Sem isso, um commit em
+                # lote tornaria o erro de uma linha capaz de derrubar todas
+                # as linhas boas acumuladas no lote até aqui.
+                with db.begin_nested():
+                    dados = DemandaCsvService._mapear_linha(db, gabinete_id, linha)
+                    DemandaService.criar(
+                        db,
+                        gabinete_id,
+                        eleitor_id=(str(dados["eleitor_id"]) if dados["eleitor_id"] else None),
+                        titulo=dados["titulo"],
+                        descricao=dados["descricao"],
+                        categoria_id=str(dados["categoria_id"]),
+                        subcategoria_id=(
+                            str(dados["subcategoria_id"]) if dados["subcategoria_id"] else None
+                        ),
+                        status=dados["status"],
+                        prioridade="Normal",
+                        secretaria=dados["secretaria"],
+                        ref_historico=ref,
+                        data_abertura=dados["data_abertura"],
+                        fechar_automaticamente=False,
+                        eleitor_obrigatorio=False,
+                        commit=False,
+                    )
+
                 resultado["importadas"] += 1
                 if dados["eleitor_id"]:
                     resultado["vinculadas"] += 1
@@ -208,17 +224,23 @@ class DemandaCsvService:
                     resultado["detalhes_sem_vinculo"].append(
                         (numero, ref, ref_eleitor, dados["vinculo_motivo"])
                     )
+
+                pendentes_no_lote += 1
+                if pendentes_no_lote >= TAMANHO_LOTE:
+                    db.commit()
+                    pendentes_no_lote = 0
             except ValueError as error:
-                db.rollback()
                 resultado["erros"].append((numero, ref, ref_eleitor, str(error)))
             except Exception:
-                db.rollback()
                 logger.exception(
                     "Erro inesperado ao importar a linha %s do CSV de atendimentos.", numero
                 )
                 resultado["erros"].append(
                     (numero, ref, ref_eleitor, "Erro inesperado ao processar esta linha.")
                 )
+
+        if pendentes_no_lote:
+            db.commit()
 
         return resultado
 

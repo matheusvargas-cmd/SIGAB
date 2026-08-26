@@ -110,13 +110,15 @@ def importar_pagina(request: Request, contexto: ContextoSessao = Depends(obter_c
 
 
 @router.post("/importar", response_class=HTMLResponse)
-async def importar_csv(
+def importar_csv(
     request: Request,
     arquivo: UploadFile = File(...),
     db: Session = Depends(get_db),
     contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
-    conteudo = await arquivo.read()
+    # Rota síncrona de propósito — ver comentário equivalente em
+    # app/modules/eleitores/controller.py:importar_csv().
+    conteudo = arquivo.file.read()
     resultado = DemandaCsvService.importar_atendimento_historico(db, contexto.gabinete_id, conteudo)
     return templates.TemplateResponse(
         request=request,
