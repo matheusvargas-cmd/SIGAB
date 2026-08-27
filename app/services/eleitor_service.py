@@ -119,18 +119,25 @@ class EleitorService:
         return list(db.scalars(consulta).all())
 
     @staticmethod
-    def listar_aniversariantes_hoje(db: Session, gabinete_id: int) -> list[Eleitor]:
+    def listar_aniversariantes_hoje(db: Session, gabinete_id: int, data: date | None = None) -> list[Eleitor]:
         # extract() é traduzido pelo próprio SQLAlchemy para a função nativa
         # de cada dialeto (STRFTIME no SQLite, EXTRACT no PostgreSQL) — só
         # comparar mês e dia diretamente, sem depender de função específica
         # de um banco só.
-        hoje = date.today()
+        #
+        # `data` é opcional (default date.today(), o mesmo `hoje` de sempre
+        # — nenhuma mudança de comportamento para quem já chama sem
+        # argumento, como o Dashboard) para permitir que o e-mail diário
+        # (app/services/daily_email_service.py) passe explicitamente o "hoje"
+        # já calculado em America/Sao_Paulo, em vez de confiar no fuso do
+        # servidor.
+        referencia = data or date.today()
         consulta = (
             select(Eleitor)
             .where(Eleitor.gabinete_id == gabinete_id)
             .where(Eleitor.nascimento.isnot(None))
-            .where(extract("month", Eleitor.nascimento) == hoje.month)
-            .where(extract("day", Eleitor.nascimento) == hoje.day)
+            .where(extract("month", Eleitor.nascimento) == referencia.month)
+            .where(extract("day", Eleitor.nascimento) == referencia.day)
             .order_by(Eleitor.nome)
         )
         return list(db.scalars(consulta).all())

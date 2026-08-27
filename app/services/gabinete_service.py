@@ -1,3 +1,5 @@
+from datetime import date
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -28,7 +30,9 @@ class GabineteService:
     ADMIN editando o próprio gabinete."""
 
     @staticmethod
-    def atualizar(db: Session, gabinete: Gabinete, nome: str, ativo: bool) -> Gabinete:
+    def atualizar(
+        db: Session, gabinete: Gabinete, nome: str, ativo: bool, email_institucional: str = ""
+    ) -> Gabinete:
         nome_normalizado = (nome or "").strip()
         if len(nome_normalizado) < NOME_MINIMO_CARACTERES:
             raise ValueError("Nome do gabinete inválido.")
@@ -45,8 +49,13 @@ class GabineteService:
                 "Peça para outro administrador desativá-lo, ou faça isso fora do sistema."
             )
 
+        email_normalizado = (email_institucional or "").strip().lower()
+        if email_normalizado and "@" not in email_normalizado:
+            raise ValueError("E-mail institucional inválido.")
+
         gabinete.nome = nome_normalizado
         gabinete.ativo = ativo
+        gabinete.email_institucional = email_normalizado or None
         db.commit()
         db.refresh(gabinete)
         return gabinete
@@ -158,7 +167,12 @@ class GabineteService:
 
     @staticmethod
     def atualizar_superadmin(
-        db: Session, gabinete: Gabinete, nome: str, responsavel: str | None, ativo: bool
+        db: Session,
+        gabinete: Gabinete,
+        nome: str,
+        responsavel: str | None,
+        ativo: bool,
+        email_institucional: str = "",
     ) -> Gabinete:
         """Edição pelo SUPERADMIN — sem a trava de "não desativar o
         gabinete que você está usando agora" de atualizar(): o SUPERADMIN
@@ -169,9 +183,32 @@ class GabineteService:
         if len(nome_normalizado) < NOME_MINIMO_CARACTERES:
             raise ValueError("Nome do gabinete inválido.")
 
+        email_normalizado = (email_institucional or "").strip().lower()
+        if email_normalizado and "@" not in email_normalizado:
+            raise ValueError("E-mail institucional inválido.")
+
         gabinete.nome = nome_normalizado
         gabinete.responsavel = (responsavel or "").strip() or None
         gabinete.ativo = ativo
+        gabinete.email_institucional = email_normalizado or None
         db.commit()
         db.refresh(gabinete)
         return gabinete
+
+    @staticmethod
+    def registrar_envio_diario(db: Session, gabinete_id: int, data: date) -> None:
+        """Marca que o e-mail diário deste gabinete, para esta data, já foi
+        enviado com sucesso — ver Gabinete.ultimo_email_diario_data. Só deve
+        ser chamado DEPOIS do SMTP confirmar o envio (nunca antes), para que
+        uma falha no meio do caminho deixe uma nova tentativa possível no
+        mesmo dia."""
+        gabinete = db.get(Gabinete, gabinete_id)
+        if gabinete is None:
+            return
+        gabinete.ultimo_email_diario_data = data
+        db.commit()
+
+    @staticmethod
+    def ja_enviou_diario_hoje(db: Session, gabinete_id: int, data: date) -> bool:
+        gabinete = db.get(Gabinete, gabinete_id)
+        return gabinete is not None and gabinete.ultimo_email_diario_data == data

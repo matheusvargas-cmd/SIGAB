@@ -103,6 +103,30 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
 
+    # --- E-mail diário do gabinete (app/services/daily_email_service.py) ---
+    # Nenhum provedor específico é assumido: qualquer SMTP compatível
+    # (Gmail com senha de app, SendGrid, Mailgun, SES etc.) funciona só
+    # trocando essas variáveis. Todas com default vazio/seguro — ambiente
+    # local continua funcionando sem nenhuma delas definida (o envio de
+    # e-mail simplesmente não roda sem configuração, nunca quebra o boot).
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    smtp_use_tls: bool = True
+
+    @property
+    def smtp_configurado(self) -> bool:
+        return bool(self.smtp_host and self.smtp_from)
+
+    # Token secreto para a rota POST /jobs/enviar-diario (chamada por um
+    # agendador externo, nunca por um usuário logado — não usa cookie de
+    # sessão). Vazio por padrão: a rota recusa qualquer chamada enquanto
+    # este valor não for definido, então não existe um "token padrão"
+    # esquecido em produção.
+    jobs_token: str = ""
+
     @property
     def cors_origins_lista(self) -> list[str]:
         return [origem.strip() for origem in self.cors_origins.split(",") if origem.strip()]

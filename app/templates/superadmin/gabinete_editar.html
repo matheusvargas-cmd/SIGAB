@@ -23,6 +23,10 @@
                         <label class="form-label" for="responsavel">Vereador/responsável</label>
                         <input class="form-control" id="responsavel" name="responsavel" value="{{ gabinete.responsavel or '' }}">
                     </div>
+                    <div class="col-md-8">
+                        <label class="form-label" for="email_institucional">E-mail institucional (recebe o e-mail diário)</label>
+                        <input class="form-control" type="email" id="email_institucional" name="email_institucional" value="{{ gabinete.email_institucional or '' }}">
+                    </div>
                     <div class="col-12">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="ativo" name="ativo" {% if gabinete.ativo %}checked{% endif %}>
@@ -50,6 +54,26 @@
                     <dt class="col-sm-6">Compromissos (agenda)</dt>
                     <dd class="col-sm-6 text-end">{{ contadores.agenda }}</dd>
                 </dl>
+            </div>
+        </div>
+        <div class="card mt-4">
+            <div class="card-body p-4">
+                <h3 class="h6 text-muted mb-2">E-mail diário</h3>
+                <p class="small text-muted mb-3">
+                    {% if gabinete.ultimo_email_diario_data %}
+                        Último envio: {{ gabinete.ultimo_email_diario_data.strftime('%d/%m/%Y') }}.
+                    {% else %}
+                        Nenhum e-mail diário enviado ainda.
+                    {% endif %}
+                    {% if not gabinete.email_institucional %}
+                        <br>Configure o e-mail institucional acima antes de testar o envio.
+                    {% endif %}
+                </p>
+                <form method="post" action="/superadmin/gabinetes/{{ gabinete.id }}/enviar-diario">
+                    <button class="btn btn-outline-primary" type="submit" {% if not gabinete.email_institucional %}disabled{% endif %}>
+                        📨 Enviar diário agora
+                    </button>
+                </form>
             </div>
         </div>
     </div>

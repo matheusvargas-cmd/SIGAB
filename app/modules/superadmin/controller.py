@@ -7,6 +7,7 @@ from app.core.config import TEMPLATES_DIR
 from app.core.contexto import exigir_superadmin
 from app.core.database import get_db
 from app.models.usuario import Usuario
+from app.services.daily_email_service import DailyEmailService
 from app.services.gabinete_service import GabineteService
 
 # Prefixo próprio, fora de /configuracoes de propósito: /configuracoes é o
@@ -135,6 +136,7 @@ def atualizar(
     gabinete_id: int,
     nome: str = Form(...),
     responsavel: str = Form(""),
+    email_institucional: str = Form(""),
     ativo: bool = Form(False),
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(exigir_superadmin),
@@ -143,7 +145,9 @@ def atualizar(
     if gabinete is None:
         return flash_message("Gabinete não encontrado.", "danger")
     try:
-        GabineteService.atualizar_superadmin(db, gabinete, nome, responsavel, ativo)
+        GabineteService.atualizar_superadmin(
+            db, gabinete, nome, responsavel, ativo, email_institucional
+        )
     except ValueError as error:
         return templates.TemplateResponse(
             request=request,
@@ -158,3 +162,23 @@ def atualizar(
             status_code=400,
         )
     return flash_message("Gabinete atualizado.", "success")
+
+
+@router.post("/{gabinete_id}/enviar-diario", response_class=HTMLResponse)
+def enviar_diario_agora(
+    request: Request,
+    gabinete_id: int,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(exigir_superadmin),
+):
+    """Disparo manual do e-mail diário — mesmo conteúdo exato do envio
+    automático, só que sob demanda, para validar visual/agenda/
+    aniversariantes/links de WhatsApp sem esperar 07:30. forcar=True: um
+    reenvio de teste no mesmo dia não deve ficar bloqueado pela trava de
+    idempotência pensada para o job automático."""
+    gabinete = GabineteService.obter_por_id(db, gabinete_id)
+    if gabinete is None:
+        return flash_message("Gabinete não encontrado.", "danger")
+    resultado = DailyEmailService.enviar_diario(db, gabinete_id, forcar=True)
+    categoria = "success" if resultado["status"] == "enviado" else "danger"
+    return flash_message(resultado["motivo"], categoria)

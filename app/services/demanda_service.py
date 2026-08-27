@@ -180,6 +180,39 @@ class DemandaService:
         return db.scalar(consulta) or 0
 
     @staticmethod
+    def listar_atrasadas(db: Session, gabinete_id: int, data: date | None = None) -> list[Demanda]:
+        """Mesma regra de contar_atrasadas() acima (prazo vencido, status
+        ainda não finalizado), só que devolvendo os registros — usado pelo
+        e-mail diário (app/services/daily_email_service.py). `data` opcional
+        para permitir passar o "hoje" já calculado em America/Sao_Paulo."""
+        referencia = data or date.today()
+        consulta = (
+            select(Demanda)
+            .where(Demanda.gabinete_id == gabinete_id)
+            .where(Demanda.prazo.isnot(None))
+            .where(Demanda.prazo < referencia)
+            .where(Demanda.status.notin_(STATUS_FINALIZADOS))
+            .options(joinedload(Demanda.eleitor))
+            .order_by(Demanda.prazo)
+        )
+        return list(db.scalars(consulta).unique().all())
+
+    @staticmethod
+    def listar_vencendo_hoje(db: Session, gabinete_id: int, data: date | None = None) -> list[Demanda]:
+        """Demandas com prazo exatamente na data de referência, ainda não
+        finalizadas — mesmo critério de status de contar_prazo_proximo()."""
+        referencia = data or date.today()
+        consulta = (
+            select(Demanda)
+            .where(Demanda.gabinete_id == gabinete_id)
+            .where(Demanda.prazo == referencia)
+            .where(Demanda.status.notin_(STATUS_FINALIZADOS))
+            .options(joinedload(Demanda.eleitor))
+            .order_by(Demanda.titulo)
+        )
+        return list(db.scalars(consulta).unique().all())
+
+    @staticmethod
     def listar_recentes(db: Session, gabinete_id: int, limite: int = 5) -> list[Demanda]:
         consulta = (
             select(Demanda)

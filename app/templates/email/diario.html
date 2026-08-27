@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ assunto }}</title>
+</head>
+<body style="margin:0; padding:0; background-color:#F4F6F8; font-family:Arial, Helvetica, sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#F4F6F8; padding:24px 12px;">
+<tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px; background-color:#FFFFFF; border-radius:12px; overflow:hidden;">
+
+  <!-- Cabecalho -->
+  <tr>
+    <td style="background-color:#012049; padding:28px 24px; text-align:center;">
+      <div style="font-family:Arial, Helvetica, sans-serif; font-size:22px; font-weight:bold; color:#FFFFFF;">
+        Gabinete<span style="color:#5DBB2F;"> 360</span>
+      </div>
+      <div style="font-family:Arial, Helvetica, sans-serif; font-size:13px; color:rgba(255,255,255,0.75); margin-top:4px;">
+        {{ gabinete_nome }}
+      </div>
+      <div style="font-family:Arial, Helvetica, sans-serif; font-size:15px; color:#FFFFFF; margin-top:14px;">
+        Bom dia! Aqui está o resumo de hoje, {{ data_formatada }}.
+      </div>
+    </td>
+  </tr>
+
+  <!-- Agenda do dia -->
+  <tr>
+    <td style="padding:24px 24px 8px 24px;">
+      <div style="font-family:Arial, Helvetica, sans-serif; font-size:16px; font-weight:bold; color:#012049; border-bottom:2px solid #F4F6F8; padding-bottom:8px; margin-bottom:12px;">
+        📅 Agenda de hoje
+      </div>
+      {% if compromissos %}
+        {% for c in compromissos %}
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:10px; background-color:#F4F6F8; border-radius:8px;">
+          <tr>
+            <td style="padding:12px 14px;">
+              <div style="font-family:Arial, Helvetica, sans-serif; font-size:13px; font-weight:bold; color:#2e7ede;">
+                {{ c.horario }}
+              </div>
+              <div style="font-family:Arial, Helvetica, sans-serif; font-size:14px; font-weight:bold; color:#012049; margin-top:2px;">
+                {{ c.titulo }}
+              </div>
+              {% if c.local %}
+              <div style="font-family:Arial, Helvetica, sans-serif; font-size:13px; color:#5F6B7A; margin-top:2px;">
+                📍 {{ c.local }}
+              </div>
+              {% endif %}
+            </td>
+          </tr>
+        </table>
+        {% endfor %}
+      {% else %}
+        <div style="font-family:Arial, Helvetica, sans-serif; font-size:14px; color:#5F6B7A; padding:8px 0 16px 0;">
+          Nenhum compromisso agendado para hoje.
+        </div>
+      {% endif %}
+    </td>
+  </tr>
+
+  <!-- Aniversariantes -->
+  <tr>
+    <td style="padding:8px 24px 8px 24px;">
+      <div style="font-family:Arial, Helvetica, sans-serif; font-size:16px; font-weight:bold; color:#012049; border-bottom:2px solid #F4F6F8; padding-bottom:8px; margin-bottom:12px;">
+        🎉 Aniversariantes de hoje
+      </div>
+      {% if aniversariantes %}
+        {% for a in aniversariantes %}
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:12px; background-color:#F4F6F8; border-radius:8px;">
+          <tr>
+            <td style="padding:14px;">
+              <div style="font-family:Arial, Helvetica, sans-serif; font-size:14px; font-weight:bold; color:#012049;">
+                {{ a.nome }}{% if a.telefone_exibicao %} · {{ a.telefone_exibicao }}{% endif %}
+              </div>
+              <div style="font-family:Arial, Helvetica, sans-serif; font-size:13px; color:#5F6B7A; margin-top:6px; white-space:pre-line;">{{ a.mensagem }}</div>
+              {% if a.whatsapp_link %}
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:10px;">
+                <tr>
+                  <td style="background-color:#5DBB2F; border-radius:6px;">
+                    <a href="{{ a.whatsapp_link }}" target="_blank" style="display:inline-block; padding:9px 16px; font-family:Arial, Helvetica, sans-serif; font-size:13px; font-weight:bold; color:#FFFFFF; text-decoration:none;">
+                      📲 Enviar pelo WhatsApp
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              {% endif %}
+            </td>
+          </tr>
+        </table>
+        {% endfor %}
+      {% else %}
+        <div style="font-family:Arial, Helvetica, sans-serif; font-size:14px; color:#5F6B7A; padding:8px 0 16px 0;">
+          Nenhum aniversariante hoje.
+        </div>
+      {% endif %}
+    </td>
+  </tr>
+
+  {% if demandas_atrasadas or demandas_vencendo_hoje %}
+  <!-- Demandas -->
+  <tr>
+    <td style="padding:8px 24px 24px 24px;">
+      <div style="font-family:Arial, Helvetica, sans-serif; font-size:16px; font-weight:bold; color:#012049; border-bottom:2px solid #F4F6F8; padding-bottom:8px; margin-bottom:12px;">
+        ⚠️ Demandas que precisam de atenção
+      </div>
+      {% if demandas_atrasadas %}
+        <div style="font-family:Arial, Helvetica, sans-serif; font-size:13px; font-weight:bold; color:#DC3545; margin-bottom:6px;">
+          Atrasadas ({{ demandas_atrasadas|length }})
+        </div>
+        {% for d in demandas_atrasadas %}
+        <div style="font-family:Arial, Helvetica, sans-serif; font-size:13px; color:#5F6B7A; padding:6px 0; border-bottom:1px solid #F4F6F8;">
+          <strong style="color:#012049;">{{ d.titulo }}</strong>{% if d.eleitor_nome %} — {{ d.eleitor_nome }}{% endif %} · prazo {{ d.prazo_formatado }}
+        </div>
+        {% endfor %}
+      {% endif %}
+      {% if demandas_vencendo_hoje %}
+        <div style="font-family:Arial, Helvetica, sans-serif; font-size:13px; font-weight:bold; color:#FD7E14; margin:14px 0 6px 0;">
+          Vencendo hoje ({{ demandas_vencendo_hoje|length }})
+        </div>
+        {% for d in demandas_vencendo_hoje %}
+        <div style="font-family:Arial, Helvetica, sans-serif; font-size:13px; color:#5F6B7A; padding:6px 0; border-bottom:1px solid #F4F6F8;">
+          <strong style="color:#012049;">{{ d.titulo }}</strong>{% if d.eleitor_nome %} — {{ d.eleitor_nome }}{% endif %}
+        </div>
+        {% endfor %}
+      {% endif %}
+    </td>
+  </tr>
+  {% endif %}
+
+  <!-- Rodape -->
+  <tr>
+    <td style="background-color:#012049; padding:16px 24px; text-align:center;">
+      <div style="font-family:Arial, Helvetica, sans-serif; font-size:11px; color:rgba(255,255,255,0.55);">
+        Gabinete 360 — Gestão Inteligente de Gabinetes
+      </div>
+    </td>
+  </tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>

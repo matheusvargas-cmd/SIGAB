@@ -53,13 +53,16 @@ def atualizar(
     request: Request,
     nome: str = Form(...),
     ativo: bool = Form(False),
+    email_institucional: str = Form(""),
     db: Session = Depends(get_db),
     contexto: ContextoSessao = Depends(_exigir_admin),
 ):
     try:
-        GabineteService.atualizar(db, contexto.gabinete, nome, ativo)
+        GabineteService.atualizar(db, contexto.gabinete, nome, ativo, email_institucional)
     except ValueError as error:
-        gabinete_preenchido = SimpleNamespace(id=contexto.gabinete.id, nome=nome, ativo=ativo)
+        gabinete_preenchido = SimpleNamespace(
+            id=contexto.gabinete.id, nome=nome, ativo=ativo, email_institucional=email_institucional
+        )
         return templates.TemplateResponse(
             request=request,
             name="configuracoes/gabinete_formulario.html",
