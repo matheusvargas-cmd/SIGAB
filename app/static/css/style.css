@@ -36,10 +36,17 @@
 }
 
 :root {
-  --c360-azul-principal: #06274d;
-  --c360-azul-principal-escuro: #082140;
-  --c360-azul-secundario: #1976D2;
-  --c360-azul-secundario-escuro: #145ea8;
+  /* Azuis calibrados para bater com a logo real (amostrado de
+     app/static/img/logo-horizontal.png): fundo navy predominante em
+     #012049, azul de destaque do ícone (arco/pessoas) em #2e7ede. Os
+     tons "-escuro" mantêm a mesma proporção de escurecimento que já
+     existia entre os pares principal/principal-escuro e
+     secundario/secundario-escuro — só a base mudou, a relação entre
+     claro e escuro dentro de cada par continua igual. */
+  --c360-azul-principal: #012049;
+  --c360-azul-principal-escuro: #011b3d;
+  --c360-azul-secundario: #2e7ede;
+  --c360-azul-secundario-escuro: #2565b2;
   --c360-verde: #5DBB2F;
   --c360-verde-escuro: #4a9425;
   --c360-branco: #FFFFFF;
