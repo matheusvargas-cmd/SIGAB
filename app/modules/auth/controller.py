@@ -51,6 +51,14 @@ def login(
     request.session.clear()
     request.session["usuario_id"] = usuario.id
 
+    # SUPERADMIN é global — nunca depende de MembroGabinete para entrar, e
+    # a sessão dele nunca ganha gabinete_id (ver exigir_superadmin() em
+    # app/core/contexto.py, trilha inteiramente separada desta). Checado
+    # antes da lógica de vínculos abaixo: um SUPERADMIN sem nenhum
+    # MembroGabinete não deve cair no erro "não vinculado a gabinete".
+    if usuario.super_admin:
+        return RedirectResponse("/superadmin/gabinetes", status_code=303)
+
     vinculos = list(
         db.scalars(
             select(MembroGabinete).where(

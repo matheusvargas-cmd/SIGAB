@@ -21,6 +21,7 @@ from app.modules.demandas.controller import router as demandas_router
 from app.modules.eleitores.controller import router as eleitores_router
 from app.modules.gabinete.controller import router as gabinete_router
 from app.modules.relatorios.controller import router as relatorios_router
+from app.modules.superadmin.controller import router as superadmin_router
 from app.modules.usuarios.controller import router as usuarios_router
 
 logger = logging.getLogger(__name__)
@@ -149,3 +150,4 @@ app.include_router(relatorios_router)
 app.include_router(configuracoes_router)
 app.include_router(usuarios_router)
 app.include_router(gabinete_router)
+app.include_router(superadmin_router)

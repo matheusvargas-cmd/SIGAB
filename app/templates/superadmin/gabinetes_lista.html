@@ -1,0 +1,54 @@
+{% extends 'shared/base_superadmin.html' %}
+
+{% block conteudo %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+        <h2 class="mb-0">Gabinetes</h2>
+        <p class="text-muted mb-0">Todos os gabinetes do Gabinete 360</p>
+    </div>
+    <a class="btn btn-primary" href="/superadmin/gabinetes/novo">Novo gabinete</a>
+</div>
+
+{% if flash_message %}
+<div class="alert alert-{{ flash_category }}" role="alert">{% if flash_category == 'success' %}✔ {% endif %}{{ flash_message }}</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th class="ps-3">Gabinete</th>
+                        <th>Responsável</th>
+                        <th>Status</th>
+                        <th class="text-end">Usuários</th>
+                        <th class="text-end">Eleitores</th>
+                        <th class="text-end">Demandas</th>
+                        <th class="text-end">Agenda</th>
+                        <th class="text-end pe-3">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for linha in linhas %}
+                    <tr>
+                        <td class="ps-3">{{ linha.gabinete.nome }}</td>
+                        <td>{{ linha.gabinete.responsavel or '-' }}</td>
+                        <td><span class="badge {{ 'text-bg-success' if linha.gabinete.ativo else 'text-bg-secondary' }}">{{ 'Ativo' if linha.gabinete.ativo else 'Inativo' }}</span></td>
+                        <td class="text-end">{{ linha.contadores.usuarios }}</td>
+                        <td class="text-end">{{ linha.contadores.eleitores }}</td>
+                        <td class="text-end">{{ linha.contadores.demandas }}</td>
+                        <td class="text-end">{{ linha.contadores.agenda }}</td>
+                        <td class="text-end pe-3">
+                            <a class="btn btn-sm btn-outline-primary" href="/superadmin/gabinetes/{{ linha.gabinete.id }}/editar">Editar</a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td class="text-center text-muted py-4" colspan="8">Nenhum gabinete cadastrado.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

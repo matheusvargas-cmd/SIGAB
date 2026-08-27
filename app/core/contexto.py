@@ -99,6 +99,20 @@ def obter_contexto_atual(
     return contexto
 
 
+def exigir_superadmin(usuario: Usuario = Depends(obter_usuario_atual)) -> Usuario:
+    """Dependency para as rotas globais de /superadmin — trilha de
+    autorização inteiramente separada de exigir_perfil()/ContextoSessao.
+    Olha só Usuario.super_admin; nunca consulta MembroGabinete nem exige
+    gabinete selecionado (um SUPERADMIN não pertence a nenhum gabinete).
+    Reaproveita obter_usuario_atual() (autenticação — sem sessão válida,
+    vira NaoAutenticado, redireciona pro /login, igual a qualquer rota).
+    Sem super_admin=True, vira SemPermissao — 403, mesma página de erro já
+    usada pelas rotas de tenant."""
+    if not usuario.super_admin:
+        raise SemPermissao()
+    return usuario
+
+
 def exigir_perfil(*perfis_permitidos: str):
     """Dependency factory: use Depends(exigir_perfil("ADMIN")) numa rota
     para exigir um perfil específico, além de autenticação/gabinete já

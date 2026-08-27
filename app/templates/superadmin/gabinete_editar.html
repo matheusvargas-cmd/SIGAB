@@ -1,0 +1,57 @@
+{% extends 'shared/base_superadmin.html' %}
+
+{% block conteudo %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">Editar gabinete</h2>
+    <a class="btn btn-outline-secondary" href="/superadmin/gabinetes">Voltar</a>
+</div>
+
+{% if erro %}
+<div class="alert alert-danger" role="alert">{{ erro }}</div>
+{% endif %}
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <form class="card" method="post" action="/superadmin/gabinetes/{{ gabinete.id }}/editar">
+            <div class="card-body p-4">
+                <div class="row g-3">
+                    <div class="col-md-8">
+                        <label class="form-label" for="nome">Nome do gabinete *</label>
+                        <input class="form-control" id="nome" name="nome" value="{{ gabinete.nome }}" minlength="2" required autofocus>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="responsavel">Vereador/responsável</label>
+                        <input class="form-control" id="responsavel" name="responsavel" value="{{ gabinete.responsavel or '' }}">
+                    </div>
+                    <div class="col-12">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="ativo" name="ativo" {% if gabinete.ativo %}checked{% endif %}>
+                            <label class="form-check-label" for="ativo">Gabinete ativo</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer bg-white text-end">
+                <button class="btn btn-primary" type="submit">Salvar</button>
+            </div>
+        </form>
+    </div>
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-body p-4">
+                <h3 class="h6 text-muted mb-3">Informações agregadas</h3>
+                <dl class="row mb-0">
+                    <dt class="col-sm-6">Usuários</dt>
+                    <dd class="col-sm-6 text-end">{{ contadores.usuarios }}</dd>
+                    <dt class="col-sm-6">Eleitores</dt>
+                    <dd class="col-sm-6 text-end">{{ contadores.eleitores }}</dd>
+                    <dt class="col-sm-6">Demandas</dt>
+                    <dd class="col-sm-6 text-end">{{ contadores.demandas }}</dd>
+                    <dt class="col-sm-6">Compromissos (agenda)</dt>
+                    <dd class="col-sm-6 text-end">{{ contadores.agenda }}</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

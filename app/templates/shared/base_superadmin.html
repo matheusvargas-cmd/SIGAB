@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang='pt-br'>
+<head>
+<meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'>
+<title>{{ titulo }} · Gabinete 360 · Superadmin</title>
+<link rel='icon' type='image/x-icon' href='/static/img/favicon.ico'>
+<link rel='icon' type='image/png' sizes='32x32' href='/static/img/icone-32.png'>
+<link rel='icon' type='image/png' sizes='64x64' href='/static/img/icone-64.png'>
+<link rel='icon' type='image/png' sizes='128x128' href='/static/img/icone-128.png'>
+<link href='/static/css/bootstrap.min.css' rel='stylesheet'>
+<link href='/static/css/style.css' rel='stylesheet'>
+</head>
+<body>
+<div class='container-fluid'>
+<div class='row'>
+<main class='col-12 p-4'>
+    <header class="topbar">
+        <div>
+            <div class="topbar-breadcrumb">Superadmin / Gabinetes</div>
+            <h1 class="topbar-titulo">{{ titulo }}</h1>
+        </div>
+        <div class="topbar-acoes">
+            <div class="usuario-area">
+                <button class="topbar-usuario" type="button" data-usuario-toggle title="{{ usuario_nome }} · Superadmin">
+                    {{ usuario_nome[:1]|upper }}
+                </button>
+                <div class="usuario-menu" data-usuario-menu>
+                    <div class="usuario-menu-nome">{{ usuario_nome }}</div>
+                    <div class="usuario-menu-gabinete">Superadmin</div>
+                    <form method="post" action="/logout">
+                        <button class="usuario-menu-item usuario-menu-sair" type="submit">Sair</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </header>
+
+{% block conteudo %}{% endblock %}
+
+</main>
+</div>
+</div>
+<script>
+(function () {
+    var botao = document.querySelector('[data-usuario-toggle]');
+    var menu = document.querySelector('[data-usuario-menu]');
+    if (!botao || !menu) {
+        return;
+    }
+    botao.addEventListener('click', function (evento) {
+        evento.preventDefault();
+        evento.stopPropagation();
+        menu.classList.toggle('aberto');
+    });
+    document.addEventListener('click', function (evento) {
+        if (!menu.contains(evento.target) && evento.target !== botao) {
+            menu.classList.remove('aberto');
+        }
+    });
+})();
+</script>
+</body>
+</html>

@@ -28,6 +28,13 @@ class Usuario(Base):
     ativo = Column(Boolean, nullable=False, default=True)
     criado_em = Column(DateTime, default=datetime.utcnow)
 
+    # Perfil global, fora do modelo de MembroGabinete: um SUPERADMIN não
+    # pertence a nenhum gabinete específico, administra todos. Nunca lido a
+    # partir de ContextoSessao/MembroGabinete — ver exigir_superadmin() em
+    # app/core/contexto.py, trilha de autorização inteiramente separada da
+    # trilha por gabinete (exigir_perfil/obter_contexto_atual).
+    super_admin = Column(Boolean, nullable=False, default=False)
+
     # Útil para auditoria de troca de senha/ativação — atualizado sempre
     # que o registro é alterado (ver AuthService/futura tela de usuários).
     atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

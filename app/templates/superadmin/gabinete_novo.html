@@ -1,0 +1,48 @@
+{% extends 'shared/base_superadmin.html' %}
+
+{% block conteudo %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">Novo gabinete</h2>
+    <a class="btn btn-outline-secondary" href="/superadmin/gabinetes">Voltar</a>
+</div>
+
+{% if erro %}
+<div class="alert alert-danger" role="alert">{{ erro }}</div>
+{% endif %}
+
+<form class="card" method="post" action="/superadmin/gabinetes/novo">
+    <div class="card-body p-4">
+        <h3 class="h6 text-muted mb-3">Dados do gabinete</h3>
+        <div class="row g-3 mb-4">
+            <div class="col-md-8">
+                <label class="form-label" for="nome_gabinete">Nome do gabinete *</label>
+                <input class="form-control" id="nome_gabinete" name="nome_gabinete" value="{{ dados.nome_gabinete or '' }}" minlength="2" required autofocus>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="responsavel">Vereador/responsável</label>
+                <input class="form-control" id="responsavel" name="responsavel" value="{{ dados.responsavel or '' }}">
+            </div>
+        </div>
+
+        <h3 class="h6 text-muted mb-3">Administrador do gabinete</h3>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label" for="nome_admin">Nome *</label>
+                <input class="form-control" id="nome_admin" name="nome_admin" value="{{ dados.nome_admin or '' }}" minlength="2" required>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="email_admin">E-mail *</label>
+                <input class="form-control" type="email" id="email_admin" name="email_admin" value="{{ dados.email_admin or '' }}" required>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="senha_admin">Senha inicial *</label>
+                <input class="form-control" type="password" id="senha_admin" name="senha_admin" minlength="8" required>
+                <div class="form-text">Mínimo 8 caracteres.</div>
+            </div>
+        </div>
+    </div>
+    <div class="card-footer bg-white text-end">
+        <button class="btn btn-primary" type="submit">Criar gabinete</button>
+    </div>
+</form>
+{% endblock %}

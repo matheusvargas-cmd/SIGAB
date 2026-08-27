@@ -15,5 +15,12 @@ class Gabinete(Base):
 
     id = Column(Integer, primary_key=True)
     nome = Column(String(150), nullable=False)
+
+    # Nome do vereador/responsável pelo gabinete — opcional, usado pelo
+    # SUPERADMIN para diferenciar gabinetes na listagem global (o nome do
+    # gabinete sozinho nem sempre deixa isso claro). Não afeta nenhuma
+    # regra de negócio nem isolamento multi-tenant.
+    responsavel = Column(String(150), nullable=True)
+
     ativo = Column(Boolean, nullable=False, default=True)
     criado_em = Column(DateTime, default=datetime.utcnow)
