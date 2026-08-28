@@ -19,31 +19,48 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 LIMITE_RECENTES = 5
 
 
-def _mensagem_parabens(nome_eleitor: str) -> str:
+# Escritos como escape \UXXXXXXXX (não como o glifo colado no arquivo) de
+# propósito: são caracteres fora do BMP (4 bytes em UTF-8), o ponto do
+# texto mais exposto a corrupção ao passar por edição/terminal/checkout no
+# meio do caminho (bundle -> Windows -> git) — diferente dos acentos do
+# português, que são BMP e sobrevivem a praticamente qualquer transporte.
+# Como escape ASCII puro no .py, o Python monta o caractere certo em
+# runtime sempre, não importa o que aconteceu com o arquivo até chegar
+# aqui. WhatsappLinkService.gerar_link() continua sendo o único lugar que
+# gera a URL final (urllib.parse.quote, UTF-8) — não alterado.
+EMOJI_FESTA = "\U0001F389"  # 🎉
+EMOJI_BOLO = "\U0001F382"  # 🎂
+
+
+def _mensagem_parabens(nome_eleitor: str, nome_gabinete: str) -> str:
     # Independente da mensagem de aniversário do e-mail diário
     # (DailyEmailService._mensagem_aniversario) de propósito — este botão
     # não deve depender/alterar aquele serviço; só o WhatsappLinkService é
     # compartilhado entre os dois, conforme escopo desta etapa.
     primeiro_nome = (nome_eleitor or "").strip().split(" ")[0] or nome_eleitor
     return (
-        f"Olá, {primeiro_nome}! 🎉\n"
-        "Em nome do Gabinete 360, desejamos a você um feliz aniversário! "
+        f"Olá, {primeiro_nome}! {EMOJI_FESTA}\n"
+        f"Em nome do {nome_gabinete}, desejamos a você um feliz aniversário! "
         "Que este novo ciclo seja repleto de saúde, paz e realizações. "
-        "Um grande abraço! 🎂"
+        f"Um grande abraço! {EMOJI_BOLO}"
     )
 
 
-def _preparar_aniversariantes(aniversariantes: list[Eleitor], hoje: date) -> list[dict]:
+def _preparar_aniversariantes(
+    aniversariantes: list[Eleitor], hoje: date, nome_gabinete: str
+) -> list[dict]:
     """Monta, no controller, tudo que o template precisa exibir pronto —
     nenhuma normalização de telefone nem geração de link em Jinja. Prioriza
     eleitor.whatsapp sobre eleitor.telefone tanto para o link quanto para o
     texto exibido (mesmo número que o botão vai usar); sem nenhum dos dois,
     whatsapp_link fica None e o template mostra "Sem telefone" — nunca um
-    link wa.me inventado ou quebrado."""
+    link wa.me inventado ou quebrado. nome_gabinete vem de
+    contexto.gabinete.nome (já carregado por obter_contexto_atual) — nunca
+    uma nova consulta ao banco só para isso."""
     resultado = []
     for eleitor in aniversariantes:
         telefone_para_link = eleitor.whatsapp or eleitor.telefone
-        mensagem = _mensagem_parabens(eleitor.nome)
+        mensagem = _mensagem_parabens(eleitor.nome, nome_gabinete)
         resultado.append(
             {
                 "id": eleitor.id,
@@ -79,7 +96,9 @@ async def dashboard(
             "demandas_atrasadas": DemandaService.contar_atrasadas(db, gabinete_id),
             "demandas_prazo_proximo": DemandaService.contar_prazo_proximo(db, gabinete_id, 7),
             "proximos_compromissos": AgendaService.listar_proximos(db, gabinete_id, LIMITE_RECENTES),
-            "aniversariantes_hoje": _preparar_aniversariantes(aniversariantes_hoje, hoje),
+            "aniversariantes_hoje": _preparar_aniversariantes(
+                aniversariantes_hoje, hoje, contexto.gabinete.nome
+            ),
             "hoje": hoje,
         },
     )
