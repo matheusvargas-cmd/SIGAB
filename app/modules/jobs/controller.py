@@ -36,11 +36,14 @@ def enviar_diario(
     (America/Sao_Paulo). Idempotente por gabinete — ver
     DailyEmailService.enviar_diario/GabineteService.ja_enviou_diario_hoje.
     Não retorna nenhum dado de gabinete além de contagem/status — não é uma
-    rota de leitura de dado de tenant."""
+    rota de leitura de dado de tenant. Resposta deliberadamente enxuta (sem
+    o detalhe por gabinete): agendadores externos como cron-job.org têm um
+    limite de tamanho de resposta, e o detalhe completo não é necessário
+    para confirmar que o job rodou — só a contagem agregada."""
     resultados = DailyEmailService.enviar_diario_todos_os_gabinetes(db)
     return {
+        "status": "ok",
         "data": DailyEmailService.hoje_operacional().isoformat(),
         "total_gabinetes": len(resultados),
         "enviados": sum(1 for r in resultados if r["status"] == "enviado"),
-        "resultados": resultados,
     }
