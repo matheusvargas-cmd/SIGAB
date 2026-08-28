@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.config import TEMPLATES_DIR
 from app.core.contexto import ContextoSessao, exigir_perfil
 from app.core.database import get_db
+from app.core.flash import codificar_flash, decodificar_flash
 from app.services.gabinete_service import GabineteService
 
 router = APIRouter(prefix="/configuracoes/gabinete", tags=["Cadastros"])
@@ -23,7 +24,8 @@ def flash_message(
     redirect = RedirectResponse("/configuracoes/gabinete", status_code=303)
     if message is not None:
         redirect.set_cookie(
-            "flash_message", message, max_age=10, httponly=True, path="/configuracoes", samesite="lax"
+            "flash_message", codificar_flash(message), max_age=10, httponly=True,
+            path="/configuracoes", samesite="lax",
         )
         redirect.set_cookie(
             "flash_category", category, max_age=10, httponly=True, path="/configuracoes", samesite="lax"
@@ -39,7 +41,7 @@ def visualizar(request: Request, contexto: ContextoSessao = Depends(_exigir_admi
         context={
             "titulo": "Gabinete",
             "gabinete": contexto.gabinete,
-            "flash_message": request.cookies.get("flash_message"),
+            "flash_message": decodificar_flash(request.cookies.get("flash_message")),
             "flash_category": request.cookies.get("flash_category", "warning"),
         },
     )

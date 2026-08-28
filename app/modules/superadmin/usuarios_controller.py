@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.config import TEMPLATES_DIR
 from app.core.contexto import exigir_superadmin
 from app.core.database import get_db
+from app.core.flash import codificar_flash, decodificar_flash
 from app.models.membro_gabinete import PERFIS_OPCOES
 from app.models.usuario import Usuario
 from app.services.gabinete_service import GabineteService
@@ -30,7 +31,8 @@ def flash_message(
     redirect = RedirectResponse(destino, status_code=303)
     if message is not None:
         redirect.set_cookie(
-            "flash_message", message, max_age=10, httponly=True, path="/superadmin", samesite="lax"
+            "flash_message", codificar_flash(message), max_age=10, httponly=True,
+            path="/superadmin", samesite="lax",
         )
         redirect.set_cookie(
             "flash_category", category, max_age=10, httponly=True, path="/superadmin", samesite="lax"
@@ -41,7 +43,7 @@ def flash_message(
 def _gabinete_nao_encontrado() -> RedirectResponse:
     redirect = RedirectResponse("/superadmin/gabinetes", status_code=303)
     redirect.set_cookie(
-        "flash_message", "Gabinete não encontrado.", max_age=10, httponly=True,
+        "flash_message", codificar_flash("Gabinete não encontrado."), max_age=10, httponly=True,
         path="/superadmin", samesite="lax",
     )
     redirect.set_cookie(
@@ -69,7 +71,7 @@ def listar(
             "usuario_nome": usuario.nome,
             "gabinete": gabinete,
             "membros": membros,
-            "flash_message": request.cookies.get("flash_message"),
+            "flash_message": decodificar_flash(request.cookies.get("flash_message")),
             "flash_category": request.cookies.get("flash_category", "warning"),
         },
     )

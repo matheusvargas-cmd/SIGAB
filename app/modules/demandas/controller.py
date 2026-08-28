@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.config import TEMPLATES_DIR
 from app.core.contexto import ContextoSessao, obter_contexto_atual
 from app.core.database import get_db
+from app.core.flash import codificar_flash, decodificar_flash
 from app.models.categoria import Categoria
 from app.models.subcategoria import Subcategoria
 from app.services.agenda_service import AgendaService
@@ -33,7 +34,8 @@ def flash_message(
     redirect = RedirectResponse("/demandas", status_code=303)
     if message is not None:
         redirect.set_cookie(
-            "flash_message", message, max_age=10, httponly=True, path="/demandas", samesite="lax"
+            "flash_message", codificar_flash(message), max_age=10, httponly=True,
+            path="/demandas", samesite="lax",
         )
         redirect.set_cookie(
             "flash_category", category, max_age=10, httponly=True, path="/demandas", samesite="lax"
@@ -91,7 +93,7 @@ def listar(
             "pesquisa": pesquisa,
             "pagina_atual": pagina_atual,
             "total_paginas": total_paginas,
-            "flash_message": request.cookies.get("flash_message"),
+            "flash_message": decodificar_flash(request.cookies.get("flash_message")),
             "flash_category": request.cookies.get("flash_category", "warning"),
         },
     )
