@@ -116,12 +116,17 @@
                 {% if aniversariantes_hoje %}
                 <ul class="list-group list-group-flush">
                     {% for eleitor in aniversariantes_hoje %}
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <li class="list-group-item d-flex justify-content-between align-items-center gap-2">
                         <div>
-                            <div class="fw-semibold">{{ eleitor.nome }}{% if eleitor.nascimento %} · {{ hoje.year - eleitor.nascimento.year }} anos{% endif %}</div>
-                            <div class="text-muted small">{{ eleitor.telefone or eleitor.whatsapp or '-' }}</div>
+                            <div class="fw-semibold">{{ eleitor.nome }}{% if eleitor.idade is not none %} · {{ eleitor.idade }} anos{% endif %}</div>
+                            <div class="text-muted small">{{ eleitor.telefone_exibicao or 'Sem telefone' }}</div>
                         </div>
-                        <a class="btn btn-sm btn-outline-secondary" href="/eleitores/{{ eleitor.id }}">Ver</a>
+                        <div class="d-flex gap-2 text-nowrap">
+                            {% if eleitor.whatsapp_link %}
+                            <a class="btn btn-sm btn-outline-secondary" href="{{ eleitor.whatsapp_link }}" target="_blank" rel="noopener noreferrer">💬 Enviar parabéns</a>
+                            {% endif %}
+                            <a class="btn btn-sm btn-outline-secondary" href="/eleitores/{{ eleitor.id }}">Ver</a>
+                        </div>
                     </li>
                     {% endfor %}
                 </ul>
