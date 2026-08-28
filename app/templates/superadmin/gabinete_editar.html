@@ -58,6 +58,13 @@
         </div>
         <div class="card mt-4">
             <div class="card-body p-4">
+                <h3 class="h6 text-muted mb-2">Usuários do gabinete</h3>
+                <p class="small text-muted mb-3">{{ contadores.usuarios }} usuário(s) ativo(s).</p>
+                <a class="btn btn-outline-primary" href="/superadmin/gabinetes/{{ gabinete.id }}/usuarios">Ver usuários</a>
+            </div>
+        </div>
+        <div class="card mt-4">
+            <div class="card-body p-4">
                 <h3 class="h6 text-muted mb-2">E-mail diário</h3>
                 <p class="small text-muted mb-3">
                     {% if gabinete.ultimo_email_diario_data %}

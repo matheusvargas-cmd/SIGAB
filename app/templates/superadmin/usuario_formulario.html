@@ -1,0 +1,49 @@
+{% extends 'shared/base_superadmin.html' %}
+
+{% block conteudo %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">{{ titulo }}</h2>
+    <a class="btn btn-outline-secondary" href="/superadmin/gabinetes/{{ gabinete.id }}/usuarios">Voltar</a>
+</div>
+
+{% if erro %}
+<div class="alert alert-danger" role="alert">{{ erro }}</div>
+{% endif %}
+
+<form class="card" method="post" action="/superadmin/gabinetes/{{ gabinete.id }}/usuarios/novo">
+    <div class="card-body p-4">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label" for="nome">Nome *</label>
+                <input class="form-control" id="nome" name="nome" value="{{ usuario_preenchido.nome }}" minlength="2" required autofocus>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="email">E-mail *</label>
+                <input class="form-control" type="email" id="email" name="email" value="{{ usuario_preenchido.email }}" required>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="senha">Senha inicial *</label>
+                <input class="form-control" type="password" id="senha" name="senha" minlength="8" required>
+                <div class="form-text">Mínimo 8 caracteres.</div>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="confirmar_senha">Confirmar senha *</label>
+                <input class="form-control" type="password" id="confirmar_senha" name="confirmar_senha" minlength="8" required>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="perfil">Perfil *</label>
+                <select class="form-select" id="perfil" name="perfil" required>
+                    {% for opcao in perfis_opcoes %}
+                    <option value="{{ opcao }}" {% if usuario_preenchido.perfil == opcao %}selected{% endif %}>{{ opcao }}</option>
+                    {% endfor %}
+                </select>
+                <div class="form-text">Um gabinete pode ter mais de um ADMIN.</div>
+            </div>
+        </div>
+    </div>
+    <div class="card-footer bg-white text-end">
+        <a class="btn btn-outline-secondary" href="/superadmin/gabinetes/{{ gabinete.id }}/usuarios">Cancelar</a>
+        <button class="btn btn-primary" type="submit">Cadastrar</button>
+    </div>
+</form>
+{% endblock %}

@@ -77,9 +77,15 @@ class UsuarioService:
         return db.scalar(select(Usuario).where(Usuario.email == email_normalizado))
 
     @staticmethod
-    def criar_usuario_e_membro(
-        db: Session, gabinete_id: int, nome: str, email: str, senha: str, perfil: str
-    ) -> MembroGabinete:
+    def _criar_usuario_com_senha(db: Session, nome: str, email: str, senha: str) -> Usuario:
+        """Validação de nome/e-mail/senha + hash + persistência de Usuario,
+        compartilhada por criar_usuario_e_membro (tela do ADMIN) e
+        criar_usuario_e_membro_superadmin (tela do SUPERADMIN) — só o
+        conjunto de perfis permitidos para o MembroGabinete difere entre os
+        dois, então essa parte fica igual para os dois. flush() (não
+        commit()): quem chama decide quando fechar a transação, depois de
+        também criar o MembroGabinete — nunca fica um Usuario sem vínculo
+        se o passo seguinte falhar."""
         nome_normalizado = (nome or "").strip()
         if len(nome_normalizado) < NOME_MINIMO_CARACTERES:
             raise ValueError("Nome inválido.")
@@ -87,9 +93,6 @@ class UsuarioService:
         email_normalizado = (email or "").strip().lower()
         if "@" not in email_normalizado:
             raise ValueError("E-mail inválido.")
-
-        if perfil not in PERFIS_ATRIBUIVEIS_PELA_UI:
-            raise ValueError("Perfil inválido.")
 
         if len(senha or "") < SENHA_MINIMO_CARACTERES:
             raise ValueError(f"Senha muito curta — mínimo {SENHA_MINIMO_CARACTERES} caracteres.")
@@ -104,6 +107,39 @@ class UsuarioService:
         )
         db.add(usuario)
         db.flush()
+        return usuario
+
+    @staticmethod
+    def criar_usuario_e_membro(
+        db: Session, gabinete_id: int, nome: str, email: str, senha: str, perfil: str
+    ) -> MembroGabinete:
+        if perfil not in PERFIS_ATRIBUIVEIS_PELA_UI:
+            raise ValueError("Perfil inválido.")
+
+        usuario = UsuarioService._criar_usuario_com_senha(db, nome, email, senha)
+
+        membro = MembroGabinete(usuario_id=usuario.id, gabinete_id=gabinete_id, perfil=perfil, ativo=True)
+        db.add(membro)
+        db.commit()
+        db.refresh(membro)
+        return membro
+
+    @staticmethod
+    def criar_usuario_e_membro_superadmin(
+        db: Session, gabinete_id: int, nome: str, email: str, senha: str, perfil: str
+    ) -> MembroGabinete:
+        """Só para rotas /superadmin (Depends(exigir_superadmin)) — mesma
+        validação/hash de criar_usuario_e_membro, mas sem a restrição de
+        PERFIS_ATRIBUIVEIS_PELA_UI: o SUPERADMIN pode atribuir ADMIN
+        diretamente (um gabinete pode ter vários ADMINs simultâneos — não
+        existe "ADMIN exclusivo"). "SUPERADMIN" nunca é um valor aceito
+        aqui: não é um perfil de MembroGabinete, é o campo separado
+        Usuario.super_admin (promovido só pelo mecanismo de bootstrap
+        próprio), e este formulário nunca oferece essa opção."""
+        if perfil not in PERFIS_OPCOES:
+            raise ValueError("Perfil inválido.")
+
+        usuario = UsuarioService._criar_usuario_com_senha(db, nome, email, senha)
 
         membro = MembroGabinete(usuario_id=usuario.id, gabinete_id=gabinete_id, perfil=perfil, ativo=True)
         db.add(membro)
@@ -158,6 +194,48 @@ class UsuarioService:
             if outros == 0:
                 raise ValueError("Não é possível remover o último administrador ativo do gabinete.")
 
+        membro.perfil = perfil
+        membro.ativo = ativo
+        db.commit()
+        db.refresh(membro)
+        return membro
+
+    @staticmethod
+    def atualizar_membro_superadmin(
+        db: Session, gabinete_id: int, membro: MembroGabinete, nome: str, email: str, perfil: str, ativo: bool
+    ) -> MembroGabinete:
+        """Só para rotas /superadmin — diferente de atualizar_membro()
+        (tela do ADMIN comum, que só edita perfil/ativo e nunca promove a
+        ADMIN): aqui o SUPERADMIN também pode editar nome/e-mail do
+        Usuario e promover/rebaixar livremente entre ADMIN/VEREADOR/
+        ASSESSOR. Mantém a mesma trava de não deixar o gabinete sem
+        nenhum ADMIN ativo — mesmo o SUPERADMIN precisa promover outra
+        pessoa antes de rebaixar/desativar o último."""
+        nome_normalizado = (nome or "").strip()
+        if len(nome_normalizado) < NOME_MINIMO_CARACTERES:
+            raise ValueError("Nome inválido.")
+
+        email_normalizado = (email or "").strip().lower()
+        if "@" not in email_normalizado:
+            raise ValueError("E-mail inválido.")
+
+        outro_usuario_com_email = db.scalar(
+            select(Usuario).where(Usuario.email == email_normalizado, Usuario.id != membro.usuario_id)
+        )
+        if outro_usuario_com_email is not None:
+            raise ValueError("Já existe outro usuário com este e-mail.")
+
+        if perfil not in PERFIS_OPCOES:
+            raise ValueError("Perfil inválido.")
+
+        vai_perder_admin_ativo = membro.perfil == "ADMIN" and (perfil != "ADMIN" or not ativo)
+        if vai_perder_admin_ativo:
+            outros = UsuarioService.contar_admins_ativos(db, gabinete_id, ignorar_membro_id=membro.id)
+            if outros == 0:
+                raise ValueError("Não é possível remover o último administrador ativo do gabinete.")
+
+        membro.usuario.nome = nome_normalizado
+        membro.usuario.email = email_normalizado
         membro.perfil = perfil
         membro.ativo = ativo
         db.commit()
