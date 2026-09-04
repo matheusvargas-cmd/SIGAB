@@ -38,3 +38,13 @@ class Gabinete(Base):
     # o envio, então uma tentativa que falhou no meio pode ser refeita no
     # mesmo dia sem duplicar.
     ultimo_email_diario_data = Column(Date, nullable=True)
+
+    # Identificador público do gabinete para o futuro módulo de Atendimento
+    # ao Cidadão (/cidadao/<token>) — 6 caracteres alfanuméricos, gerado
+    # criptograficamente (ver GabineteService._gerar_public_token), nunca o
+    # id numérico do gabinete: expor o id permitiria adivinhar/varrer
+    # gabinetes sequencialmente, o token não. Não concede nenhum acesso à
+    # área administrativa por si só — é só "qual gabinete", igual a uma URL
+    # curta. Nenhuma rota pública é criada nesta fase; a coluna existe só
+    # para já ter todo gabinete (existente e futuro) com um token estável.
+    public_token = Column(String(6), nullable=False, unique=True, index=True)

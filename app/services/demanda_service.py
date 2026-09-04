@@ -348,6 +348,7 @@ class DemandaService:
         fechar_automaticamente: bool = True,
         eleitor_obrigatorio: bool = True,
         commit: bool = True,
+        origem: str = "INTERNA",
     ) -> Demanda:
         # secretaria/ref_historico/data_abertura/fechar_automaticamente/
         # eleitor_obrigatorio existem para a importação histórica
@@ -390,6 +391,7 @@ class DemandaService:
             data_fechamento=(
                 datetime.now() if fechar_automaticamente and dados["status"] == "Concluído" else None
             ),
+            origem=origem,
         )
         db.add(demanda)
         if not commit:

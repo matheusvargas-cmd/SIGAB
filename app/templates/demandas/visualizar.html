@@ -46,6 +46,23 @@
     </div>
 </div>
 
+{% if anexos %}
+<div class="card mb-3">
+    <div class="card-header">Anexos</div>
+    <div class="card-body d-flex flex-wrap gap-3">
+        {% for anexo in anexos %}
+        <a href="/demandas/{{ demanda.id }}/anexos/{{ anexo.id }}" target="_blank" rel="noopener"
+           class="text-center text-decoration-none" style="width: 120px;" title="{{ anexo.nome_original }}">
+            <img src="/demandas/{{ demanda.id }}/anexos/{{ anexo.id }}" alt="{{ anexo.nome_original }}"
+                 class="img-thumbnail" loading="lazy"
+                 style="width: 120px; height: 120px; object-fit: cover;">
+            <div class="small text-muted text-truncate">{{ anexo.nome_original }}</div>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
 <div class="card">
     <div class="card-body p-4">
         <dl class="row mb-0">

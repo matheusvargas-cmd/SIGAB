@@ -15,6 +15,7 @@ from app.models.categoria import Categoria
 from app.models.subcategoria import Subcategoria
 from app.services.agenda_service import AgendaService
 from app.services.categoria_service import CategoriaService
+from app.services.demanda_anexo_service import DemandaAnexoService
 from app.services.demanda_csv_service import DemandaCsvService
 from app.services.demanda_service import (
     PRIORIDADE_OPCOES,
@@ -22,6 +23,7 @@ from app.services.demanda_service import (
     DemandaService,
 )
 from app.services.eleitor_service import EleitorService
+from app.services.storage_service import StorageError, obter_storage_service
 from app.services.subcategoria_service import SubcategoriaService
 
 router = APIRouter(prefix="/demandas", tags=["Demandas"])
@@ -263,6 +265,7 @@ def visualizar(
         else None
     )
     compromisso_retorno = AgendaService.obter_por_demanda(db, contexto.gabinete_id, demanda.id)
+    anexos = DemandaAnexoService.listar_por_demanda(db, contexto.gabinete_id, demanda.id)
     return templates.TemplateResponse(
         request=request,
         name="demandas/visualizar.html",
@@ -271,8 +274,43 @@ def visualizar(
             "demanda": demanda,
             "eleitor": eleitor,
             "compromisso_retorno": compromisso_retorno,
+            "anexos": anexos,
         },
     )
+
+
+@router.get("/{demanda_id}/anexos/{anexo_id}")
+def abrir_anexo(
+    demanda_id: int,
+    anexo_id: int,
+    db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
+):
+    # Dupla checagem de propósito (nunca confiar só no anexo_id): tanto a
+    # demanda quanto o anexo precisam pertencer ao gabinete autenticado, e
+    # o anexo precisa mesmo pertencer a ESTA demanda — nenhuma URL
+    # temporária é gerada antes dessas três checagens passarem. Ver
+    # Prompt 3, seção 14 (isolamento multi-tenant) e 16 (autorização antes
+    # da geração da URL).
+    demanda = DemandaService.obter_por_id(db, contexto.gabinete_id, demanda_id)
+    anexo = DemandaAnexoService.obter_por_id(db, contexto.gabinete_id, anexo_id)
+    if (
+        demanda is None
+        or anexo is None
+        or anexo.demanda_id != demanda.id
+        or not anexo.arquivo_disponivel
+    ):
+        return flash_message("Anexo não encontrado.")
+
+    storage = obter_storage_service()
+    if storage is None:
+        return flash_message("O armazenamento de fotos não está configurado neste ambiente.")
+
+    try:
+        url = storage.gerar_url_temporaria(anexo.storage_key)
+    except StorageError:
+        return flash_message("Não foi possível abrir o anexo. Tente novamente.")
+    return RedirectResponse(url, status_code=302)
 
 
 @router.get("/{demanda_id}/editar", response_class=HTMLResponse)

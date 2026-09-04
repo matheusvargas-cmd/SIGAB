@@ -34,6 +34,7 @@ local, mesma regra do main.py).
 
 import getpass
 import os
+import secrets
 import sys
 from pathlib import Path
 
@@ -50,6 +51,21 @@ from app.models.usuario import Usuario
 from app.services.migration_service import MigrationService
 
 SENHA_MINIMO_CARACTERES = 8
+
+# Mesmo alfabeto de GabineteService/MigrationService (não importado — este
+# script já é propositalmente autossuficiente, sem depender de app.services).
+_ALFABETO_TOKEN_PUBLICO = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+_TAMANHO_TOKEN_PUBLICO = 6
+
+
+def _gerar_public_token(db) -> str:
+    for _ in range(10):
+        token = "".join(
+            secrets.choice(_ALFABETO_TOKEN_PUBLICO) for _ in range(_TAMANHO_TOKEN_PUBLICO)
+        )
+        if db.scalar(select(Gabinete).where(Gabinete.public_token == token)) is None:
+            return token
+    raise RuntimeError("Não foi possível gerar um public_token único.")
 
 
 def _obter(variavel_ambiente: str, pergunta: str, oculto: bool = False) -> str:
@@ -113,7 +129,7 @@ def main() -> int:
             print(f"\nJá existe um usuário com o e-mail '{email}'. Nada foi criado.")
             return 1
 
-        gabinete = Gabinete(nome=nome_gabinete, ativo=True)
+        gabinete = Gabinete(nome=nome_gabinete, ativo=True, public_token=_gerar_public_token(db))
         db.add(gabinete)
         db.flush()
 
