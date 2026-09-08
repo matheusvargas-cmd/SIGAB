@@ -7,6 +7,7 @@ from sqlalchemy import exists, extract, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.busca import normalizar
+from app.core.documentos import normalizar_cpf, validar_cpf
 from app.models.demanda import Demanda
 from app.models.eleitor import Eleitor
 
@@ -214,6 +215,7 @@ class EleitorService:
             ref_historico=ref_historico,
         )
         EleitorService._validar_duplicidade(db, gabinete_id, dados["nome"], dados["telefone"])
+        EleitorService._validar_cpf_duplicado(db, gabinete_id, dados["cpf_normalizado"])
         eleitor = Eleitor(gabinete_id=gabinete_id, **dados)
         db.add(eleitor)
         if not commit:
@@ -265,6 +267,9 @@ class EleitorService:
         EleitorService._validar_duplicidade(
             db, eleitor.gabinete_id, dados["nome"], dados["telefone"], ignorar_id=eleitor.id
         )
+        EleitorService._validar_cpf_duplicado(
+            db, eleitor.gabinete_id, dados["cpf_normalizado"], ignorar_id=eleitor.id
+        )
         for campo, valor in dados.items():
             setattr(eleitor, campo, valor)
         db.commit()
@@ -282,6 +287,75 @@ class EleitorService:
         db.commit()
 
     @staticmethod
+    def criar_ou_atualizar_por_cpf(
+        db: Session,
+        gabinete_id: int,
+        cpf: str,
+        nome: str,
+        whatsapp: str | None = None,
+        telefone: str | None = None,
+        email: str | None = None,
+        endereco: str | None = None,
+        bairro: str | None = None,
+        cidade: str | None = None,
+    ) -> Eleitor:
+        """Único ponto de entrada usado pelo atendimento público
+        (AtendimentoPublicoService) — identifica o eleitor por
+        gabinete_id + cpf_normalizado (nunca por nome/telefone/e-mail,
+        essa é a regra do cadastro manual em _validar_duplicidade, uma
+        regra diferente e que continua intacta). Exige CPF
+        matematicamente válido (validar_cpf) — diferente de
+        criar()/atualizar() acima, que nunca validaram dígito
+        verificador, só formatação; essa exigência é exclusiva de quem
+        entra pelo CPF como chave.
+
+        Se o CPF já pertence a um eleitor deste gabinete: atualiza só os
+        campos que vieram preenchidos desta vez, preservando o valor já
+        cadastrado em cada campo que o cidadão deixou em branco — nunca
+        apaga dado existente por causa de um reenvio incompleto."""
+        cpf_normalizado = normalizar_cpf(cpf)
+        if not cpf_normalizado or not validar_cpf(cpf_normalizado):
+            raise ValueError("Informe um CPF válido.")
+
+        eleitor_existente = db.scalar(
+            select(Eleitor).where(
+                Eleitor.gabinete_id == gabinete_id, Eleitor.cpf_normalizado == cpf_normalizado
+            )
+        )
+
+        if eleitor_existente is None:
+            return EleitorService.criar(
+                db,
+                gabinete_id,
+                nome=nome,
+                telefone=telefone,
+                whatsapp=whatsapp,
+                email=email,
+                endereco=endereco,
+                bairro=bairro,
+                cidade=cidade,
+                cpf=cpf,
+            )
+
+        return EleitorService.atualizar(
+            db,
+            eleitor_existente,
+            nome=(nome or "").strip() or eleitor_existente.nome,
+            telefone=(telefone or "").strip() or eleitor_existente.telefone,
+            whatsapp=(whatsapp or "").strip() or eleitor_existente.whatsapp,
+            nascimento=eleitor_existente.nascimento,
+            endereco=(endereco or "").strip() or eleitor_existente.endereco,
+            bairro=(bairro or "").strip() or eleitor_existente.bairro,
+            cidade=(cidade or "").strip() or eleitor_existente.cidade,
+            observacoes=eleitor_existente.observacoes,
+            apelido=eleitor_existente.apelido,
+            email=(email or "").strip() or eleitor_existente.email,
+            cpf=cpf,
+            titulo_eleitor=eleitor_existente.titulo_eleitor,
+            zona_eleitoral=eleitor_existente.zona_eleitoral,
+        )
+
+    @staticmethod
     def _normalizar_dados(**dados: Any) -> dict[str, Any]:
         nome = (dados.get("nome") or "").strip()
         if len(nome) < NOME_MINIMO_CARACTERES:
@@ -291,6 +365,12 @@ class EleitorService:
         for campo, valor in dados.items():
             if campo != "nome" and isinstance(valor, str):
                 dados[campo] = valor.strip() or None
+
+        # Mantido em sincronia com "cpf" sempre que criar/atualizar passa
+        # por aqui — nunca preenchido pelo formulário diretamente. Ver
+        # app/core/documentos.py:normalizar_cpf e a constraint de
+        # unicidade parcial (gabinete_id + cpf_normalizado) da migration.
+        dados["cpf_normalizado"] = normalizar_cpf(dados.get("cpf"))
         return dados
 
     @staticmethod
@@ -318,3 +398,22 @@ class EleitorService:
         for candidato in db.scalars(consulta):
             if re.sub(r"\D", "", candidato.telefone or "") == digitos_telefone:
                 raise ValueError("Cadastro duplicado.")
+
+    @staticmethod
+    def _validar_cpf_duplicado(
+        db: Session, gabinete_id: int, cpf_normalizado: str | None, ignorar_id: int | None = None
+    ) -> None:
+        # Complementa (não substitui) _validar_duplicidade acima: mesmo
+        # gabinete + mesmo CPF é sempre o mesmo eleitor, regra central do
+        # futuro módulo de Atendimento ao Cidadão — mas já vale para o
+        # cadastro manual de hoje, para nunca deixar a constraint de banco
+        # (ver migration) estourar como IntegrityError bruto na tela.
+        if not cpf_normalizado:
+            return
+        consulta = select(Eleitor).where(
+            Eleitor.gabinete_id == gabinete_id, Eleitor.cpf_normalizado == cpf_normalizado
+        )
+        if ignorar_id is not None:
+            consulta = consulta.where(Eleitor.id != ignorar_id)
+        if db.scalar(consulta.limit(1)) is not None:
+            raise ValueError("Já existe um eleitor com este CPF neste gabinete.")

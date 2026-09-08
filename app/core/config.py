@@ -127,6 +127,32 @@ class Settings(BaseSettings):
     # esquecido em produção.
     jobs_token: str = ""
 
+    # --- Upload de fotos do atendimento público (Cloudflare R2, S3-compatível) ---
+    # app/services/storage_service.py. Bucket sempre privado (Public Access
+    # = Disabled no R2) — nenhuma dessas variáveis nem o objeto armazenado
+    # ficam acessíveis publicamente; leitura sempre via URL temporária
+    # gerada sob demanda. Sem as 5 variáveis abaixo definidas, o upload de
+    # fotos fica indisponível (mensagem amigável ao cidadão — nunca quebra
+    # o resto do formulário público, que continua funcionando sem foto
+    # nenhuma) — nunca um erro mascarado nem um storage local substituto.
+    # R2_ENDPOINT é o endpoint S3 da conta Cloudflare
+    # (https://<account_id>.r2.cloudflarestorage.com).
+    r2_account_id: str = ""
+    r2_access_key_id: str = ""
+    r2_secret_access_key: str = ""
+    r2_bucket_name: str = ""
+    r2_endpoint: str = ""
+
+    @property
+    def r2_configurado(self) -> bool:
+        return bool(
+            self.r2_account_id
+            and self.r2_access_key_id
+            and self.r2_secret_access_key
+            and self.r2_bucket_name
+            and self.r2_endpoint
+        )
+
     @property
     def cors_origins_lista(self) -> list[str]:
         return [origem.strip() for origem in self.cors_origins.split(",") if origem.strip()]

@@ -44,3 +44,27 @@ class WhatsappLinkService:
         if numero is None:
             return None
         return f"https://wa.me/{numero}?text={quote(mensagem)}"
+
+    @staticmethod
+    def montar_mensagem_demanda(
+        nome_eleitor: str, nome_gabinete: str, demanda_id: int, titulo: str, status: str
+    ) -> str:
+        """Mensagem pré-preenchida para a tela de visualização de demanda
+        (app/modules/demandas/controller.py) — só o texto; o link em si
+        continua sendo gerado por gerar_link() acima, sem duplicar
+        normalização de telefone nem nenhuma outra lógica deste serviço.
+
+        Usa só campos que realmente existem em Demanda/Eleitor
+        (protocolo = Demanda.id, título, status) — nunca CPF, endereço
+        completo ou qualquer outro dado sensível além do necessário para
+        o cidadão reconhecer a própria solicitação. O SIGAB nunca envia
+        isto sozinho: é só o texto que aparece pronto dentro do WhatsApp,
+        para o usuário do gabinete revisar e decidir se envia."""
+        primeiro_nome = (nome_eleitor or "").strip().split(" ")[0] or nome_eleitor
+        return (
+            f"Olá, {primeiro_nome}. Aqui é do {nome_gabinete}.\n\n"
+            f"Recebemos sua solicitação registrada sob o protocolo #{demanda_id}.\n\n"
+            f"Assunto: {titulo}\n\n"
+            f"Sua demanda está atualmente com o status: {status}.\n\n"
+            "Estamos acompanhando sua solicitação."
+        )

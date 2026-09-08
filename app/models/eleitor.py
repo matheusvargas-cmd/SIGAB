@@ -27,6 +27,16 @@ class Eleitor(Base):
     bairro = Column(String(100))
     cidade = Column(String(100))
     cpf = Column(String(14))
+
+    # Só dígitos (ver app/core/documentos.py:normalizar_cpf), mantido em
+    # sincronia com "cpf" por EleitorService.criar/atualizar — nunca
+    # editado diretamente pelo formulário. Existe para permitir localizar
+    # "mesmo gabinete + mesmo CPF = mesmo eleitor" (regra do futuro módulo
+    # de Atendimento ao Cidadão) sem depender da formatação digitada em
+    # "cpf" ("123.456.789-09" vs "12345678909"). Nullable: eleitor
+    # histórico sem CPF continua permitido — a constraint de unicidade
+    # (ver migration) ignora NULL.
+    cpf_normalizado = Column(String(20), nullable=True, index=True)
     titulo_eleitor = Column(String(12))
     zona_eleitoral = Column(String(10))
     ref_historico = Column(String(50))

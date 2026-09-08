@@ -1,18 +1,41 @@
+import logging
 from datetime import date, datetime, time, timedelta
 from math import ceil
 from typing import Any
 
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import case, delete, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.busca import normalizar
 from app.models.categoria import Categoria
 from app.models.demanda import Demanda
+from app.models.demanda_anexo import DemandaAnexo
 from app.models.eleitor import Eleitor
+from app.models.historico_demanda import HistoricoDemanda
+from app.models.submissao_cidadao import SubmissaoCidadao
 from app.models.subcategoria import Subcategoria
 from app.services.agenda_service import AgendaService
+from app.services.demanda_anexo_service import DemandaAnexoService
+from app.services.historico_demanda_service import HistoricoDemandaService
+from app.services.storage_service import obter_storage_service
+
+logger = logging.getLogger(__name__)
 
 POR_PAGINA = 20
+
+MENSAGEM_FALHA_EXCLUSAO_ANEXO = (
+    "Não foi possível concluir a exclusão porque um ou mais anexos não puderam ser removidos "
+    "do armazenamento. Nenhum dado da demanda foi excluído. Tente novamente ou solicite "
+    "suporte técnico."
+)
+
+
+class FalhaExclusaoAnexoError(Exception):
+    """Levantada por DemandaService.excluir() quando existem anexos com
+    arquivo ainda no storage e pelo menos um deles não pôde ser removido
+    do R2 (ou o storage não está configurado neste ambiente). Nunca
+    carrega detalhe de infraestrutura na mensagem — só a mensagem
+    amigável definida em MENSAGEM_FALHA_EXCLUSAO_ANEXO."""
 TITULO_MINIMO_CARACTERES = 5
 
 CATEGORIAS = [
@@ -63,7 +86,11 @@ class DemandaService:
 
     @staticmethod
     def listar(
-        db: Session, gabinete_id: int, pesquisa: str | None = None, pagina: int = 1
+        db: Session,
+        gabinete_id: int,
+        pesquisa: str | None = None,
+        pagina: int = 1,
+        origem: str | None = None,
     ) -> tuple[list[Demanda], int, int]:
         # outerjoin (não join): uma demanda sem eleitor vinculado
         # (eleitor_id nulo — CSV real do Meu Mandato permite isso) precisa
@@ -80,6 +107,14 @@ class DemandaService:
             .where(Demanda.gabinete_id == gabinete_id)
             .outerjoin(Eleitor, Demanda.eleitor_id == Eleitor.id)
         )
+
+        # Filtro opcional por origem (INTERNA/PUBLICA) — sempre no banco,
+        # nunca em Python: evita trazer registros a mais só para
+        # descartá-los depois, e mantém a paginação (LIMIT/OFFSET abaixo)
+        # coerente com o total realmente filtrado.
+        if origem:
+            consulta = consulta.where(Demanda.origem == origem)
+            consulta_total = consulta_total.where(Demanda.origem == origem)
 
         if pesquisa and pesquisa.strip():
             termo = f"%{normalizar(pesquisa.strip())}%"
@@ -348,6 +383,9 @@ class DemandaService:
         fechar_automaticamente: bool = True,
         eleitor_obrigatorio: bool = True,
         commit: bool = True,
+        origem: str = "INTERNA",
+        usuario_id: int | None = None,
+        registrar_historico: bool = True,
     ) -> Demanda:
         # secretaria/ref_historico/data_abertura/fechar_automaticamente/
         # eleitor_obrigatorio existem para a importação histórica
@@ -390,14 +428,42 @@ class DemandaService:
             data_fechamento=(
                 datetime.now() if fechar_automaticamente and dados["status"] == "Concluído" else None
             ),
+            origem=origem,
         )
         db.add(demanda)
+        # flush (não só no commit=False): precisa de demanda.id já
+        # preenchido para o primeiro HistoricoDemanda logo abaixo — tanto
+        # para o caminho commit=False (importador de CSV, que também usa
+        # este flush para sincronizar_retorno_demanda) quanto para o
+        # caminho commit=True, onde antes esse flush só aconteceria
+        # implicitamente dentro do db.commit() final.
+        db.flush()
+
+        if registrar_historico:
+            # Only a demanda pública leva essa observação — a criação
+            # interna não precisa de um texto especial (o próprio
+            # usuario_id já identifica quem criou).
+            observacao = (
+                "Demanda registrada pelo atendimento público."
+                if origem == "PUBLICA"
+                else None
+            )
+            HistoricoDemandaService.registrar(
+                db,
+                gabinete_id=gabinete_id,
+                demanda_id=demanda.id,
+                status_novo=dados["status"],
+                status_anterior=None,
+                usuario_id=usuario_id,
+                observacao=observacao,
+            )
+
         if not commit:
             # commit=False é usado só pelo importador de CSV (commit em
-            # lote, não por linha) — flush() já basta para popular
-            # demanda.id, que sincronizar_retorno_demanda precisa para
-            # consultar um eventual compromisso já vinculado.
-            db.flush()
+            # lote, não por linha; registrar_historico=False nesse
+            # caminho — ver DemandaCsvService) e por
+            # AtendimentoPublicoService (que ainda precisa subir fotos
+            # antes do commit final).
             AgendaService.sincronizar_retorno_demanda(db, demanda)
             return demanda
         db.commit()
@@ -419,6 +485,7 @@ class DemandaService:
         responsavel: str | None = None,
         prazo: date | None = None,
         observacoes_internas: str | None = None,
+        usuario_id: int | None = None,
     ) -> Demanda:
         dados = DemandaService._validar_dados(
             db,
@@ -434,6 +501,10 @@ class DemandaService:
 
         if demanda.status == "Concluído" and dados["status"] == "Protocolado":
             raise ValueError("Não é possível reabrir uma demanda concluída.")
+
+        # Capturado antes de qualquer mutação em demanda.status logo
+        # abaixo — é o valor real "antes desta edição", para o histórico.
+        status_anterior = demanda.status
 
         if dados["status"] == "Concluído" and demanda.status != "Concluído":
             demanda.data_fechamento = datetime.now()
@@ -452,6 +523,22 @@ class DemandaService:
         demanda.prazo = prazo
         demanda.observacoes_internas = (observacoes_internas or "").strip() or None
 
+        # Só grava histórico quando o status realmente mudou — trocar
+        # título/descrição/prioridade/etc. sem trocar status não gera
+        # evento. Mesma transação da atualização da própria demanda:
+        # HistoricoDemandaService.registrar só adiciona à sessão, o
+        # commit abaixo grava as duas coisas juntas (e um rollback
+        # desfaz as duas juntas).
+        if status_anterior != demanda.status:
+            HistoricoDemandaService.registrar(
+                db,
+                gabinete_id=demanda.gabinete_id,
+                demanda_id=demanda.id,
+                status_novo=demanda.status,
+                status_anterior=status_anterior,
+                usuario_id=usuario_id,
+            )
+
         db.commit()
         db.refresh(demanda)
         AgendaService.sincronizar_retorno_demanda(db, demanda)
@@ -459,7 +546,108 @@ class DemandaService:
 
     @staticmethod
     def excluir(db: Session, demanda: Demanda) -> None:
+        """Exclusão definitiva de uma Demanda — só o fluxo interno
+        autenticado chama isto (nunca o módulo público /cidadao, que não
+        tem nenhuma rota de exclusão). R2 e PostgreSQL não formam uma
+        transação distribuída: por isso, se a demanda tem algum anexo
+        com arquivo ainda no storage, TODOS os objetos são removidos do
+        R2 primeiro — nenhum registro do banco é tocado antes disso. Só
+        depois de confirmado que o storage está limpo é que
+        DemandaAnexo, HistoricoDemanda e a própria Demanda são apagados,
+        em UM único commit (caminho normal: nunca "demanda excluída sem
+        se saber se o anexo foi" nem "anexo apagado do R2 sem o registro
+        correspondente desaparecer").
+
+        Se algum objeto falhar ao ser removido do R2: nada é apagado do
+        banco (nem a Demanda, nem nenhum DemandaAnexo, nem o
+        HistoricoDemanda) — levanta FalhaExclusaoAnexoError, e o
+        chamador decide o que mostrar.
+
+        Janela de corrida entre R2 e o commit (achado numa revisão
+        posterior): marcar arquivo_disponivel=False só DEPOIS que
+        storage.excluir() confirma sucesso deixava uma janela aberta —
+        entre o objeto já ter sumido fisicamente do R2 e o commit que
+        registra isso, uma outra requisição (ex.: abrir_anexo) ainda lia
+        arquivo_disponivel=True do último commit e conseguia gerar uma
+        URL assinada para um objeto que já não existia mais. Por isso,
+        agora arquivo_disponivel é derrubado a False e COMITADO para
+        TODOS os anexos pendentes ANTES de qualquer chamada ao R2 —
+        fecha a janela por completo, porque nenhuma leitura concorrente
+        (sempre um SELECT simples, nunca bloqueado por lock de outra
+        transação em READ COMMITTED) volta a enxergar True depois desse
+        commit, não importa se o R2 ainda não foi tocado.
+
+        Isso por si só criaria um novo problema (marcar indisponível
+        antes de confirmar a remoção de verdade) se o campo usado para
+        decidir o que precisa de nova tentativa continuasse sendo
+        arquivo_disponivel — por isso quem decide "ainda falta excluir
+        do R2" é sempre excluido_em IS NULL (nunca arquivo_disponivel),
+        preenchido com a hora só quando storage.excluir() de fato
+        confirma sucesso. As três combinações possíveis de
+        (arquivo_disponivel, excluido_em) passam a significar:
+          - (True,  None)   -> normal, nunca tocado por uma exclusão;
+          - (False, None)   -> exclusão em andamento ou que falhou nesse
+                                anexo específico: precisa de nova
+                                tentativa (idempotente — o DELETE do
+                                S3/R2 não quebra nada se repetido, tenha
+                                o objeto sido removido antes ou não);
+          - (False, <hora>) -> confirmado removido do R2.
+        Numa nova tentativa (ou depois de a aplicação cair no meio do
+        processo), o filtro por excluido_em IS NULL sempre encontra
+        exatamente o que ainda falta processar, sem depender de saber
+        se aquele anexo específico já tinha sido marcado indisponível
+        numa tentativa anterior."""
+        anexos = DemandaAnexoService.listar_todos_por_demanda(db, demanda.id)
+        anexos_pendentes = [anexo for anexo in anexos if anexo.excluido_em is None]
+
+        if anexos_pendentes:
+            storage = obter_storage_service()
+            if storage is None:
+                logger.error(
+                    "Exclusão de demanda_id=%s (gabinete_id=%s) abortada: existem %d anexo(s) "
+                    "pendente(s) e o storage não está configurado neste ambiente.",
+                    demanda.id, demanda.gabinete_id, len(anexos_pendentes),
+                )
+                raise FalhaExclusaoAnexoError(MENSAGEM_FALHA_EXCLUSAO_ANEXO)
+
+            # Derruba e comita ANTES de qualquer chamada ao R2 — ver
+            # docstring acima. A partir deste commit, nenhuma leitura
+            # concorrente volta a considerar estes anexos disponíveis.
+            for anexo in anexos_pendentes:
+                anexo.arquivo_disponivel = False
+            db.commit()
+
+            houve_falha = False
+            for anexo in anexos_pendentes:
+                if storage.excluir(anexo.storage_key):
+                    anexo.excluido_em = datetime.now()
+                else:
+                    houve_falha = True
+                    logger.error(
+                        "Falha ao excluir do R2 o anexo id=%s (demanda_id=%s, gabinete_id=%s) "
+                        "durante exclusão de demanda.",
+                        anexo.id, demanda.id, demanda.gabinete_id,
+                    )
+
+            if houve_falha:
+                # Persiste só as marcações de sucesso já aplicadas acima
+                # (excluido_em dos que confirmaram saída do R2) — nunca
+                # a Demanda, nunca o HistoricoDemanda, nunca o
+                # DemandaAnexo que falhou. A demanda continua existindo
+                # e disponível para uma nova tentativa de exclusão.
+                db.commit()
+                raise FalhaExclusaoAnexoError(MENSAGEM_FALHA_EXCLUSAO_ANEXO)
+
         AgendaService.excluir_compromisso_da_demanda(db, demanda.gabinete_id, demanda.id)
+        db.execute(delete(DemandaAnexo).where(DemandaAnexo.demanda_id == demanda.id))
+        db.execute(delete(HistoricoDemanda).where(HistoricoDemanda.demanda_id == demanda.id))
+        # Uma demanda de origem pública sempre tem uma SubmissaoCidadao
+        # apontando para ela (trava de idempotência do envio — ver
+        # Prompt 2.1); sem isto, a FK submissoes_cidadao_demanda_id_fkey
+        # impede o DELETE de demandas abaixo. Depois que a demanda em si
+        # vai ser apagada, a linha de idempotência não tem mais nenhuma
+        # finalidade (o token já cumpriu seu papel no momento do envio).
+        db.execute(delete(SubmissaoCidadao).where(SubmissaoCidadao.demanda_id == demanda.id))
         db.delete(demanda)
         db.commit()
 

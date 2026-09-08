@@ -15,14 +15,19 @@ from app.models.categoria import Categoria
 from app.models.subcategoria import Subcategoria
 from app.services.agenda_service import AgendaService
 from app.services.categoria_service import CategoriaService
+from app.services.demanda_anexo_service import DemandaAnexoService
 from app.services.demanda_csv_service import DemandaCsvService
 from app.services.demanda_service import (
     PRIORIDADE_OPCOES,
     STATUS_OPCOES,
     DemandaService,
+    FalhaExclusaoAnexoError,
 )
 from app.services.eleitor_service import EleitorService
+from app.services.historico_demanda_service import HistoricoDemandaService
+from app.services.storage_service import StorageError, obter_storage_service
 from app.services.subcategoria_service import SubcategoriaService
+from app.services.whatsapp_link_service import WhatsappLinkService
 
 router = APIRouter(prefix="/demandas", tags=["Demandas"])
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -78,11 +83,16 @@ def listar(
     request: Request,
     pesquisa: str = "",
     pagina: int = 1,
+    origem: str = "",
     db: Session = Depends(get_db),
     contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
+    # origem só é aceita se for exatamente um dos dois valores reais do
+    # campo — qualquer outra coisa na query string (adivinhada,
+    # digitada errado) é tratada como "sem filtro", nunca como um erro.
+    origem_filtro = origem if origem in ("INTERNA", "PUBLICA") else ""
     demandas, pagina_atual, total_paginas = DemandaService.listar(
-        db, contexto.gabinete_id, pesquisa, pagina
+        db, contexto.gabinete_id, pesquisa, pagina, origem=origem_filtro or None
     )
     resposta = templates.TemplateResponse(
         request=request,
@@ -93,6 +103,7 @@ def listar(
             "pesquisa": pesquisa,
             "pagina_atual": pagina_atual,
             "total_paginas": total_paginas,
+            "origem_filtro": origem_filtro,
             "flash_message": decodificar_flash(request.cookies.get("flash_message")),
             "flash_category": request.cookies.get("flash_category", "warning"),
         },
@@ -193,6 +204,7 @@ def criar(
             responsavel,
             prazo,
             observacoes_internas,
+            usuario_id=contexto.usuario.id,
         )
     except ValueError as error:
         demanda_preenchida = SimpleNamespace(
@@ -263,6 +275,27 @@ def visualizar(
         else None
     )
     compromisso_retorno = AgendaService.obter_por_demanda(db, contexto.gabinete_id, demanda.id)
+    # listar_todos_por_demanda_do_gabinete (e não listar_por_demanda):
+    # inclui também anexos já indisponíveis, para o template poder
+    # mostrar "Arquivo indisponível" em vez de simplesmente omitir o
+    # anexo sem explicação — nunca usado para gerar link, isso continua
+    # sendo só de abrir_anexo. Filtra por gabinete_id E demanda_id — a
+    # terceira validação (a própria demanda pertence a este gabinete) já
+    # aconteceu acima, em DemandaService.obter_por_id.
+    anexos = DemandaAnexoService.listar_todos_por_demanda_do_gabinete(
+        db, contexto.gabinete_id, demanda.id
+    )
+    historico = HistoricoDemandaService.listar_por_demanda(db, contexto.gabinete_id, demanda.id)
+
+    whatsapp_link = None
+    telefone_whatsapp_exibicao = None
+    if eleitor is not None:
+        telefone_whatsapp_exibicao = eleitor.whatsapp or eleitor.telefone
+        mensagem = WhatsappLinkService.montar_mensagem_demanda(
+            eleitor.nome, contexto.gabinete.nome, demanda.id, demanda.titulo, demanda.status
+        )
+        whatsapp_link = WhatsappLinkService.gerar_link(telefone_whatsapp_exibicao, mensagem)
+
     return templates.TemplateResponse(
         request=request,
         name="demandas/visualizar.html",
@@ -271,8 +304,46 @@ def visualizar(
             "demanda": demanda,
             "eleitor": eleitor,
             "compromisso_retorno": compromisso_retorno,
+            "anexos": anexos,
+            "historico": historico,
+            "whatsapp_link": whatsapp_link,
+            "telefone_whatsapp_exibicao": telefone_whatsapp_exibicao,
         },
     )
+
+
+@router.get("/{demanda_id}/anexos/{anexo_id}")
+def abrir_anexo(
+    demanda_id: int,
+    anexo_id: int,
+    db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
+):
+    # Dupla checagem de propósito (nunca confiar só no anexo_id): tanto a
+    # demanda quanto o anexo precisam pertencer ao gabinete autenticado, e
+    # o anexo precisa mesmo pertencer a ESTA demanda — nenhuma URL
+    # temporária é gerada antes dessas três checagens passarem. Ver
+    # Prompt 3, seção 14 (isolamento multi-tenant) e 16 (autorização antes
+    # da geração da URL).
+    demanda = DemandaService.obter_por_id(db, contexto.gabinete_id, demanda_id)
+    anexo = DemandaAnexoService.obter_por_id(db, contexto.gabinete_id, anexo_id)
+    if (
+        demanda is None
+        or anexo is None
+        or anexo.demanda_id != demanda.id
+        or not anexo.arquivo_disponivel
+    ):
+        return flash_message("Anexo não encontrado.")
+
+    storage = obter_storage_service()
+    if storage is None:
+        return flash_message("O armazenamento de fotos não está configurado neste ambiente.")
+
+    try:
+        url = storage.gerar_url_temporaria(anexo.storage_key)
+    except StorageError:
+        return flash_message("Não foi possível abrir o anexo. Tente novamente.")
+    return RedirectResponse(url, status_code=302)
 
 
 @router.get("/{demanda_id}/editar", response_class=HTMLResponse)
@@ -353,6 +424,7 @@ def atualizar(
             responsavel,
             prazo,
             observacoes_internas,
+            usuario_id=contexto.usuario.id,
         )
     except ValueError as error:
         demanda_preenchida = SimpleNamespace(
@@ -410,14 +482,50 @@ def atualizar(
     return flash_message("Demanda atualizada.", "success")
 
 
+@router.get("/{demanda_id}/excluir", response_class=HTMLResponse)
+def confirmar_exclusao(
+    request: Request,
+    demanda_id: int,
+    db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
+):
+    # GET nunca exclui — só mostra a tela de confirmação. A exclusão de
+    # fato só acontece no POST abaixo, depois que o usuário confirma
+    # explicitamente ali.
+    demanda = DemandaService.obter_por_id(db, contexto.gabinete_id, demanda_id)
+    if demanda is None:
+        return flash_message("Demanda não encontrada.")
+    quantidade_anexos = len(
+        DemandaAnexoService.listar_por_demanda(db, contexto.gabinete_id, demanda.id)
+    )
+    return templates.TemplateResponse(
+        request=request,
+        name="demandas/excluir_confirmar.html",
+        context={
+            "titulo": "Excluir demanda",
+            "demanda": demanda,
+            "quantidade_anexos": quantidade_anexos,
+        },
+    )
+
+
 @router.post("/{demanda_id}/excluir")
 def excluir(
     demanda_id: int,
     db: Session = Depends(get_db),
     contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
+    # contexto (obter_contexto_atual) já garante autenticação + vínculo
+    # ativo com o gabinete; obter_por_id garante que a demanda pertence a
+    # ESTE gabinete — nunca confia só no demanda_id da URL. A partir daí
+    # toda a decisão (o que apagar do R2, o que apagar do banco, em que
+    # ordem) é responsabilidade centralizada de DemandaService.excluir —
+    # nenhuma lógica de storage/R2 aqui no controller.
     demanda = DemandaService.obter_por_id(db, contexto.gabinete_id, demanda_id)
     if demanda is None:
         return flash_message("Demanda não encontrada.")
-    DemandaService.excluir(db, demanda)
+    try:
+        DemandaService.excluir(db, demanda)
+    except FalhaExclusaoAnexoError as error:
+        return flash_message(str(error), "danger")
     return flash_message("Demanda excluída.", "success")

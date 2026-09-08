@@ -50,3 +50,11 @@ class Demanda(Base):
     observacoes_internas = Column(Text)
 
     ref_historico = Column(String(50))
+
+    # Origem da demanda: "INTERNA" (cadastrada por alguém do gabinete,
+    # sempre foi o único caso até agora) ou "PUBLICA" (futuro módulo de
+    # Atendimento ao Cidadão, /cidadao/<token> — ainda não implementado
+    # nesta fase). default="INTERNA" cobre todo INSERT que não informar o
+    # campo explicitamente — nenhuma chamada existente de
+    # DemandaService.criar precisa mudar por causa disso.
+    origem = Column(String(20), nullable=False, default="INTERNA")

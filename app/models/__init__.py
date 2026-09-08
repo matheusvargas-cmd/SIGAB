@@ -7,19 +7,25 @@
 from app.models.agenda import Agenda
 from app.models.categoria import Categoria
 from app.models.demanda import Demanda
+from app.models.demanda_anexo import DemandaAnexo
 from app.models.eleitor import Eleitor
 from app.models.gabinete import Gabinete
+from app.models.historico_demanda import HistoricoDemanda
 from app.models.membro_gabinete import MembroGabinete
 from app.models.subcategoria import Subcategoria
+from app.models.submissao_cidadao import SubmissaoCidadao
 from app.models.usuario import Usuario
 
 __all__ = [
     "Agenda",
     "Categoria",
     "Demanda",
+    "DemandaAnexo",
     "Eleitor",
     "Gabinete",
+    "HistoricoDemanda",
     "MembroGabinete",
     "Subcategoria",
+    "SubmissaoCidadao",
     "Usuario",
 ]

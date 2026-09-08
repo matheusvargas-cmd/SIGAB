@@ -214,6 +214,14 @@ class DemandaCsvService:
                         fechar_automaticamente=False,
                         eleitor_obrigatorio=False,
                         commit=False,
+                        # Import histórico em lote (datas antigas, sem
+                        # usuário associado) — um HistoricoDemanda datado
+                        # de "agora" para cada linha importada seria
+                        # enganoso (pareceria criada hoje) e geraria
+                        # milhares de linhas sem valor real. Preserva o
+                        # comportamento de antes do Prompt 4 (zero
+                        # histórico para esta rotina).
+                        registrar_historico=False,
                     )
 
                 resultado["importadas"] += 1

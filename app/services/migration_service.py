@@ -1,11 +1,19 @@
 import logging
+import secrets
 
-from sqlalchemy import inspect, text
+from sqlalchemy import inspect, select, text
 from sqlalchemy.orm import Session
 
 from app.core.database import engine
 
 logger = logging.getLogger(__name__)
+
+# Mesmo alfabeto de GabineteService (não importado — este método é o único
+# caminho de criação de Gabinete que roda fora de uma Session/request
+# normal, no boot do processo; mantém-se autossuficiente de propósito,
+# igual ao resto desta classe).
+_ALFABETO_TOKEN_PUBLICO = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+_TAMANHO_TOKEN_PUBLICO = 6
 
 
 class MigrationService:
@@ -412,7 +420,16 @@ class MigrationService:
         with Session(engine) as sessao:
             gabinete = sessao.query(Gabinete).order_by(Gabinete.id).first()
             if gabinete is None:
-                gabinete = Gabinete(nome="Gabinete Principal", ativo=True)
+                token = None
+                for _ in range(10):
+                    candidato = "".join(
+                        secrets.choice(_ALFABETO_TOKEN_PUBLICO)
+                        for _ in range(_TAMANHO_TOKEN_PUBLICO)
+                    )
+                    if sessao.scalar(select(Gabinete).where(Gabinete.public_token == candidato)) is None:
+                        token = candidato
+                        break
+                gabinete = Gabinete(nome="Gabinete Principal", ativo=True, public_token=token)
                 sessao.add(gabinete)
                 sessao.flush()
                 logger.info("Gabinete padrão '%s' criado para a instalação local.", gabinete.nome)

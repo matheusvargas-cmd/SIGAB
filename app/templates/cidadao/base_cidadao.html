@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang='pt-br'>
+<head>
+<meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'>
+<title>{{ titulo }} · Gabinete 360</title>
+<link rel='icon' type='image/x-icon' href='/static/img/favicon.ico'>
+<link rel='icon' type='image/png' sizes='32x32' href='/static/img/icone-32.png'>
+<link rel='icon' type='image/png' sizes='64x64' href='/static/img/icone-64.png'>
+<link rel='icon' type='image/png' sizes='128x128' href='/static/img/icone-128.png'>
+<link href='/static/css/bootstrap.min.css' rel='stylesheet'>
+<link href='/static/css/style.css' rel='stylesheet'>
+<style>
+    body.tela-cidadao {
+        min-height: 100vh;
+        background: linear-gradient(160deg, var(--c360-azul-principal), var(--c360-azul-principal-escuro));
+        padding: 1.5rem 1rem;
+    }
+    .cartao-cidadao {
+        width: 100%;
+        max-width: 640px;
+        margin: 0 auto;
+        background: var(--c360-branco);
+        border-radius: var(--c360-radius);
+        box-shadow: var(--c360-sombra-forte);
+        padding: 2rem 1.75rem;
+    }
+    .cartao-cidadao .logo-cidadao {
+        display: block;
+        margin: 0 auto 1.2rem;
+        max-width: 200px;
+        height: auto;
+    }
+    .cartao-cidadao h1 {
+        color: var(--c360-azul-principal);
+    }
+    .secao-cidadao {
+        border-top: 1px solid var(--c360-borda);
+        margin-top: 1.5rem;
+        padding-top: 1.25rem;
+    }
+    .secao-cidadao h2 {
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--c360-azul-principal);
+        margin-bottom: 1rem;
+    }
+</style>
+</head>
+<body class="tela-cidadao">
+<div class="cartao-cidadao">
+    <img src="/static/img/logo-horizontal.png" alt="Gabinete 360 — Gestão Inteligente de Gabinetes" class="logo-cidadao">
+    {% block conteudo_cidadao %}{% endblock %}
+</div>
+</body>
+</html>

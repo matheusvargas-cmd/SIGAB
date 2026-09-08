@@ -17,7 +17,7 @@
 <div class="alert alert-{{ flash_category }}" role="alert">{% if flash_category == 'success' %}✔ {% endif %}{{ flash_message }}</div>
 {% endif %}
 
-<form class="row g-2 mb-4" method="get" action="/demandas">
+<form class="row g-2 align-items-center mb-4" method="get" action="/demandas">
     <div class="col-sm-8 col-md-6">
         <label class="visually-hidden" for="pesquisa">Pesquisar demanda</label>
         <input class="form-control" id="pesquisa" name="pesquisa" value="{{ pesquisa }}" placeholder="Eleitor, título, categoria, status, responsável ou cidade">
@@ -25,6 +25,16 @@
     <div class="col-auto">
         <button class="btn btn-outline-primary" type="submit">Pesquisar</button>
         {% if pesquisa %}<a class="btn btn-outline-secondary" href="/demandas">Limpar</a>{% endif %}
+    </div>
+    <div class="col-auto ms-auto">
+        <div class="btn-group" role="group" aria-label="Filtrar por origem">
+            <a class="btn btn-sm {{ 'btn-secondary' if not origem_filtro else 'btn-outline-secondary' }}"
+               href="/demandas?pesquisa={{ pesquisa|urlencode }}">Todas</a>
+            <a class="btn btn-sm {{ 'btn-secondary' if origem_filtro == 'INTERNA' else 'btn-outline-secondary' }}"
+               href="/demandas?pesquisa={{ pesquisa|urlencode }}&origem=INTERNA">Internas</a>
+            <a class="btn btn-sm {{ 'btn-info' if origem_filtro == 'PUBLICA' else 'btn-outline-info' }}"
+               href="/demandas?pesquisa={{ pesquisa|urlencode }}&origem=PUBLICA">Públicas</a>
+        </div>
     </div>
 </form>
 
@@ -49,19 +59,21 @@
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0 tabela-fixa">
                 <colgroup>
-                    <col style="width: 12%">
-                    <col style="width: 14%">
+                    <col style="width: 8%">
+                    <col style="width: 11%">
+                    <col style="width: 13%">
                     <col style="width: 15%">
                     <col style="width: 11%">
-                    <col style="width: 10%">
-                    <col style="width: 13%">
+                    <col style="width: 9%">
+                    <col style="width: 12%">
                     <col style="width: 6%">
-                    <col style="width: 19%">
+                    <col style="width: 15%">
                 </colgroup>
                 <thead>
                     <tr>
                         <th class="ps-3 text-nowrap">Prioridade</th>
                         <th>Status</th>
+                        <th>Origem</th>
                         <th>Título</th>
                         <th>Eleitor</th>
                         <th>Categoria</th>
@@ -75,6 +87,13 @@
                     <tr>
                         <td class="ps-3"><span class="badge {{ prioridade_classes.get(demanda.prioridade, 'text-bg-secondary') }}">{{ demanda.prioridade }}</span></td>
                         <td><span class="badge {{ status_classes.get(demanda.status, 'text-bg-secondary') }}">{{ demanda.status }}</span></td>
+                        <td>
+                            {% if demanda.origem == 'PUBLICA' %}
+                            <span class="badge text-bg-info text-dark" title="Registrada pelo atendimento ao cidadão">PÚBLICA</span>
+                            {% else %}
+                            <span class="badge text-bg-light text-dark border">INTERNA</span>
+                            {% endif %}
+                        </td>
                         <td>{{ demanda.titulo }}</td>
                         <td>{{ demanda.eleitor.nome if demanda.eleitor else '-' }}</td>
                         <td>{{ demanda.categoria or '-' }}</td>
@@ -84,14 +103,12 @@
                             <div class="acoes-compactas">
                                 <a class="btn btn-sm btn-outline-secondary" href="/demandas/{{ demanda.id }}">Visualizar</a>
                                 <a class="btn btn-sm btn-outline-primary" href="/demandas/{{ demanda.id }}/editar">Editar</a>
-                                <form class="d-inline" method="post" action="/demandas/{{ demanda.id }}/excluir" onsubmit="return confirm('Confirma a exclusão desta demanda?');">
-                                    <button class="btn btn-sm btn-outline-danger" type="submit">Excluir</button>
-                                </form>
+                                <a class="btn btn-sm btn-outline-danger" href="/demandas/{{ demanda.id }}/excluir">Excluir</a>
                             </div>
                         </td>
                     </tr>
                     {% else %}
-                    <tr><td class="text-center text-muted py-4" colspan="8">Nenhuma demanda encontrada.</td></tr>
+                    <tr><td class="text-center text-muted py-4" colspan="9">Nenhuma demanda encontrada.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
@@ -99,5 +116,5 @@
     </div>
 </div>
 
-{{ paginacao(pagina_atual, total_paginas, '/demandas', pesquisa, 'Paginação de demandas') }}
+{{ paginacao(pagina_atual, total_paginas, '/demandas', pesquisa, 'Paginação de demandas', ('&origem=' ~ origem_filtro) if origem_filtro else '') }}
 {% endblock %}

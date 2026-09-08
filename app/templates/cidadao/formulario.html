@@ -1,0 +1,200 @@
+{% extends 'cidadao/base_cidadao.html' %}
+
+{% block conteudo_cidadao %}
+<h1 class="h5 text-center mb-1">Solicite atendimento</h1>
+<p class="text-center text-muted small mb-4">{{ gabinete.nome }}</p>
+<p class="text-muted small text-center mb-4">
+    Preencha os dados abaixo para registrar sua solicitação. Nossa equipe vai analisar e dar retorno.
+</p>
+
+{% if erro %}
+<div class="alert alert-danger py-2 small" role="alert">{{ erro }}</div>
+{% endif %}
+
+<form method="post" action="/cidadao/{{ gabinete.public_token }}" id="form-cidadao" enctype="multipart/form-data" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="submissao_token" value="{{ submissao_token }}">
+
+    <div class="secao-cidadao" style="border-top: none; margin-top: 0; padding-top: 0;">
+        <h2>Seus dados</h2>
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label" for="nome">Nome completo *</label>
+                <input class="form-control" id="nome" name="nome" value="{{ dados.nome or '' }}" required autofocus>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="cpf">CPF *</label>
+                <input class="form-control" id="cpf" name="cpf" value="{{ dados.cpf or '' }}" inputmode="numeric" placeholder="000.000.000-00" required>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="whatsapp">WhatsApp *</label>
+                <input class="form-control" id="whatsapp" name="whatsapp" value="{{ dados.whatsapp or '' }}" inputmode="tel" placeholder="(00) 00000-0000" required>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="telefone">Telefone</label>
+                <input class="form-control" id="telefone" name="telefone" value="{{ dados.telefone or '' }}" inputmode="tel">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="email">E-mail</label>
+                <input class="form-control" type="email" id="email" name="email" value="{{ dados.email or '' }}">
+            </div>
+        </div>
+    </div>
+
+    <div class="secao-cidadao">
+        <h2>Endereço (opcional)</h2>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label" for="cep">CEP</label>
+                <input class="form-control" id="cep" name="cep" value="{{ dados.cep or '' }}" inputmode="numeric">
+            </div>
+            <div class="col-md-8">
+                <label class="form-label" for="logradouro">Logradouro</label>
+                <input class="form-control" id="logradouro" name="logradouro" value="{{ dados.logradouro or '' }}">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="numero">Número</label>
+                <input class="form-control" id="numero" name="numero" value="{{ dados.numero or '' }}">
+            </div>
+            <div class="col-md-8">
+                <label class="form-label" for="complemento">Complemento</label>
+                <input class="form-control" id="complemento" name="complemento" value="{{ dados.complemento or '' }}">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="bairro">Bairro</label>
+                <input class="form-control" id="bairro" name="bairro" value="{{ dados.bairro or '' }}">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="cidade">Cidade</label>
+                <input class="form-control" id="cidade" name="cidade" value="{{ dados.cidade or '' }}">
+            </div>
+        </div>
+    </div>
+
+    <div class="secao-cidadao">
+        <h2>Sua solicitação</h2>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label" for="categoria_id">Categoria *</label>
+                <select class="form-select" id="categoria_id" name="categoria_id" required>
+                    <option value="">Selecione...</option>
+                    {% for categoria in categorias %}
+                    <option value="{{ categoria.id }}" {% if dados.categoria_id == categoria.id|string %}selected{% endif %}>{{ categoria.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="subcategoria_id">Subcategoria</label>
+                <select class="form-select" id="subcategoria_id" name="subcategoria_id">
+                    <option value="">Selecione...</option>
+                </select>
+            </div>
+            <div class="col-12">
+                <label class="form-label" for="titulo">Título/resumo *</label>
+                <input class="form-control" id="titulo" name="titulo" value="{{ dados.titulo or '' }}" maxlength="150" required>
+            </div>
+            <div class="col-12">
+                <label class="form-label" for="descricao">Descrição *</label>
+                <textarea class="form-control" id="descricao" name="descricao" rows="4" required>{{ dados.descricao or '' }}</textarea>
+            </div>
+            <div class="col-12">
+                <label class="form-label" for="fotos">Fotos (opcional)</label>
+                <input class="form-control" type="file" id="fotos" name="fotos" multiple
+                       accept="image/jpeg,image/png,image/webp">
+                <div class="form-text">
+                    Você pode enviar até 3 fotos. Máximo de 5 MB por foto.
+                </div>
+                <ul id="lista-fotos-selecionadas" class="list-unstyled small mt-2 mb-0"></ul>
+            </div>
+        </div>
+    </div>
+
+    <button class="btn btn-primary w-100 mt-4" type="submit" id="botao-enviar">Enviar solicitação</button>
+</form>
+
+<script id="dados-subcategorias" type="application/json">
+{{ subcategorias_json | safe }}
+</script>
+<script>
+(function () {
+    var subcategoriasPorCategoria = JSON.parse(document.getElementById('dados-subcategorias').textContent);
+    var selectCategoria = document.getElementById('categoria_id');
+    var selectSubcategoria = document.getElementById('subcategoria_id');
+    var subcategoriaSelecionadaInicial = "{{ dados.subcategoria_id or '' }}";
+
+    function atualizarSubcategorias() {
+        var categoriaId = selectCategoria.value;
+        var opcoes = subcategoriasPorCategoria[categoriaId] || [];
+        selectSubcategoria.innerHTML = '<option value="">Selecione...</option>';
+        opcoes.forEach(function (subcategoria) {
+            var opcao = document.createElement('option');
+            opcao.value = subcategoria.id;
+            opcao.textContent = subcategoria.nome;
+            if (String(subcategoria.id) === subcategoriaSelecionadaInicial) {
+                opcao.selected = true;
+            }
+            selectSubcategoria.appendChild(opcao);
+        });
+    }
+
+    selectCategoria.addEventListener('change', atualizarSubcategorias);
+    if (selectCategoria.value) {
+        atualizarSubcategorias();
+    }
+
+    // Evita duplo envio por duplo clique — o formulário ainda é reenviado
+    // normalmente (não bloqueia o submit), só impede um segundo clique no
+    // mesmo botão enquanto a primeira requisição está em voo.
+    document.getElementById('form-cidadao').addEventListener('submit', function () {
+        var botao = document.getElementById('botao-enviar');
+        botao.disabled = true;
+        botao.textContent = 'Enviando...';
+    });
+})();
+
+(function () {
+    // Só conveniência visual (mostrar nome/tamanho das fotos escolhidas e
+    // permitir remover uma antes de enviar) — quem decide de verdade
+    // quantidade/tamanho/formato é sempre o servidor; nada aqui bloqueia
+    // ou substitui essa checagem.
+    var inputFotos = document.getElementById('fotos');
+    var lista = document.getElementById('lista-fotos-selecionadas');
+
+    function formatarTamanho(bytes) {
+        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function renderizarFotos() {
+        lista.innerHTML = '';
+        Array.prototype.forEach.call(inputFotos.files, function (arquivo, indice) {
+            var item = document.createElement('li');
+            item.className = 'd-flex justify-content-between align-items-center';
+
+            var texto = document.createElement('span');
+            texto.textContent = arquivo.name + ' (' + formatarTamanho(arquivo.size) + ')';
+
+            var remover = document.createElement('button');
+            remover.type = 'button';
+            remover.className = 'btn btn-sm btn-link text-danger p-0 ms-2';
+            remover.textContent = 'remover';
+            remover.addEventListener('click', function () {
+                var transferencia = new DataTransfer();
+                Array.prototype.forEach.call(inputFotos.files, function (outroArquivo, outroIndice) {
+                    if (outroIndice !== indice) {
+                        transferencia.items.add(outroArquivo);
+                    }
+                });
+                inputFotos.files = transferencia.files;
+                renderizarFotos();
+            });
+
+            item.appendChild(texto);
+            item.appendChild(remover);
+            lista.appendChild(item);
+        });
+    }
+
+    inputFotos.addEventListener('change', renderizarFotos);
+})();
+</script>
+{% endblock %}

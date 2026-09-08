@@ -1,3 +1,4 @@
+import secrets
 from datetime import date
 
 from sqlalchemy import func, select
@@ -15,6 +16,12 @@ from app.services.demanda_service import CATEGORIAS
 
 NOME_MINIMO_CARACTERES = 2
 SENHA_MINIMO_CARACTERES = 8
+
+# Sem 0/O/1/I/L (visualmente ambíguos) — o token é lido/digitado por
+# pessoas (URL do futuro módulo de Atendimento ao Cidadão), não só por
+# máquina. 32 caracteres ^ 6 posições ≈ 1 bilhão de combinações.
+ALFABETO_TOKEN_PUBLICO = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+TAMANHO_TOKEN_PUBLICO = 6
 
 
 class GabineteService:
@@ -69,6 +76,20 @@ class GabineteService:
         return db.get(Gabinete, gabinete_id)
 
     @staticmethod
+    def obter_por_public_token(db: Session, public_token: str) -> Gabinete | None:
+        """Único ponto de entrada do módulo público (/cidadao/<token>) —
+        nunca aceitar gabinete_id vindo do cliente; o token é a única
+        fonte de verdade sobre qual gabinete está sendo atendido. Não
+        filtra por `ativo` aqui de propósito: o controller decide o que
+        fazer com um gabinete inativo (mesma mensagem genérica de "link
+        indisponível" que um token inexistente, para não revelar qual dos
+        dois é o caso)."""
+        token_normalizado = (public_token or "").strip().upper()
+        if not token_normalizado:
+            return None
+        return db.scalar(select(Gabinete).where(Gabinete.public_token == token_normalizado))
+
+    @staticmethod
     def contadores(db: Session, gabinete_id: int) -> dict:
         """Só contagens agregadas — nunca uma consulta que devolva linha de
         eleitor/demanda/agenda em si. É o que mantém o painel do SUPERADMIN
@@ -93,6 +114,21 @@ class GabineteService:
             )
             or 0,
         }
+
+    @staticmethod
+    def _gerar_public_token_unico(db: Session) -> str:
+        """secrets.choice (não random.choice) — precisa ser
+        criptograficamente imprevisível, é a única credencial da URL
+        pública do gabinete. Colisão é praticamente impossível (~1 bilhão
+        de combinações), mas o laço confere unicidade no banco mesmo
+        assim, nunca confia só na aleatoriedade."""
+        for _ in range(10):
+            token = "".join(
+                secrets.choice(ALFABETO_TOKEN_PUBLICO) for _ in range(TAMANHO_TOKEN_PUBLICO)
+            )
+            if db.scalar(select(Gabinete).where(Gabinete.public_token == token)) is None:
+                return token
+        raise RuntimeError("Não foi possível gerar um public_token único.")
 
     @staticmethod
     def criar_gabinete_com_admin(
@@ -135,7 +171,10 @@ class GabineteService:
 
         try:
             gabinete = Gabinete(
-                nome=nome_gabinete_normalizado, responsavel=responsavel_normalizado, ativo=True
+                nome=nome_gabinete_normalizado,
+                responsavel=responsavel_normalizado,
+                ativo=True,
+                public_token=GabineteService._gerar_public_token_unico(db),
             )
             db.add(gabinete)
             db.flush()

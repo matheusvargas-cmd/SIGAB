@@ -15,6 +15,7 @@ from app.services.migration_service import MigrationService
 
 from app.modules.agenda.controller import router as agenda_router
 from app.modules.auth.controller import router as auth_router
+from app.modules.cidadao.controller import router as cidadao_router
 from app.modules.configuracoes.controller import router as configuracoes_router
 from app.modules.dashboard.controller import router as dashboard_router
 from app.modules.demandas.controller import router as demandas_router
@@ -155,3 +156,4 @@ app.include_router(gabinete_router)
 app.include_router(superadmin_router)
 app.include_router(superadmin_usuarios_router)
 app.include_router(jobs_router)
+app.include_router(cidadao_router)
