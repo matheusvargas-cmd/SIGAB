@@ -66,6 +66,14 @@
                 Relatórios
             </a>
         </li>
+        {% if contexto %}
+        <li>
+            <a href="/configuracoes/gabinete/link-publico" class="{% if caminho.startswith('/configuracoes/gabinete/link-publico') %}ativo{% endif %}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6" height="6" rx="1"></rect><rect x="14" y="4" width="6" height="6" rx="1"></rect><rect x="4" y="14" width="6" height="6" rx="1"></rect><path d="M14 14h3v3h-3zM20 14v3M17 20h3"></path></svg>
+                Link público
+            </a>
+        </li>
+        {% endif %}
         {% if contexto and contexto.perfil == 'ADMIN' %}
         <li>
             <a href="#" class="sidebar-toggle {% if caminho.startswith('/configuracoes') %}ativo aberto{% endif %}" data-sidebar-toggle="cadastros">
@@ -82,9 +90,6 @@
                 </li>
                 <li>
                     <a href="/configuracoes/gabinete" class="{% if caminho == '/configuracoes/gabinete' %}ativo{% endif %}">Gabinete</a>
-                </li>
-                <li>
-                    <a href="/configuracoes/gabinete/link-publico" class="{% if caminho.startswith('/configuracoes/gabinete/link-publico') %}ativo{% endif %}">Link público</a>
                 </li>
             </ul>
         </li>

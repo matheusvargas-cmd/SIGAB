@@ -96,6 +96,87 @@ class DemandaService:
     sempre o gabinete_id do ContextoSessao autenticado."""
 
     @staticmethod
+    def _consulta_filtrada(
+        gabinete_id: int,
+        pesquisa: str | None,
+        origem: str | None,
+        status: str | None,
+        atrasada: bool,
+    ):
+        """Monta a base de `select(Demanda)` com todos os filtros da tela
+        de demandas aplicados (gabinete, origem, status, atrasada,
+        pesquisa) — sem ORDER BY nem LIMIT/OFFSET, que cada chamador
+        decide por conta própria. Único lugar onde esses filtros são
+        escritos: tanto listar() (paginado) quanto
+        listar_todos_filtrados() (impressão, sem paginação) reaproveitam
+        exatamente a mesma lógica, nunca duas versões que podem divergir
+        silenciosamente. outerjoin (não join): uma demanda sem eleitor
+        vinculado (eleitor_id nulo — CSV real do Meu Mandato permite isso)
+        precisa continuar aparecendo na listagem normal, não só quando tem
+        eleitor."""
+        consulta = (
+            select(Demanda)
+            .where(Demanda.gabinete_id == gabinete_id)
+            .outerjoin(Eleitor, Demanda.eleitor_id == Eleitor.id)
+            .options(joinedload(Demanda.eleitor))
+        )
+
+        # Filtro opcional por origem (INTERNA/PUBLICA) — sempre no banco,
+        # nunca em Python: evita trazer registros a mais só para
+        # descartá-los depois, e mantém total/paginação coerentes com o
+        # que de fato foi filtrado.
+        if origem:
+            consulta = consulta.where(Demanda.origem == origem)
+
+        if status and status in STATUS_OPCOES:
+            consulta = consulta.where(Demanda.status == status)
+
+        # "Atrasada" nunca é um status gravado — é sempre calculado na hora
+        # (prazo vencido + status ainda não finalizado), mesma regra de
+        # contar_atrasadas()/listar_atrasadas() abaixo. Filtrar assim,
+        # sempre no banco, é o que permite este filtro conviver com
+        # paginação/ordenação sem duas fontes de verdade divergentes.
+        if atrasada:
+            hoje = date.today()
+            consulta = consulta.where(
+                and_(
+                    Demanda.prazo.isnot(None),
+                    Demanda.prazo < hoje,
+                    Demanda.status.notin_(STATUS_FINALIZADOS),
+                )
+            )
+
+        if pesquisa and pesquisa.strip():
+            termo = f"%{normalizar(pesquisa.strip())}%"
+            consulta = consulta.where(
+                or_(
+                    func.normalizar(Eleitor.nome).like(termo),
+                    func.normalizar(Demanda.titulo).like(termo),
+                    func.normalizar(Demanda.categoria).like(termo),
+                    func.normalizar(Demanda.status).like(termo),
+                    func.normalizar(Demanda.responsavel).like(termo),
+                    func.normalizar(Eleitor.cidade).like(termo),
+                )
+            )
+
+        return consulta
+
+    @staticmethod
+    def _ordenar(consulta, ordenar_por: str | None, ordenar_direcao: str):
+        # Ordenação por cabeçalho clicável (tela de demandas) — só as
+        # colunas em COLUNAS_ORDENAVEIS, nunca uma coluna arbitrária vinda
+        # da query string. Sem ordenar_por (ou valor não reconhecido),
+        # mantém o critério padrão de sempre: prioridade, depois abertura.
+        coluna_ordenacao = COLUNAS_ORDENAVEIS.get(ordenar_por or "")
+        if coluna_ordenacao is not None:
+            direcao = coluna_ordenacao.desc() if ordenar_direcao == "desc" else coluna_ordenacao.asc()
+            # Desempate por id: sem isso, duas linhas com o mesmo valor na
+            # coluna ordenada (ex.: mesmo prazo) poderiam mudar de posição
+            # entre páginas/execuções diferentes da mesma consulta.
+            return consulta.order_by(direcao, Demanda.id.desc())
+        return consulta.order_by(_ORDEM_PRIORIDADE, Demanda.data_abertura)
+
+    @staticmethod
     def listar(
         db: Session,
         gabinete_id: int,
@@ -107,83 +188,38 @@ class DemandaService:
         ordenar_por: str | None = None,
         ordenar_direcao: str = "asc",
     ) -> tuple[list[Demanda], int, int]:
-        # outerjoin (não join): uma demanda sem eleitor vinculado
-        # (eleitor_id nulo — CSV real do Meu Mandato permite isso) precisa
-        # continuar aparecendo na listagem normal, não só quando tem eleitor.
-        consulta = (
-            select(Demanda)
-            .where(Demanda.gabinete_id == gabinete_id)
-            .outerjoin(Eleitor, Demanda.eleitor_id == Eleitor.id)
-            .options(joinedload(Demanda.eleitor))
-        )
-        consulta_total = (
-            select(func.count())
-            .select_from(Demanda)
-            .where(Demanda.gabinete_id == gabinete_id)
-            .outerjoin(Eleitor, Demanda.eleitor_id == Eleitor.id)
-        )
-
-        # Filtro opcional por origem (INTERNA/PUBLICA) — sempre no banco,
-        # nunca em Python: evita trazer registros a mais só para
-        # descartá-los depois, e mantém a paginação (LIMIT/OFFSET abaixo)
-        # coerente com o total realmente filtrado.
-        if origem:
-            consulta = consulta.where(Demanda.origem == origem)
-            consulta_total = consulta_total.where(Demanda.origem == origem)
-
-        if status and status in STATUS_OPCOES:
-            consulta = consulta.where(Demanda.status == status)
-            consulta_total = consulta_total.where(Demanda.status == status)
-
-        # "Atrasada" nunca é um status gravado — é sempre calculado na hora
-        # (prazo vencido + status ainda não finalizado), mesma regra de
-        # contar_atrasadas()/listar_atrasadas() abaixo. Filtrar assim,
-        # sempre no banco, é o que permite este filtro conviver com
-        # paginação/ordenação sem duas fontes de verdade divergentes.
-        if atrasada:
-            hoje = date.today()
-            filtro_atrasada = and_(
-                Demanda.prazo.isnot(None),
-                Demanda.prazo < hoje,
-                Demanda.status.notin_(STATUS_FINALIZADOS),
-            )
-            consulta = consulta.where(filtro_atrasada)
-            consulta_total = consulta_total.where(filtro_atrasada)
-
-        if pesquisa and pesquisa.strip():
-            termo = f"%{normalizar(pesquisa.strip())}%"
-            filtro = or_(
-                func.normalizar(Eleitor.nome).like(termo),
-                func.normalizar(Demanda.titulo).like(termo),
-                func.normalizar(Demanda.categoria).like(termo),
-                func.normalizar(Demanda.status).like(termo),
-                func.normalizar(Demanda.responsavel).like(termo),
-                func.normalizar(Eleitor.cidade).like(termo),
-            )
-            consulta = consulta.where(filtro)
-            consulta_total = consulta_total.where(filtro)
-
-        total_registros = db.scalar(consulta_total) or 0
+        consulta = DemandaService._consulta_filtrada(gabinete_id, pesquisa, origem, status, atrasada)
+        total_registros = db.scalar(
+            select(func.count()).select_from(consulta.with_only_columns(Demanda.id).subquery())
+        ) or 0
         total_paginas = max(1, ceil(total_registros / POR_PAGINA))
         pagina_atual = min(max(1, pagina), total_paginas)
 
-        # Ordenação por cabeçalho clicável (tela de demandas) — só as
-        # colunas em COLUNAS_ORDENAVEIS, nunca uma coluna arbitrária vinda
-        # da query string. Sem ordenar_por (ou valor não reconhecido),
-        # mantém o critério padrão de sempre: prioridade, depois abertura.
-        coluna_ordenacao = COLUNAS_ORDENAVEIS.get(ordenar_por or "")
-        if coluna_ordenacao is not None:
-            direcao = coluna_ordenacao.desc() if ordenar_direcao == "desc" else coluna_ordenacao.asc()
-            # Desempate por id: sem isso, duas linhas com o mesmo valor na
-            # coluna ordenada (ex.: mesmo prazo) poderiam mudar de posição
-            # entre páginas diferentes da mesma consulta.
-            consulta = consulta.order_by(direcao, Demanda.id.desc())
-        else:
-            consulta = consulta.order_by(_ORDEM_PRIORIDADE, Demanda.data_abertura)
-
+        consulta = DemandaService._ordenar(consulta, ordenar_por, ordenar_direcao)
         consulta = consulta.limit(POR_PAGINA).offset((pagina_atual - 1) * POR_PAGINA)
         demandas = list(db.scalars(consulta).unique().all())
         return demandas, pagina_atual, total_paginas
+
+    @staticmethod
+    def listar_todos_filtrados(
+        db: Session,
+        gabinete_id: int,
+        pesquisa: str | None = None,
+        origem: str | None = None,
+        status: str | None = None,
+        atrasada: bool = False,
+        ordenar_por: str | None = None,
+        ordenar_direcao: str = "asc",
+    ) -> list[Demanda]:
+        """Mesmos filtros e mesma ordenação de listar() (reaproveita
+        _consulta_filtrada/_ordenar — nunca uma segunda implementação que
+        possa divergir), mas sem LIMIT/OFFSET: usado exclusivamente pela
+        impressão do relatório (app/modules/demandas/controller.py), que
+        precisa do conjunto completo que corresponde ao filtro, nunca
+        apenas a página exibida na tela."""
+        consulta = DemandaService._consulta_filtrada(gabinete_id, pesquisa, origem, status, atrasada)
+        consulta = DemandaService._ordenar(consulta, ordenar_por, ordenar_direcao)
+        return list(db.scalars(consulta).unique().all())
 
     @staticmethod
     def calcular_atraso(demanda: Demanda, hoje: date | None = None) -> int | None:

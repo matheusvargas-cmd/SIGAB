@@ -46,6 +46,7 @@
     <div class="col-auto">
         <button class="btn btn-outline-primary" type="submit">Filtrar</button>
         {% if pesquisa or status_filtro or atrasada_filtro %}<a class="btn btn-outline-secondary" href="/demandas{% if origem_filtro %}?origem={{ origem_filtro }}{% endif %}">Limpar filtros</a>{% endif %}
+        <a class="btn btn-outline-secondary" href="/demandas/imprimir?pesquisa={{ pesquisa|urlencode }}{{ filtros_qs }}{% if ordenar_por %}&ordenar_por={{ ordenar_por }}&ordenar_direcao={{ ordenar_direcao }}{% endif %}" target="_blank" rel="noopener">Imprimir relatório</a>
     </div>
     <div class="col-auto ms-auto">
         <div class="btn-group" role="group" aria-label="Filtrar por origem">
@@ -81,18 +82,18 @@
 <div class="card">
     <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0 tabela-fixa">
+            <table class="table table-hover align-middle mb-0 tabela-fixa tabela-demandas">
                 <colgroup>
-                    <col style="width: 7%">
+                    <col style="width: 8%">
                     <col style="width: 10%">
                     <col style="width: 8%">
-                    <col style="width: 14%">
+                    <col style="width: 16%">
                     <col style="width: 12%">
                     <col style="width: 9%">
-                    <col style="width: 9%">
-                    <col style="width: 9%">
+                    <col style="width: 8%">
+                    <col style="width: 8%">
                     <col style="width: 6%">
-                    <col style="width: 16%">
+                    <col style="width: 15%">
                 </colgroup>
                 <thead>
                     <tr>

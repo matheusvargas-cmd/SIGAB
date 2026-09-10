@@ -1,5 +1,5 @@
 import json
-from datetime import date
+from datetime import date, datetime
 from types import SimpleNamespace
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
@@ -301,6 +301,72 @@ def criar(
             status_code=400,
         )
     return flash_message("Demanda cadastrada.", "success")
+
+
+def _descricao_filtro(
+    pesquisa: str, origem_filtro: str, status_filtro: str, atrasada: bool
+) -> str:
+    """Texto legível do filtro aplicado, exibido no cabeçalho do relatório
+    impresso (app/templates/demandas/imprimir.html) — nunca a query string
+    crua."""
+    partes = []
+    if origem_filtro == "INTERNA":
+        partes.append("origem: Interna")
+    elif origem_filtro == "PUBLICA":
+        partes.append("origem: Pública")
+    if status_filtro:
+        partes.append(f"status: {status_filtro}")
+    if atrasada:
+        partes.append("apenas demandas atrasadas")
+    if pesquisa.strip():
+        partes.append(f'pesquisa: "{pesquisa.strip()}"')
+    return "; ".join(partes) if partes else "Todas as demandas"
+
+
+@router.get("/imprimir", response_class=HTMLResponse)
+def imprimir(
+    request: Request,
+    pesquisa: str = "",
+    origem: str = "",
+    status: str = "",
+    atrasada: bool = False,
+    ordenar_por: str = "",
+    ordenar_direcao: str = "asc",
+    db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
+):
+    # Mesmos filtros/ordenação de listar() acima, aceitos e validados da
+    # mesma forma — a única diferença é chamar
+    # DemandaService.listar_todos_filtrados (sem paginação) em vez de
+    # DemandaService.listar, para que a impressão contenha TODO o conjunto
+    # que corresponde ao filtro, nunca só a página exibida na tela.
+    origem_filtro = origem if origem in ("INTERNA", "PUBLICA") else ""
+    status_filtro = status if status in STATUS_OPCOES else ""
+    ordenar_direcao = "desc" if ordenar_direcao == "desc" else "asc"
+    hoje = date.today()
+    demandas = DemandaService.listar_todos_filtrados(
+        db,
+        contexto.gabinete_id,
+        pesquisa,
+        origem=origem_filtro or None,
+        status=status_filtro or None,
+        atrasada=atrasada,
+        ordenar_por=ordenar_por or None,
+        ordenar_direcao=ordenar_direcao,
+    )
+    for demanda in demandas:
+        demanda.dias_atraso = DemandaService.calcular_atraso(demanda, hoje)
+    return templates.TemplateResponse(
+        request=request,
+        name="demandas/imprimir.html",
+        context={
+            "titulo": "Imprimir demandas",
+            "demandas": demandas,
+            "total": len(demandas),
+            "gerado_em": datetime.now(),
+            "descricao_filtro": _descricao_filtro(pesquisa, origem_filtro, status_filtro, atrasada),
+        },
+    )
 
 
 @router.get("/{demanda_id}", response_class=HTMLResponse)

@@ -6,7 +6,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.core.config import TEMPLATES_DIR
-from app.core.contexto import ContextoSessao, exigir_perfil
+from app.core.contexto import ContextoSessao, exigir_perfil, obter_contexto_atual
 from app.core.database import get_db
 from app.core.flash import codificar_flash, decodificar_flash
 from app.services.gabinete_service import GabineteService
@@ -80,7 +80,16 @@ def atualizar(
 
 
 @router.get("/link-publico", response_class=HTMLResponse)
-def link_publico(request: Request, contexto: ContextoSessao = Depends(_exigir_admin)):
+def link_publico(request: Request, contexto: ContextoSessao = Depends(obter_contexto_atual)):
+    # Deliberadamente obter_contexto_atual (qualquer perfil autenticado do
+    # gabinete: ADMIN, VEREADOR ou ASSESSOR), não _exigir_admin — o link
+    # público é para uso/divulgação por toda a equipe, não uma
+    # configuração administrativa. contexto.gabinete já vem escopado ao
+    # gabinete do usuário autenticado (mesma revalidação de sempre em
+    # obter_contexto_atual), então isolamento multi-tenant é preservado:
+    # ninguém enxerga o link de um gabinete ao qual não pertence. Alterar
+    # o gabinete em si (inclusive o public_token) continua exclusivo do
+    # ADMIN via as rotas acima (visualizar/atualizar).
     url_publica = GabineteService.montar_url_publica(contexto.gabinete, str(request.base_url))
     return templates.TemplateResponse(
         request=request,
@@ -91,11 +100,11 @@ def link_publico(request: Request, contexto: ContextoSessao = Depends(_exigir_ad
 
 @router.get("/link-publico/qrcode.png")
 def link_publico_qrcode(
-    request: Request, baixar: bool = False, contexto: ContextoSessao = Depends(_exigir_admin)
+    request: Request, baixar: bool = False, contexto: ContextoSessao = Depends(obter_contexto_atual)
 ):
-    # Mesma trava de perfil da tela acima (_exigir_admin) — o QR Code em si
-    # não é secreto (o link já é público por definição), mas gerar a
-    # imagem ainda exige estar autenticado como ADMIN deste gabinete,
+    # Mesma autorização da tela acima (qualquer perfil autenticado do
+    # gabinete) — o QR Code não é secreto (o link já é público por
+    # definição), só precisa de sessão válida com gabinete selecionado,
     # nunca uma rota aberta. `baixar` só troca o Content-Disposition
     # (inline para exibir na própria tela, attachment para o botão
     # "Baixar PNG") — a imagem gerada é sempre a mesma.

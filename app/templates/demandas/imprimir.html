@@ -1,0 +1,59 @@
+{% extends 'shared/base.html' %}
+
+{% block conteudo %}
+<div class="d-flex justify-content-between align-items-center mb-4 no-print">
+    <h2 class="mb-0">Imprimir demandas</h2>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary" href="/demandas">Voltar</a>
+        <button class="btn btn-primary" type="button" onclick="window.print()">Imprimir</button>
+    </div>
+</div>
+
+<div class="d-none d-print-block mb-3">
+    <h4 class="mb-1">Relatório de demandas</h4>
+    <div class="small text-muted">Gerado em {{ gerado_em.strftime('%d/%m/%Y %H:%M') }}</div>
+    <div class="small text-muted">Filtro: {{ descricao_filtro }}</div>
+</div>
+
+<p class="text-muted no-print">Filtro: <strong>{{ descricao_filtro }}</strong></p>
+<p class="text-muted">Total: <strong>{{ total }}</strong> demanda{{ 's' if total != 1 else '' }}</p>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th class="ps-3">Protocolo</th>
+                        <th>Solicitação</th>
+                        <th>Título</th>
+                        <th>Eleitor</th>
+                        <th>Categoria</th>
+                        <th>Status</th>
+                        <th>Prioridade</th>
+                        <th>Prazo</th>
+                        <th class="pe-3">Atraso</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for demanda in demandas %}
+                    <tr>
+                        <td class="ps-3">#{{ demanda.id }}</td>
+                        <td>{{ demanda.data_solicitacao.strftime('%d/%m/%Y') if demanda.data_solicitacao else '-' }}</td>
+                        <td>{{ demanda.titulo }}</td>
+                        <td>{{ demanda.eleitor.nome if demanda.eleitor else '-' }}</td>
+                        <td>{{ demanda.categoria or '-' }}</td>
+                        <td>{{ demanda.status }}</td>
+                        <td>{{ demanda.prioridade }}</td>
+                        <td>{{ demanda.prazo.strftime('%d/%m/%Y') if demanda.prazo else '-' }}</td>
+                        <td class="pe-3">{{ (demanda.dias_atraso ~ ' dia' ~ ('s' if demanda.dias_atraso != 1 else '')) if demanda.dias_atraso else '-' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td class="text-center text-muted py-4" colspan="9">Nenhuma demanda encontrada para este filtro.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

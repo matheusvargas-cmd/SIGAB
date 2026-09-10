@@ -497,6 +497,23 @@ a.stat-card:hover {
   padding-right: 0.4rem;
 }
 
+/* Tabela de Demandas: cabeçalhos curtos (ex. "Prioridade") nunca devem
+   quebrar linha — quem quebra naturalmente quando precisa é o conteúdo
+   (título, eleitor), não o rótulo da coluna. min-width garante espaço
+   coerente para as 10 colunas; abaixo disso, .table-responsive (Bootstrap)
+   já cuida da rolagem horizontal em vez de comprimir tudo. */
+.tabela-demandas thead th {
+  white-space: nowrap;
+}
+
+.tabela-demandas {
+  min-width: 1180px;
+}
+
+.tabela-demandas .acoes-compactas {
+  gap: 6px;
+}
+
 .linha-passada {
   opacity: 1;
 }
