@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
@@ -10,6 +10,7 @@ from app.core.contexto import ContextoSessao, exigir_perfil
 from app.core.database import get_db
 from app.core.flash import codificar_flash, decodificar_flash
 from app.services.gabinete_service import GabineteService
+from app.services.qrcode_service import QrCodeService
 
 router = APIRouter(prefix="/configuracoes/gabinete", tags=["Cadastros"])
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -76,3 +77,33 @@ def atualizar(
             status_code=400,
         )
     return flash_message("Gabinete atualizado.", "success")
+
+
+@router.get("/link-publico", response_class=HTMLResponse)
+def link_publico(request: Request, contexto: ContextoSessao = Depends(_exigir_admin)):
+    url_publica = GabineteService.montar_url_publica(contexto.gabinete, str(request.base_url))
+    return templates.TemplateResponse(
+        request=request,
+        name="configuracoes/gabinete_link_publico.html",
+        context={"titulo": "Link público", "url_publica": url_publica},
+    )
+
+
+@router.get("/link-publico/qrcode.png")
+def link_publico_qrcode(
+    request: Request, baixar: bool = False, contexto: ContextoSessao = Depends(_exigir_admin)
+):
+    # Mesma trava de perfil da tela acima (_exigir_admin) — o QR Code em si
+    # não é secreto (o link já é público por definição), mas gerar a
+    # imagem ainda exige estar autenticado como ADMIN deste gabinete,
+    # nunca uma rota aberta. `baixar` só troca o Content-Disposition
+    # (inline para exibir na própria tela, attachment para o botão
+    # "Baixar PNG") — a imagem gerada é sempre a mesma.
+    url_publica = GabineteService.montar_url_publica(contexto.gabinete, str(request.base_url))
+    png = QrCodeService.gerar_png(url_publica)
+    disposicao = "attachment" if baixar else "inline"
+    return Response(
+        content=png,
+        media_type="image/png",
+        headers={"Content-Disposition": f'{disposicao}; filename="qrcode-atendimento-cidadao.png"'},
+    )

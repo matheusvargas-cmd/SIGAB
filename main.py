@@ -22,6 +22,7 @@ from app.modules.demandas.controller import router as demandas_router
 from app.modules.eleitores.controller import router as eleitores_router
 from app.modules.gabinete.controller import router as gabinete_router
 from app.modules.jobs.controller import router as jobs_router
+from app.modules.perfil.controller import router as perfil_router
 from app.modules.relatorios.controller import router as relatorios_router
 from app.modules.superadmin.controller import router as superadmin_router
 from app.modules.superadmin.usuarios_controller import router as superadmin_usuarios_router
@@ -49,6 +50,7 @@ if settings.is_sqlite:
     Base.metadata.create_all(bind=engine)
     MigrationService.atualizar_schema_eleitores()
     MigrationService.atualizar_schema_demandas()
+    MigrationService.adicionar_data_solicitacao_demandas()
     MigrationService.relaxar_eleitor_obrigatorio_demandas()
     MigrationService.adicionar_gabinete_id()
     MigrationService.atualizar_schema_agenda()
@@ -153,6 +155,7 @@ app.include_router(relatorios_router)
 app.include_router(configuracoes_router)
 app.include_router(usuarios_router)
 app.include_router(gabinete_router)
+app.include_router(perfil_router)
 app.include_router(superadmin_router)
 app.include_router(superadmin_usuarios_router)
 app.include_router(jobs_router)

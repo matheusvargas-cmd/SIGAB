@@ -3,7 +3,7 @@
 {% block conteudo %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="mb-0">{{ titulo }}</h2>
-    <a class="btn btn-outline-secondary" href="/demandas">Voltar</a>
+    <a class="btn btn-outline-secondary" href="{{ voltar_url or '/demandas' }}">Voltar</a>
 </div>
 
 {% if erro %}
@@ -14,6 +14,7 @@
 {% include 'shared/_busca_eleitor.html' %}
 {% else %}
 <form class="card" method="post" action="{% if demanda and demanda.id %}/demandas/{{ demanda.id }}/editar{% else %}/demandas/novo{% endif %}">
+    {% if voltar %}<input type="hidden" name="voltar" value="{{ voltar }}">{% endif %}
     <div class="card-body p-4">
         <div class="row g-3">
             <div class="col-12">
@@ -96,6 +97,12 @@
             <div class="col-md-6">
                 <label class="form-label" for="prazo">Prazo</label>
                 <input class="form-control" id="prazo" name="prazo" type="date" value="{{ demanda.prazo.isoformat() if demanda and demanda.prazo else '' }}">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="data_solicitacao">Data da solicitação</label>
+                <input class="form-control" id="data_solicitacao" name="data_solicitacao" type="date"
+                       value="{{ (demanda.data_solicitacao if demanda and demanda.data_solicitacao else hoje).isoformat() }}">
+                <div class="form-text">Data em que a demanda foi de fato solicitada — ajuste ao lançar uma demanda antiga.</div>
             </div>
             <div class="col-12">
                 <label class="form-label" for="observacoes_internas">Observações internas</label>

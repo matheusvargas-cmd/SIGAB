@@ -81,7 +81,10 @@
                     <a href="/configuracoes/usuarios" class="{% if caminho.startswith('/configuracoes/usuarios') %}ativo{% endif %}">Usuários</a>
                 </li>
                 <li>
-                    <a href="/configuracoes/gabinete" class="{% if caminho.startswith('/configuracoes/gabinete') %}ativo{% endif %}">Gabinete</a>
+                    <a href="/configuracoes/gabinete" class="{% if caminho == '/configuracoes/gabinete' %}ativo{% endif %}">Gabinete</a>
+                </li>
+                <li>
+                    <a href="/configuracoes/gabinete/link-publico" class="{% if caminho.startswith('/configuracoes/gabinete/link-publico') %}ativo{% endif %}">Link público</a>
                 </li>
             </ul>
         </li>
@@ -108,6 +111,7 @@
                     <div class="usuario-menu-nome">{{ contexto.usuario.nome }}</div>
                     <div class="usuario-menu-gabinete">{{ contexto.gabinete.nome }}</div>
                     <a class="usuario-menu-item" href="/selecionar-gabinete">Trocar gabinete</a>
+                    <a class="usuario-menu-item" href="/minha-conta/senha">Alterar senha</a>
                     <form method="post" action="/logout">
                         <button class="usuario-menu-item usuario-menu-sair" type="submit">Sair</button>
                     </form>

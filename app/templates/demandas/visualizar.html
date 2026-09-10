@@ -29,7 +29,7 @@
             {% endif %}
         </p>
     </div>
-    <a class="btn btn-outline-secondary" href="/demandas">Voltar</a>
+    <a class="btn btn-outline-secondary" href="{{ voltar_url }}">Voltar</a>
 </div>
 
 {% if demanda.origem == 'PUBLICA' %}
@@ -120,9 +120,15 @@
             <dt class="col-sm-3">Data de abertura</dt>
             <dd class="col-sm-9">{{ demanda.data_abertura.strftime('%d/%m/%Y %H:%M') if demanda.data_abertura else '-' }}</dd>
 
+            <dt class="col-sm-3">Data da solicitação</dt>
+            <dd class="col-sm-9">{{ demanda.data_solicitacao.strftime('%d/%m/%Y') if demanda.data_solicitacao else '-' }}</dd>
+
             <dt class="col-sm-3">Prazo</dt>
             <dd class="col-sm-9">
                 {{ demanda.prazo.strftime('%d/%m/%Y') if demanda.prazo else '-' }}
+                {% if demanda.dias_atraso %}
+                <span class="badge text-bg-danger ms-1">Atrasada há {{ demanda.dias_atraso }} dia{{ 's' if demanda.dias_atraso != 1 else '' }}</span>
+                {% endif %}
                 {% if compromisso_retorno %}
                 <br><span class="badge text-bg-info text-dark">Retorno agendado para {{ compromisso_retorno.inicio.strftime('%d/%m/%Y') }}</span>
                 <a class="ms-1" href="/agenda/{{ compromisso_retorno.id }}">Abrir compromisso</a>
@@ -147,8 +153,8 @@
             <span class="text-muted small me-2">WhatsApp não disponível</span>
             {% endif %}
         {% endif %}
-        <a class="btn btn-outline-danger" href="/demandas/{{ demanda.id }}/excluir">Excluir</a>
-        <a class="btn btn-primary" href="/demandas/{{ demanda.id }}/editar">Editar</a>
+        <a class="btn btn-outline-danger" href="/demandas/{{ demanda.id }}/excluir?voltar={{ voltar|urlencode }}">Excluir</a>
+        <a class="btn btn-primary" href="/demandas/{{ demanda.id }}/editar?voltar={{ voltar|urlencode }}">Editar</a>
     </div>
 </div>
 

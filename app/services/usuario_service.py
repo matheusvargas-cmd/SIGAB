@@ -1,7 +1,7 @@
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.core.security import gerar_hash_senha
+from app.core.security import gerar_hash_senha, verificar_senha
 from app.models.membro_gabinete import PERFIS_OPCOES, MembroGabinete
 from app.models.usuario import Usuario
 
@@ -259,4 +259,22 @@ class UsuarioService:
         if len(nova_senha or "") < SENHA_MINIMO_CARACTERES:
             raise ValueError(f"Senha muito curta — mínimo {SENHA_MINIMO_CARACTERES} caracteres.")
         membro.usuario.senha_hash = gerar_hash_senha(nova_senha)
+        db.commit()
+
+    @staticmethod
+    def alterar_propria_senha(
+        db: Session, usuario: Usuario, senha_atual: str, nova_senha: str
+    ) -> None:
+        """"Alterar minha senha" (autoatendimento, ver
+        app/modules/perfil/controller.py) — distinto de definir_senha()
+        acima (que é o ADMIN redefinindo a senha de outra pessoa, sem
+        precisar da senha atual dela). Aqui SEMPRE exige a senha atual
+        correta antes de trocar; nunca aceita usuario_id vindo do
+        cliente — quem chama já resolveu `usuario` a partir da sessão
+        autenticada (Depends(obter_usuario_atual))."""
+        if not verificar_senha(senha_atual, usuario.senha_hash):
+            raise ValueError("Senha atual incorreta.")
+        if len(nova_senha or "") < SENHA_MINIMO_CARACTERES:
+            raise ValueError(f"Senha muito curta — mínimo {SENHA_MINIMO_CARACTERES} caracteres.")
+        usuario.senha_hash = gerar_hash_senha(nova_senha)
         db.commit()

@@ -4,6 +4,7 @@ from datetime import date
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.security import gerar_hash_senha
 from app.models.agenda import Agenda
 from app.models.categoria import Categoria
@@ -88,6 +89,24 @@ class GabineteService:
         if not token_normalizado:
             return None
         return db.scalar(select(Gabinete).where(Gabinete.public_token == token_normalizado))
+
+    @staticmethod
+    def montar_url_publica(gabinete: Gabinete, base_url_requisicao: str) -> str:
+        """URL completa do formulário público deste gabinete
+        (/cidadao/<public_token>) — usada pela tela "Link público"
+        (app/modules/gabinete/controller.py). Prioriza o domínio
+        configurável settings.dominio_publico (produção, ex.:
+        "gabinetes360.com.br"); sem ele configurado, cai no host da
+        própria requisição atual (ex.: o domínio do Render) — nunca quebra
+        por falta de configuração, só troca de aparência quando o domínio
+        definitivo for definido. `base_url_requisicao` é sempre
+        str(request.base_url) de quem chamou — este método nunca lê
+        Request diretamente, para não misturar essa dependência aqui."""
+        if settings.dominio_publico_normalizado:
+            base = f"https://{settings.dominio_publico_normalizado}"
+        else:
+            base = base_url_requisicao.rstrip("/")
+        return f"{base}/cidadao/{gabinete.public_token}"
 
     @staticmethod
     def contadores(db: Session, gabinete_id: int) -> dict:

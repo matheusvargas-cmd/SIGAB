@@ -89,6 +89,31 @@ class MigrationService:
                     logger.info("Coluna %s adicionada à tabela agenda.", nome)
 
     @staticmethod
+    def adicionar_data_solicitacao_demandas() -> None:
+        """Ponte de compatibilidade só para SQLite local, mesmo padrão de
+        `adicionar_gabinete_id()`: `Base.metadata.create_all()` não adiciona
+        coluna nova a uma tabela "demandas" que já existia antes desta
+        etapa. Faz o mesmo backfill da migration Alembic equivalente
+        (bc9c961bdf45) — a partir de data_abertura, nunca apagando/alterando
+        outra coisa. Idempotente: só executa se a coluna ainda não existir.
+        """
+        inspector = inspect(engine)
+        if "demandas" not in inspector.get_table_names():
+            return
+
+        colunas = {coluna["name"] for coluna in inspector.get_columns("demandas")}
+        if "data_solicitacao" in colunas:
+            return
+
+        with engine.begin() as conexao:
+            conexao.execute(text("ALTER TABLE demandas ADD COLUMN data_solicitacao DATE"))
+            conexao.execute(text("UPDATE demandas SET data_solicitacao = substr(data_abertura, 1, 10)"))
+            conexao.execute(
+                text("UPDATE demandas SET data_solicitacao = date('now') WHERE data_solicitacao IS NULL")
+            )
+        logger.info("Coluna demandas.data_solicitacao adicionada e preenchida a partir de data_abertura.")
+
+    @staticmethod
     def semear_categorias_padrao() -> None:
         """Preserva, na nova tabela de categorias configuráveis, os valores que
         o sistema já usava antes desta estrutura existir: a lista fixa

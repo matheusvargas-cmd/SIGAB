@@ -1,0 +1,55 @@
+{% extends 'shared/base.html' %}
+
+{% block conteudo %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">Link público — Atendimento ao Cidadão</h2>
+    <a class="btn btn-outline-secondary" href="/configuracoes/gabinete">Voltar</a>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body p-4">
+        <p class="text-muted">
+            Este é o endereço que o seu gabinete pode divulgar (redes sociais, WhatsApp, cartões, placas)
+            para que qualquer cidadão registre uma solicitação diretamente, sem precisar de login.
+            O token é permanente — o link nunca muda.
+        </p>
+        <div class="input-group">
+            <input class="form-control" id="url-publica" type="text" value="{{ url_publica }}" readonly>
+            <button class="btn btn-outline-primary" type="button" id="botao-copiar">Copiar link</button>
+        </div>
+        <div class="form-text" id="copiado-confirmacao" hidden>Link copiado!</div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">QR Code</div>
+    <div class="card-body p-4 text-center">
+        <img src="/configuracoes/gabinete/link-publico/qrcode.png" alt="QR Code do link público" class="img-thumbnail mb-3" style="width: 220px; height: 220px;">
+        <div>
+            <a class="btn btn-outline-primary" href="/configuracoes/gabinete/link-publico/qrcode.png?baixar=1">Baixar PNG</a>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var botao = document.getElementById('botao-copiar');
+    var campo = document.getElementById('url-publica');
+    var confirmacao = document.getElementById('copiado-confirmacao');
+
+    botao.addEventListener('click', function () {
+        var copiar = function () {
+            confirmacao.hidden = false;
+            setTimeout(function () { confirmacao.hidden = true; }, 3000);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(campo.value).then(copiar);
+        } else {
+            campo.select();
+            document.execCommand('copy');
+            copiar();
+        }
+    });
+})();
+</script>
+{% endblock %}

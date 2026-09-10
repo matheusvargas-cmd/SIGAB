@@ -17,23 +17,44 @@
 <div class="alert alert-{{ flash_category }}" role="alert">{% if flash_category == 'success' %}✔ {% endif %}{{ flash_message }}</div>
 {% endif %}
 
-<form class="row g-2 align-items-center mb-4" method="get" action="/demandas">
-    <div class="col-sm-8 col-md-6">
+{# Sufixo de query string com todos os filtros ativos (exceto pagina) —
+   reaproveitado pelos cabeçalhos ordenáveis, pela paginação e pelo
+   parâmetro "voltar" de cada linha, sempre a mesma fonte, nunca
+   remontado de formas diferentes em lugares diferentes. #}
+{% set filtros_qs %}{% if origem_filtro %}&origem={{ origem_filtro }}{% endif %}{% if status_filtro %}&status={{ status_filtro|urlencode }}{% endif %}{% if atrasada_filtro %}&atrasada=1{% endif %}{% endset %}
+
+<form class="row g-2 align-items-center mb-3" method="get" action="/demandas">
+    <div class="col-sm-8 col-md-4">
         <label class="visually-hidden" for="pesquisa">Pesquisar demanda</label>
         <input class="form-control" id="pesquisa" name="pesquisa" value="{{ pesquisa }}" placeholder="Eleitor, título, categoria, status, responsável ou cidade">
     </div>
     <div class="col-auto">
-        <button class="btn btn-outline-primary" type="submit">Pesquisar</button>
-        {% if pesquisa %}<a class="btn btn-outline-secondary" href="/demandas">Limpar</a>{% endif %}
+        <select class="form-select" name="status">
+            <option value="">Todos os status</option>
+            {% for opcao in status_opcoes %}
+            <option value="{{ opcao }}" {% if status_filtro == opcao %}selected{% endif %}>{{ opcao }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-auto">
+        <div class="form-check pt-2">
+            <input class="form-check-input" type="checkbox" id="atrasada" name="atrasada" value="1" {% if atrasada_filtro %}checked{% endif %}>
+            <label class="form-check-label" for="atrasada">Só atrasadas</label>
+        </div>
+    </div>
+    {% if origem_filtro %}<input type="hidden" name="origem" value="{{ origem_filtro }}">{% endif %}
+    <div class="col-auto">
+        <button class="btn btn-outline-primary" type="submit">Filtrar</button>
+        {% if pesquisa or status_filtro or atrasada_filtro %}<a class="btn btn-outline-secondary" href="/demandas{% if origem_filtro %}?origem={{ origem_filtro }}{% endif %}">Limpar filtros</a>{% endif %}
     </div>
     <div class="col-auto ms-auto">
         <div class="btn-group" role="group" aria-label="Filtrar por origem">
             <a class="btn btn-sm {{ 'btn-secondary' if not origem_filtro else 'btn-outline-secondary' }}"
-               href="/demandas?pesquisa={{ pesquisa|urlencode }}">Todas</a>
+               href="/demandas?pesquisa={{ pesquisa|urlencode }}{% if status_filtro %}&status={{ status_filtro|urlencode }}{% endif %}{% if atrasada_filtro %}&atrasada=1{% endif %}">Todas</a>
             <a class="btn btn-sm {{ 'btn-secondary' if origem_filtro == 'INTERNA' else 'btn-outline-secondary' }}"
-               href="/demandas?pesquisa={{ pesquisa|urlencode }}&origem=INTERNA">Internas</a>
+               href="/demandas?pesquisa={{ pesquisa|urlencode }}&origem=INTERNA{% if status_filtro %}&status={{ status_filtro|urlencode }}{% endif %}{% if atrasada_filtro %}&atrasada=1{% endif %}">Internas</a>
             <a class="btn btn-sm {{ 'btn-info' if origem_filtro == 'PUBLICA' else 'btn-outline-info' }}"
-               href="/demandas?pesquisa={{ pesquisa|urlencode }}&origem=PUBLICA">Públicas</a>
+               href="/demandas?pesquisa={{ pesquisa|urlencode }}&origem=PUBLICA{% if status_filtro %}&status={{ status_filtro|urlencode }}{% endif %}{% if atrasada_filtro %}&atrasada=1{% endif %}">Públicas</a>
         </div>
     </div>
 </form>
@@ -54,36 +75,42 @@
     'Urgente': 'text-bg-danger',
 } %}
 
+{% macro seta_ordenacao(campo) %}{% if ordenar_por == campo %}{{ ' ▲' if ordenar_direcao == 'asc' else ' ▼' }}{% endif %}{% endmacro %}
+{% macro link_ordenacao(campo) %}/demandas?pesquisa={{ pesquisa|urlencode }}{{ filtros_qs }}&ordenar_por={{ campo }}&ordenar_direcao={{ 'desc' if (ordenar_por == campo and ordenar_direcao == 'asc') else 'asc' }}{% endmacro %}
+
 <div class="card">
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0 tabela-fixa">
                 <colgroup>
+                    <col style="width: 7%">
+                    <col style="width: 10%">
                     <col style="width: 8%">
-                    <col style="width: 11%">
-                    <col style="width: 13%">
-                    <col style="width: 15%">
-                    <col style="width: 11%">
-                    <col style="width: 9%">
+                    <col style="width: 14%">
                     <col style="width: 12%">
+                    <col style="width: 9%">
+                    <col style="width: 9%">
+                    <col style="width: 9%">
                     <col style="width: 6%">
-                    <col style="width: 15%">
+                    <col style="width: 16%">
                 </colgroup>
                 <thead>
                     <tr>
-                        <th class="ps-3 text-nowrap">Prioridade</th>
-                        <th>Status</th>
+                        <th class="ps-3"><a class="text-decoration-none text-dark" href="{{ link_ordenacao('prioridade') }}">Prioridade{{ seta_ordenacao('prioridade') }}</a></th>
+                        <th><a class="text-decoration-none text-dark" href="{{ link_ordenacao('status') }}">Status{{ seta_ordenacao('status') }}</a></th>
                         <th>Origem</th>
                         <th>Título</th>
                         <th>Eleitor</th>
                         <th>Categoria</th>
-                        <th class="text-nowrap">Responsável</th>
-                        <th>Prazo</th>
+                        <th class="text-nowrap"><a class="text-decoration-none text-dark" href="{{ link_ordenacao('data_solicitacao') }}">Solicitação{{ seta_ordenacao('data_solicitacao') }}</a></th>
+                        <th class="text-nowrap"><a class="text-decoration-none text-dark" href="{{ link_ordenacao('prazo') }}">Prazo{{ seta_ordenacao('prazo') }}</a></th>
+                        <th class="text-nowrap">Atraso</th>
                         <th class="text-end pe-3">Ações</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for demanda in demandas %}
+                    {% set voltar = request.url.query|urlencode %}
                     <tr>
                         <td class="ps-3"><span class="badge {{ prioridade_classes.get(demanda.prioridade, 'text-bg-secondary') }}">{{ demanda.prioridade }}</span></td>
                         <td><span class="badge {{ status_classes.get(demanda.status, 'text-bg-secondary') }}">{{ demanda.status }}</span></td>
@@ -97,18 +124,25 @@
                         <td>{{ demanda.titulo }}</td>
                         <td>{{ demanda.eleitor.nome if demanda.eleitor else '-' }}</td>
                         <td>{{ demanda.categoria or '-' }}</td>
-                        <td>{{ demanda.responsavel or '-' }}</td>
+                        <td class="text-nowrap">{{ demanda.data_solicitacao.strftime('%d/%m/%Y') if demanda.data_solicitacao else '-' }}</td>
                         <td class="text-nowrap">{{ demanda.prazo.strftime('%d/%m/%Y') if demanda.prazo else '-' }}</td>
+                        <td class="text-nowrap">
+                            {% if demanda.dias_atraso %}
+                            <span class="badge text-bg-danger">{{ demanda.dias_atraso }}d</span>
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
                         <td class="text-end pe-3 text-nowrap">
                             <div class="acoes-compactas">
-                                <a class="btn btn-sm btn-outline-secondary" href="/demandas/{{ demanda.id }}">Visualizar</a>
-                                <a class="btn btn-sm btn-outline-primary" href="/demandas/{{ demanda.id }}/editar">Editar</a>
-                                <a class="btn btn-sm btn-outline-danger" href="/demandas/{{ demanda.id }}/excluir">Excluir</a>
+                                <a class="btn btn-sm btn-outline-secondary" href="/demandas/{{ demanda.id }}?voltar={{ voltar }}">Visualizar</a>
+                                <a class="btn btn-sm btn-outline-primary" href="/demandas/{{ demanda.id }}/editar?voltar={{ voltar }}">Editar</a>
+                                <a class="btn btn-sm btn-outline-danger" href="/demandas/{{ demanda.id }}/excluir?voltar={{ voltar }}">Excluir</a>
                             </div>
                         </td>
                     </tr>
                     {% else %}
-                    <tr><td class="text-center text-muted py-4" colspan="9">Nenhuma demanda encontrada.</td></tr>
+                    <tr><td class="text-center text-muted py-4" colspan="10">Nenhuma demanda encontrada.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
@@ -116,5 +150,5 @@
     </div>
 </div>
 
-{{ paginacao(pagina_atual, total_paginas, '/demandas', pesquisa, 'Paginação de demandas', ('&origem=' ~ origem_filtro) if origem_filtro else '') }}
+{{ paginacao(pagina_atual, total_paginas, '/demandas', pesquisa, 'Paginação de demandas', filtros_qs ~ (('&ordenar_por=' ~ ordenar_por ~ '&ordenar_direcao=' ~ ordenar_direcao) if ordenar_por else '')) }}
 {% endblock %}

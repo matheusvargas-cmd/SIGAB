@@ -110,7 +110,8 @@
         </div>
         {% for d in demandas_atrasadas %}
         <div style="font-family:Arial, Helvetica, sans-serif; font-size:13px; color:#5F6B7A; padding:6px 0; border-bottom:1px solid #F4F6F8;">
-          <strong style="color:#012049;">{{ d.titulo }}</strong>{% if d.eleitor_nome %} — {{ d.eleitor_nome }}{% endif %} · prazo {{ d.prazo_formatado }}
+          <strong style="color:#012049;">Protocolo #{{ d.protocolo }} — {{ d.titulo }}</strong>{% if d.eleitor_nome %} — {{ d.eleitor_nome }}{% endif %}<br>
+          status: {{ d.status }} · prazo {{ d.prazo_formatado }} · <strong style="color:#DC3545;">{{ d.dias_atraso }} dia{{ 's' if d.dias_atraso != 1 else '' }} de atraso</strong>
         </div>
         {% endfor %}
       {% endif %}

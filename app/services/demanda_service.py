@@ -3,7 +3,7 @@ from datetime import date, datetime, time, timedelta
 from math import ceil
 from typing import Any
 
-from sqlalchemy import case, delete, func, or_, select
+from sqlalchemy import and_, case, delete, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.busca import normalizar
@@ -78,6 +78,17 @@ _ORDEM_PRIORIDADE = case(
     else_=4,
 )
 
+# Colunas que a tela de demandas permite ordenar clicando no cabeçalho
+# (DemandaService.listar, ordenar_por) — nenhuma coluna fora desta lista é
+# aceita, mesmo que exista no model (evita expor ordenação por coisas como
+# observacoes_internas via query string adivinhada).
+COLUNAS_ORDENAVEIS = {
+    "data_solicitacao": Demanda.data_solicitacao,
+    "prazo": Demanda.prazo,
+    "status": Demanda.status,
+    "prioridade": _ORDEM_PRIORIDADE,
+}
+
 
 class DemandaService:
     """Toda consulta/escrita aqui é sempre filtrada por gabinete_id — ver
@@ -91,6 +102,10 @@ class DemandaService:
         pesquisa: str | None = None,
         pagina: int = 1,
         origem: str | None = None,
+        status: str | None = None,
+        atrasada: bool = False,
+        ordenar_por: str | None = None,
+        ordenar_direcao: str = "asc",
     ) -> tuple[list[Demanda], int, int]:
         # outerjoin (não join): uma demanda sem eleitor vinculado
         # (eleitor_id nulo — CSV real do Meu Mandato permite isso) precisa
@@ -116,6 +131,25 @@ class DemandaService:
             consulta = consulta.where(Demanda.origem == origem)
             consulta_total = consulta_total.where(Demanda.origem == origem)
 
+        if status and status in STATUS_OPCOES:
+            consulta = consulta.where(Demanda.status == status)
+            consulta_total = consulta_total.where(Demanda.status == status)
+
+        # "Atrasada" nunca é um status gravado — é sempre calculado na hora
+        # (prazo vencido + status ainda não finalizado), mesma regra de
+        # contar_atrasadas()/listar_atrasadas() abaixo. Filtrar assim,
+        # sempre no banco, é o que permite este filtro conviver com
+        # paginação/ordenação sem duas fontes de verdade divergentes.
+        if atrasada:
+            hoje = date.today()
+            filtro_atrasada = and_(
+                Demanda.prazo.isnot(None),
+                Demanda.prazo < hoje,
+                Demanda.status.notin_(STATUS_FINALIZADOS),
+            )
+            consulta = consulta.where(filtro_atrasada)
+            consulta_total = consulta_total.where(filtro_atrasada)
+
         if pesquisa and pesquisa.strip():
             termo = f"%{normalizar(pesquisa.strip())}%"
             filtro = or_(
@@ -133,13 +167,41 @@ class DemandaService:
         total_paginas = max(1, ceil(total_registros / POR_PAGINA))
         pagina_atual = min(max(1, pagina), total_paginas)
 
-        consulta = (
-            consulta.order_by(_ORDEM_PRIORIDADE, Demanda.data_abertura)
-            .limit(POR_PAGINA)
-            .offset((pagina_atual - 1) * POR_PAGINA)
-        )
+        # Ordenação por cabeçalho clicável (tela de demandas) — só as
+        # colunas em COLUNAS_ORDENAVEIS, nunca uma coluna arbitrária vinda
+        # da query string. Sem ordenar_por (ou valor não reconhecido),
+        # mantém o critério padrão de sempre: prioridade, depois abertura.
+        coluna_ordenacao = COLUNAS_ORDENAVEIS.get(ordenar_por or "")
+        if coluna_ordenacao is not None:
+            direcao = coluna_ordenacao.desc() if ordenar_direcao == "desc" else coluna_ordenacao.asc()
+            # Desempate por id: sem isso, duas linhas com o mesmo valor na
+            # coluna ordenada (ex.: mesmo prazo) poderiam mudar de posição
+            # entre páginas diferentes da mesma consulta.
+            consulta = consulta.order_by(direcao, Demanda.id.desc())
+        else:
+            consulta = consulta.order_by(_ORDEM_PRIORIDADE, Demanda.data_abertura)
+
+        consulta = consulta.limit(POR_PAGINA).offset((pagina_atual - 1) * POR_PAGINA)
         demandas = list(db.scalars(consulta).unique().all())
         return demandas, pagina_atual, total_paginas
+
+    @staticmethod
+    def calcular_atraso(demanda: Demanda, hoje: date | None = None) -> int | None:
+        """Situação "atrasada" nunca é um status gravado no banco — é
+        sempre calculado a partir da data atual (mesma regra usada por
+        contar_atrasadas()/listar_atrasadas()/o filtro `atrasada` de
+        listar()). Devolve None quando a demanda NÃO está atrasada (sem
+        prazo, prazo ainda não vencido, ou já concluída/cancelada/não
+        realizada) — nesse caso o chamador simplesmente não mostra nada de
+        atraso. Quando atrasada, devolve os dias de atraso (sempre >= 1)."""
+        referencia = hoje or date.today()
+        if (
+            demanda.prazo is None
+            or demanda.status in STATUS_FINALIZADOS
+            or demanda.prazo >= referencia
+        ):
+            return None
+        return (referencia - demanda.prazo).days
 
     @staticmethod
     def obter_por_id(db: Session, gabinete_id: int, demanda_id: int) -> Demanda | None:
@@ -380,6 +442,7 @@ class DemandaService:
         secretaria: str | None = None,
         ref_historico: str | None = None,
         data_abertura: datetime | None = None,
+        data_solicitacao: date | None = None,
         fechar_automaticamente: bool = True,
         eleitor_obrigatorio: bool = True,
         commit: bool = True,
@@ -425,6 +488,14 @@ class DemandaService:
             secretaria=(secretaria or "").strip() or None,
             ref_historico=ref_historico,
             data_abertura=data_abertura or datetime.now(),
+            # Sem data_solicitacao explícita: usa a data do próprio
+            # data_abertura quando ele foi informado (importação
+            # histórica — preserva a data real do atendimento antigo, em
+            # vez da data de hoje), senão a data de hoje (cadastro normal,
+            # incluindo o atendimento público — coerente com a data do
+            # próprio protocolo).
+            data_solicitacao=data_solicitacao
+            or (data_abertura.date() if data_abertura else date.today()),
             data_fechamento=(
                 datetime.now() if fechar_automaticamente and dados["status"] == "Concluído" else None
             ),
@@ -485,6 +556,7 @@ class DemandaService:
         responsavel: str | None = None,
         prazo: date | None = None,
         observacoes_internas: str | None = None,
+        data_solicitacao: date | None = None,
         usuario_id: int | None = None,
     ) -> Demanda:
         dados = DemandaService._validar_dados(
@@ -522,6 +594,11 @@ class DemandaService:
         demanda.responsavel = (responsavel or "").strip() or None
         demanda.prazo = prazo
         demanda.observacoes_internas = (observacoes_internas or "").strip() or None
+        # Mantém a data já gravada quando o formulário não envia uma nova
+        # (nunca None — a coluna é NOT NULL) — só troca quando o usuário
+        # de fato ajusta o campo na edição.
+        if data_solicitacao is not None:
+            demanda.data_solicitacao = data_solicitacao
 
         # Só grava histórico quando o status realmente mudou — trocar
         # título/descrição/prioridade/etc. sem trocar status não gera

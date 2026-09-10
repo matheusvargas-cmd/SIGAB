@@ -88,9 +88,11 @@
                 {% if demandas_atrasadas or demandas_prazo_proximo %}
                 <ul class="list-unstyled mb-0">
                     {% if demandas_atrasadas %}
-                    <li class="d-flex justify-content-between align-items-center py-2 border-bottom">
-                        <span>🔴 Demandas atrasadas</span>
-                        <span class="fw-semibold">{{ demandas_atrasadas }}</span>
+                    <li class="py-2 border-bottom">
+                        <a class="d-flex justify-content-between align-items-center text-decoration-none text-dark" href="/demandas?atrasada=1">
+                            <span>🔴 Demandas atrasadas</span>
+                            <span class="fw-semibold">{{ demandas_atrasadas }}</span>
+                        </a>
                     </li>
                     {% endif %}
                     {% if demandas_prazo_proximo %}

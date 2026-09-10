@@ -91,9 +91,12 @@ class DailyEmailService:
 
         demandas_atrasadas = [
             {
+                "protocolo": d.id,
                 "titulo": d.titulo,
                 "eleitor_nome": d.eleitor.nome if d.eleitor else None,
+                "status": d.status,
                 "prazo_formatado": d.prazo.strftime("%d/%m/%Y") if d.prazo else "-",
+                "dias_atraso": DemandaService.calcular_atraso(d, data),
             }
             for d in DemandaService.listar_atrasadas(db, gabinete_id, data)
         ]
@@ -144,8 +147,14 @@ class DailyEmailService:
 
         if dados["demandas_atrasadas"] or dados["demandas_vencendo_hoje"]:
             linhas.append("DEMANDAS QUE PRECISAM DE ATENÇÃO")
-            for d in dados["demandas_atrasadas"]:
-                linhas.append(f"- ATRASADA: {d['titulo']} (prazo {d['prazo_formatado']})")
+            if dados["demandas_atrasadas"]:
+                linhas.append(f"Atrasadas ({len(dados['demandas_atrasadas'])}):")
+                for d in dados["demandas_atrasadas"]:
+                    dias = d["dias_atraso"]
+                    linhas.append(
+                        f"- Protocolo #{d['protocolo']} — {d['titulo']} — status: {d['status']} — "
+                        f"prazo {d['prazo_formatado']} — {dias} dia{'s' if dias != 1 else ''} de atraso"
+                    )
             for d in dados["demandas_vencendo_hoje"]:
                 linhas.append(f"- VENCE HOJE: {d['titulo']}")
             linhas.append("")

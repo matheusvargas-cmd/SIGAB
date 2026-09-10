@@ -1,0 +1,37 @@
+{% extends 'shared/base.html' %}
+
+{% block conteudo %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">Alterar minha senha</h2>
+    <a class="btn btn-outline-secondary" href="/">Voltar</a>
+</div>
+
+{% if flash_message %}
+<div class="alert alert-{{ flash_category }}" role="alert">{% if flash_category == 'success' %}✔ {% endif %}{{ flash_message }}</div>
+{% endif %}
+
+{% if erro %}
+<div class="alert alert-danger" role="alert">{{ erro }}</div>
+{% endif %}
+
+<form class="card" method="post" action="/minha-conta/senha" style="max-width: 480px;">
+    <div class="card-body p-4">
+        <div class="mb-3">
+            <label class="form-label" for="senha_atual">Senha atual *</label>
+            <input class="form-control" type="password" id="senha_atual" name="senha_atual" required autofocus>
+        </div>
+        <div class="mb-3">
+            <label class="form-label" for="nova_senha">Nova senha *</label>
+            <input class="form-control" type="password" id="nova_senha" name="nova_senha" minlength="8" required>
+            <div class="form-text">Mínimo 8 caracteres.</div>
+        </div>
+        <div class="mb-0">
+            <label class="form-label" for="confirmar_senha">Confirmar nova senha *</label>
+            <input class="form-control" type="password" id="confirmar_senha" name="confirmar_senha" minlength="8" required>
+        </div>
+    </div>
+    <div class="card-footer bg-white text-end">
+        <button class="btn btn-primary" type="submit">Alterar senha</button>
+    </div>
+</form>
+{% endblock %}

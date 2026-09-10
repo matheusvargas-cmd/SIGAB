@@ -143,6 +143,19 @@ class Settings(BaseSettings):
     r2_bucket_name: str = ""
     r2_endpoint: str = ""
 
+    # --- Link público do gabinete (/cidadao/<public_token>) ---
+    # Domínio "bonito" mostrado/copiado na tela "Link público" (ver
+    # app/modules/gabinete/controller.py) — ex.: "gabinetes360.com.br",
+    # sem esquema nem barra. Vazio por padrão: nesse caso, a URL exibida
+    # usa o próprio host da requisição atual (ex.: o domínio do Render),
+    # nunca inventa nem quebra o link — só troca para o domínio definitivo
+    # quando ele estiver configurado aqui, sem exigir alteração de código.
+    dominio_publico: str = ""
+
+    @property
+    def dominio_publico_normalizado(self) -> str:
+        return self.dominio_publico.strip().rstrip("/")
+
     @property
     def r2_configurado(self) -> bool:
         return bool(

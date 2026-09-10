@@ -3,6 +3,10 @@
 {% block conteudo_auth %}
 <h1 class="h5 text-center mb-4" style="color: var(--c360-azul-principal);">Entrar</h1>
 
+{% if flash_message %}
+<div class="alert alert-{{ flash_category }} py-2 small" role="alert">{{ flash_message }}</div>
+{% endif %}
+
 {% if erro %}
 <div class="alert alert-danger py-2 small" role="alert">{{ erro }}</div>
 {% endif %}
@@ -17,5 +21,8 @@
         <input class="form-control" type="password" id="senha" name="senha" required>
     </div>
     <button class="btn btn-primary w-100" type="submit">Entrar</button>
+    <div class="text-center mt-3">
+        <a class="small" href="/esqueci-senha">Esqueci minha senha</a>
+    </div>
 </form>
 {% endblock %}

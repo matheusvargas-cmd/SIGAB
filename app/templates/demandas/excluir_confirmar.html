@@ -3,7 +3,7 @@
 {% block conteudo %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="mb-0">Excluir demanda?</h2>
-    <a class="btn btn-outline-secondary" href="/demandas/{{ demanda.id }}">Cancelar</a>
+    <a class="btn btn-outline-secondary" href="/demandas/{{ demanda.id }}?voltar={{ voltar|urlencode }}">Cancelar</a>
 </div>
 
 <div class="card border-danger">
@@ -36,9 +36,10 @@
         {% endif %}
     </div>
     <div class="card-footer bg-white text-end">
-        <a class="btn btn-outline-secondary" href="/demandas/{{ demanda.id }}">Cancelar</a>
+        <a class="btn btn-outline-secondary" href="/demandas/{{ demanda.id }}?voltar={{ voltar|urlencode }}">Cancelar</a>
         <form class="d-inline" method="post" action="/demandas/{{ demanda.id }}/excluir"
               onsubmit="return confirm('Confirma a exclusão permanente desta demanda?');">
+            {% if voltar %}<input type="hidden" name="voltar" value="{{ voltar }}">{% endif %}
             <button class="btn btn-danger" type="submit">Excluir permanentemente</button>
         </form>
     </div>

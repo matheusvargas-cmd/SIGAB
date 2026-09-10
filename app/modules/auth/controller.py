@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.config import TEMPLATES_DIR
 from app.core.contexto import obter_usuario_atual
 from app.core.database import get_db
+from app.core.flash import decodificar_flash
 from app.models.gabinete import Gabinete
 from app.models.membro_gabinete import MembroGabinete
 from app.services.auth_service import AuthService
@@ -19,9 +20,20 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 def formulario_login(request: Request):
     if request.session.get("usuario_id"):
         return RedirectResponse("/", status_code=303)
-    return templates.TemplateResponse(
-        request=request, name="auth/login.html", context={"titulo": "Entrar", "erro": None, "email": ""}
+    resposta = templates.TemplateResponse(
+        request=request,
+        name="auth/login.html",
+        context={
+            "titulo": "Entrar",
+            "erro": None,
+            "email": "",
+            "flash_message": decodificar_flash(request.cookies.get("flash_message")),
+            "flash_category": request.cookies.get("flash_category", "warning"),
+        },
     )
+    resposta.delete_cookie("flash_message", path="/")
+    resposta.delete_cookie("flash_category", path="/")
+    return resposta
 
 
 @router.post("/login")

@@ -43,6 +43,16 @@ class Demanda(Base):
 
     data_abertura = Column(DateTime)
 
+    # Data em que a demanda foi efetivamente solicitada pelo eleitor —
+    # distinta de data_abertura (quando o registro foi cadastrado no
+    # sistema): permite lançar uma demanda antiga preservando a data real
+    # do pedido. Novas demandas recebem a data atual por padrão
+    # (DemandaService.criar); para o backfill de demandas já existentes,
+    # ver a migration correspondente (usa a data de data_abertura, único
+    # dado equivalente disponível até então, inclusive para as públicas —
+    # mantém coerência com a data de protocolo).
+    data_solicitacao = Column(Date, nullable=False)
+
     prazo = Column(Date)
 
     data_fechamento = Column(DateTime)

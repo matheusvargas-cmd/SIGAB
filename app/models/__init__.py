@@ -12,6 +12,7 @@ from app.models.eleitor import Eleitor
 from app.models.gabinete import Gabinete
 from app.models.historico_demanda import HistoricoDemanda
 from app.models.membro_gabinete import MembroGabinete
+from app.models.redefinicao_senha import RedefinicaoSenha
 from app.models.subcategoria import Subcategoria
 from app.models.submissao_cidadao import SubmissaoCidadao
 from app.models.usuario import Usuario
@@ -25,6 +26,7 @@ __all__ = [
     "Gabinete",
     "HistoricoDemanda",
     "MembroGabinete",
+    "RedefinicaoSenha",
     "Subcategoria",
     "SubmissaoCidadao",
     "Usuario",

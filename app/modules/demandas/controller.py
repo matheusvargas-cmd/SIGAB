@@ -34,9 +34,9 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 
 def flash_message(
-    message: str | None = None, category: str = "warning"
+    message: str | None = None, category: str = "warning", destino: str = "/demandas"
 ) -> RedirectResponse:
-    redirect = RedirectResponse("/demandas", status_code=303)
+    redirect = RedirectResponse(destino, status_code=303)
     if message is not None:
         redirect.set_cookie(
             "flash_message", codificar_flash(message), max_age=10, httponly=True,
@@ -46,6 +46,18 @@ def flash_message(
             "flash_category", category, max_age=10, httponly=True, path="/demandas", samesite="lax"
         )
     return redirect
+
+
+def _destino_apos_acao(voltar: str) -> str:
+    """Depois de visualizar/editar/excluir uma demanda, volta para a
+    mesma lista (mesmos filtros/página/ordenação) de onde o usuário veio
+    — nunca reseta para "/demandas" sem filtro, o que perderia o contexto
+    de quem estava, por exemplo, na aba "Públicas" (Demanda.origem ==
+    "PUBLICA"). `voltar` é sempre a query string literal da listagem de
+    origem (montada em lista.html a partir de request.url.query),
+    propagada como parâmetro por toda a navegação de visualizar/editar/
+    excluir — nunca reconstruída aqui a partir de filtros individuais."""
+    return f"/demandas?{voltar}" if voltar else "/demandas"
 
 
 def _opcoes_formulario(
@@ -84,16 +96,37 @@ def listar(
     pesquisa: str = "",
     pagina: int = 1,
     origem: str = "",
+    status: str = "",
+    atrasada: bool = False,
+    ordenar_por: str = "",
+    ordenar_direcao: str = "asc",
     db: Session = Depends(get_db),
     contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
-    # origem só é aceita se for exatamente um dos dois valores reais do
-    # campo — qualquer outra coisa na query string (adivinhada,
-    # digitada errado) é tratada como "sem filtro", nunca como um erro.
+    # origem/status só são aceitos se forem exatamente um dos valores
+    # reais do respectivo campo — qualquer outra coisa na query string
+    # (adivinhada, digitada errado) é tratada como "sem filtro", nunca
+    # como um erro. ordenar_direcao idem, restrito a "asc"/"desc".
     origem_filtro = origem if origem in ("INTERNA", "PUBLICA") else ""
+    status_filtro = status if status in STATUS_OPCOES else ""
+    ordenar_direcao = "desc" if ordenar_direcao == "desc" else "asc"
+    hoje = date.today()
     demandas, pagina_atual, total_paginas = DemandaService.listar(
-        db, contexto.gabinete_id, pesquisa, pagina, origem=origem_filtro or None
+        db,
+        contexto.gabinete_id,
+        pesquisa,
+        pagina,
+        origem=origem_filtro or None,
+        status=status_filtro or None,
+        atrasada=atrasada,
+        ordenar_por=ordenar_por or None,
+        ordenar_direcao=ordenar_direcao,
     )
+    # Situação "atrasada" nunca é lida do banco — sempre recalculada aqui
+    # a partir da data de hoje (DemandaService.calcular_atraso), a mesma
+    # regra usada pelo filtro `atrasada` acima e pelo dashboard.
+    for demanda in demandas:
+        demanda.dias_atraso = DemandaService.calcular_atraso(demanda, hoje)
     resposta = templates.TemplateResponse(
         request=request,
         name="demandas/lista.html",
@@ -104,6 +137,12 @@ def listar(
             "pagina_atual": pagina_atual,
             "total_paginas": total_paginas,
             "origem_filtro": origem_filtro,
+            "status_filtro": status_filtro,
+            "atrasada_filtro": atrasada,
+            "ordenar_por": ordenar_por,
+            "ordenar_direcao": ordenar_direcao,
+            "status_opcoes": STATUS_OPCOES,
+            "hoje": hoje,
             "flash_message": decodificar_flash(request.cookies.get("flash_message")),
             "flash_category": request.cookies.get("flash_category", "warning"),
         },
@@ -163,6 +202,7 @@ def novo(
         context={
             "titulo": "Nova demanda",
             "demanda": None,
+            "hoje": date.today(),
             "eleitor_atual": eleitor_atual,
             "eleitor_resolvido": eleitor_resolvido,
             "obrigatorio": True,
@@ -186,6 +226,7 @@ def criar(
     prioridade: str | None = Form(None),
     responsavel: str | None = Form(None),
     prazo: date | None = Form(None),
+    data_solicitacao: date | None = Form(None),
     observacoes_internas: str | None = Form(None),
     db: Session = Depends(get_db),
     contexto: ContextoSessao = Depends(obter_contexto_atual),
@@ -204,6 +245,7 @@ def criar(
             responsavel,
             prazo,
             observacoes_internas,
+            data_solicitacao=data_solicitacao,
             usuario_id=contexto.usuario.id,
         )
     except ValueError as error:
@@ -220,6 +262,7 @@ def criar(
             prioridade=prioridade,
             responsavel=responsavel,
             prazo=prazo,
+            data_solicitacao=data_solicitacao,
             observacoes_internas=observacoes_internas,
         )
         eleitor_atual = (
@@ -245,6 +288,7 @@ def criar(
             context={
                 "titulo": "Nova demanda",
                 "demanda": demanda_preenchida,
+                "hoje": date.today(),
                 "eleitor_atual": eleitor_atual,
                 "eleitor_resolvido": True,
                 "obrigatorio": True,
@@ -263,12 +307,14 @@ def criar(
 def visualizar(
     request: Request,
     demanda_id: int,
+    voltar: str = "",
     db: Session = Depends(get_db),
     contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
     demanda = DemandaService.obter_por_id(db, contexto.gabinete_id, demanda_id)
     if demanda is None:
-        return flash_message("Demanda não encontrada.")
+        return flash_message("Demanda não encontrada.", destino=_destino_apos_acao(voltar))
+    demanda.dias_atraso = DemandaService.calcular_atraso(demanda)
     eleitor = (
         EleitorService.obter_por_id(db, contexto.gabinete_id, demanda.eleitor_id)
         if demanda.eleitor_id
@@ -308,6 +354,8 @@ def visualizar(
             "historico": historico,
             "whatsapp_link": whatsapp_link,
             "telefone_whatsapp_exibicao": telefone_whatsapp_exibicao,
+            "voltar": voltar,
+            "voltar_url": _destino_apos_acao(voltar),
         },
     )
 
@@ -353,12 +401,13 @@ def editar(
     pesquisa_eleitor: str = "",
     selecionar_eleitor_id: int | None = None,
     trocar_eleitor: bool = False,
+    voltar: str = "",
     db: Session = Depends(get_db),
     contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
     demanda = DemandaService.obter_por_id(db, contexto.gabinete_id, demanda_id)
     if demanda is None:
-        return flash_message("Demanda não encontrada.")
+        return flash_message("Demanda não encontrada.", destino=_destino_apos_acao(voltar))
 
     eleitor_atual, eleitor_resolvido = EleitorService.resolver_selecao(
         db, contexto.gabinete_id, selecionar_eleitor_id, demanda.eleitor_id, trocar_eleitor
@@ -375,12 +424,15 @@ def editar(
         context={
             "titulo": "Editar demanda",
             "demanda": demanda,
+            "hoje": date.today(),
             "eleitor_atual": eleitor_atual,
             "eleitor_resolvido": eleitor_resolvido,
             "obrigatorio": True,
             "acao_busca": f"/demandas/{demanda_id}/editar",
             "pesquisa_eleitor": pesquisa_eleitor,
             "resultados_busca_eleitor": resultados_busca_eleitor,
+            "voltar": voltar,
+            "voltar_url": _destino_apos_acao(voltar),
             **_opcoes_formulario(
                 db, contexto.gabinete_id, demanda.categoria_vinculada, demanda.subcategoria_vinculada
             ),
@@ -401,13 +453,15 @@ def atualizar(
     prioridade: str | None = Form(None),
     responsavel: str | None = Form(None),
     prazo: date | None = Form(None),
+    data_solicitacao: date | None = Form(None),
     observacoes_internas: str | None = Form(None),
+    voltar: str = Form(""),
     db: Session = Depends(get_db),
     contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
     demanda = DemandaService.obter_por_id(db, contexto.gabinete_id, demanda_id)
     if demanda is None:
-        return flash_message("Demanda não encontrada.")
+        return flash_message("Demanda não encontrada.", destino=_destino_apos_acao(voltar))
 
     status_anterior = demanda.status
     try:
@@ -424,6 +478,7 @@ def atualizar(
             responsavel,
             prazo,
             observacoes_internas,
+            data_solicitacao=data_solicitacao,
             usuario_id=contexto.usuario.id,
         )
     except ValueError as error:
@@ -440,6 +495,7 @@ def atualizar(
             prioridade=prioridade,
             responsavel=responsavel,
             prazo=prazo,
+            data_solicitacao=data_solicitacao,
             observacoes_internas=observacoes_internas,
         )
         eleitor_atual = (
@@ -465,6 +521,7 @@ def atualizar(
             context={
                 "titulo": "Editar demanda",
                 "demanda": demanda_preenchida,
+                "hoje": date.today(),
                 "eleitor_atual": eleitor_atual,
                 "eleitor_resolvido": True,
                 "obrigatorio": True,
@@ -472,20 +529,24 @@ def atualizar(
                 "pesquisa_eleitor": "",
                 "resultados_busca_eleitor": [],
                 "erro": str(error),
+                "voltar": voltar,
+                "voltar_url": _destino_apos_acao(voltar),
                 **_opcoes_formulario(db, contexto.gabinete_id, categoria_atual, subcategoria_atual),
             },
             status_code=400,
         )
 
+    destino = _destino_apos_acao(voltar)
     if status_anterior != "Concluído" and demanda.status == "Concluído":
-        return flash_message("Demanda concluída.", "success")
-    return flash_message("Demanda atualizada.", "success")
+        return flash_message("Demanda concluída.", "success", destino=destino)
+    return flash_message("Demanda atualizada.", "success", destino=destino)
 
 
 @router.get("/{demanda_id}/excluir", response_class=HTMLResponse)
 def confirmar_exclusao(
     request: Request,
     demanda_id: int,
+    voltar: str = "",
     db: Session = Depends(get_db),
     contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
@@ -494,7 +555,7 @@ def confirmar_exclusao(
     # explicitamente ali.
     demanda = DemandaService.obter_por_id(db, contexto.gabinete_id, demanda_id)
     if demanda is None:
-        return flash_message("Demanda não encontrada.")
+        return flash_message("Demanda não encontrada.", destino=_destino_apos_acao(voltar))
     quantidade_anexos = len(
         DemandaAnexoService.listar_por_demanda(db, contexto.gabinete_id, demanda.id)
     )
@@ -505,6 +566,8 @@ def confirmar_exclusao(
             "titulo": "Excluir demanda",
             "demanda": demanda,
             "quantidade_anexos": quantidade_anexos,
+            "voltar": voltar,
+            "voltar_url": _destino_apos_acao(voltar),
         },
     )
 
@@ -512,6 +575,7 @@ def confirmar_exclusao(
 @router.post("/{demanda_id}/excluir")
 def excluir(
     demanda_id: int,
+    voltar: str = Form(""),
     db: Session = Depends(get_db),
     contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
@@ -521,11 +585,12 @@ def excluir(
     # toda a decisão (o que apagar do R2, o que apagar do banco, em que
     # ordem) é responsabilidade centralizada de DemandaService.excluir —
     # nenhuma lógica de storage/R2 aqui no controller.
+    destino = _destino_apos_acao(voltar)
     demanda = DemandaService.obter_por_id(db, contexto.gabinete_id, demanda_id)
     if demanda is None:
-        return flash_message("Demanda não encontrada.")
+        return flash_message("Demanda não encontrada.", destino=destino)
     try:
         DemandaService.excluir(db, demanda)
     except FalhaExclusaoAnexoError as error:
-        return flash_message(str(error), "danger")
-    return flash_message("Demanda excluída.", "success")
+        return flash_message(str(error), "danger", destino=destino)
+    return flash_message("Demanda excluída.", "success", destino=destino)

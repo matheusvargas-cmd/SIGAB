@@ -23,6 +23,7 @@ pydantic-settings==2.15.0
 pydantic_core==2.46.4
 python-dotenv==1.2.3
 python-multipart==0.0.32
+qrcode==8.2
 SQLAlchemy==2.0.51
 starlette==1.6.0
 typing-inspection==0.4.2
