@@ -499,19 +499,55 @@ a.stat-card:hover {
 
 /* Tabela de Demandas: cabeçalhos curtos (ex. "Prioridade") nunca devem
    quebrar linha — quem quebra naturalmente quando precisa é o conteúdo
-   (título, eleitor), não o rótulo da coluna. min-width garante espaço
-   coerente para as 10 colunas; abaixo disso, .table-responsive (Bootstrap)
-   já cuida da rolagem horizontal em vez de comprimir tudo. */
+   (título, eleitor), não o rótulo da coluna. Fonte discretamente menor
+   (cabeçalho e células) é a primeira linha de defesa contra compressão —
+   dá a cada coluna mais espaço "de graça" sem mudar a estrutura. Só
+   abaixo do min-width é que .table-responsive (Bootstrap) entra com
+   rolagem horizontal, como último recurso, não como solução primária. */
 .tabela-demandas thead th {
   white-space: nowrap;
+  font-size: 0.68rem;
+  letter-spacing: 0.02em;
+}
+
+.tabela-demandas td {
+  font-size: 0.82rem;
 }
 
 .tabela-demandas {
-  min-width: 1180px;
+  min-width: 1100px;
+}
+
+/* Badges (Prioridade/Status/Origem) com tamanho fixo, independente da
+   fonte reduzida da célula — nunca ficam pequenos demais só porque o
+   texto ao redor encolheu. */
+.tabela-demandas .badge {
+  font-size: 0.72rem;
+}
+
+/* Respiro extra nas colunas de data (Solicitação/Prazo não podem parecer
+   "coladas") e antes da coluna Ações (o badge de Atraso não pode encostar
+   nos botões) — sem alterar a largura das colunas em si. */
+.tabela-demandas td.text-nowrap {
+  padding-left: 0.65rem;
+  padding-right: 0.65rem;
+}
+
+.tabela-demandas td.coluna-acoes {
+  padding-left: 0.75rem;
+}
+
+/* Segurança extra: mesmo num caso extremo de dias de atraso com muitos
+   dígitos, o conteúdo desta coluna nunca deve vazar visualmente por cima
+   dos botões de Ações — corta (não quebra o layout) em vez de invadir a
+   coluna vizinha. */
+.tabela-demandas td.coluna-atraso,
+.tabela-demandas th.coluna-atraso {
+  overflow: hidden;
 }
 
 .tabela-demandas .acoes-compactas {
-  gap: 6px;
+  gap: 8px;
 }
 
 .linha-passada {

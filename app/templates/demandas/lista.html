@@ -87,13 +87,13 @@
                     <col style="width: 8%">
                     <col style="width: 10%">
                     <col style="width: 8%">
-                    <col style="width: 16%">
-                    <col style="width: 12%">
-                    <col style="width: 9%">
-                    <col style="width: 8%">
-                    <col style="width: 8%">
+                    <col style="width: 13%">
+                    <col style="width: 10%">
                     <col style="width: 6%">
-                    <col style="width: 15%">
+                    <col style="width: 8%">
+                    <col style="width: 8%">
+                    <col style="width: 8%">
+                    <col style="width: 21%">
                 </colgroup>
                 <thead>
                     <tr>
@@ -105,7 +105,7 @@
                         <th>Categoria</th>
                         <th class="text-nowrap"><a class="text-decoration-none text-dark" href="{{ link_ordenacao('data_solicitacao') }}">Solicitação{{ seta_ordenacao('data_solicitacao') }}</a></th>
                         <th class="text-nowrap"><a class="text-decoration-none text-dark" href="{{ link_ordenacao('prazo') }}">Prazo{{ seta_ordenacao('prazo') }}</a></th>
-                        <th class="text-nowrap">Atraso</th>
+                        <th class="text-nowrap coluna-atraso">Atraso</th>
                         <th class="text-end pe-3">Ações</th>
                     </tr>
                 </thead>
@@ -127,14 +127,14 @@
                         <td>{{ demanda.categoria or '-' }}</td>
                         <td class="text-nowrap">{{ demanda.data_solicitacao.strftime('%d/%m/%Y') if demanda.data_solicitacao else '-' }}</td>
                         <td class="text-nowrap">{{ demanda.prazo.strftime('%d/%m/%Y') if demanda.prazo else '-' }}</td>
-                        <td class="text-nowrap">
+                        <td class="text-nowrap coluna-atraso">
                             {% if demanda.dias_atraso %}
                             <span class="badge text-bg-danger">{{ demanda.dias_atraso }}d</span>
                             {% else %}
                             -
                             {% endif %}
                         </td>
-                        <td class="text-end pe-3 text-nowrap">
+                        <td class="text-end pe-3 text-nowrap coluna-acoes">
                             <div class="acoes-compactas">
                                 <a class="btn btn-sm btn-outline-secondary" href="/demandas/{{ demanda.id }}?voltar={{ voltar }}">Visualizar</a>
                                 <a class="btn btn-sm btn-outline-primary" href="/demandas/{{ demanda.id }}/editar?voltar={{ voltar }}">Editar</a>

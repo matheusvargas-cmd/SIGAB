@@ -6,6 +6,11 @@
 <p class="text-muted small text-center mb-4">
     Preencha os dados abaixo para registrar sua solicitação. Nossa equipe vai analisar e dar retorno.
 </p>
+<p class="text-muted small text-center mb-4" style="font-size: 0.78rem;">
+    Seus dados serão usados exclusivamente para o atendimento desta solicitação pelo {{ gabinete.nome }}
+    e poderão ser armazenados para fins de acompanhamento e histórico de atendimento, em conformidade
+    com a Lei Geral de Proteção de Dados (LGPD).
+</p>
 
 {% if erro %}
 <div class="alert alert-danger py-2 small" role="alert">{{ erro }}</div>
@@ -102,7 +107,8 @@
                 <input class="form-control" type="file" id="fotos" name="fotos" multiple
                        accept="image/jpeg,image/png,image/webp">
                 <div class="form-text">
-                    Você pode enviar até 3 fotos. Máximo de 5 MB por foto.
+                    Você pode enviar até 3 fotos, no formato JPEG, PNG ou WebP. Máximo de 5 MB por foto
+                    (15 MB no total).
                 </div>
                 <ul id="lista-fotos-selecionadas" class="list-unstyled small mt-2 mb-0"></ul>
             </div>
