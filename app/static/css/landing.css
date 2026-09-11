@@ -308,6 +308,10 @@
   align-items: center;
 }
 
+.l-hero-grid > * {
+  min-width: 0;
+}
+
 .l-hero-texto h1 {
   font-size: clamp(2rem, 4vw, 2.85rem);
   font-weight: 700;
@@ -438,13 +442,14 @@
 }
 
 .l-feature-card h3 {
-  font-size: 1rem;
+  font-size: 1.04rem;
   color: var(--l-azul);
   margin: 0 0 8px;
 }
 
 .l-feature-card p {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
+  line-height: 1.5;
   color: var(--l-cinza-texto);
   margin: 0;
 }
@@ -538,7 +543,8 @@
   display: block;
   font-family: 'Inter', sans-serif;
   color: var(--l-cinza-texto);
-  font-size: 0.76rem;
+  font-size: 0.82rem;
+  line-height: 1.5;
   margin-top: 6px;
 }
 
@@ -593,7 +599,8 @@
   align-items: flex-start;
   gap: 10px;
   color: var(--l-azul-escuro);
-  font-size: 0.96rem;
+  font-size: 1rem;
+  line-height: 1.5;
 }
 
 .l-lista-check li::before {
@@ -625,13 +632,15 @@
 
 .l-seguranca-card p {
   margin: 0;
-  font-size: 0.92rem;
+  font-size: 0.96rem;
+  line-height: 1.5;
   color: var(--l-cinza-texto);
 }
 
 .l-aviso-legal {
   margin-top: 32px;
-  font-size: 0.82rem;
+  font-size: 0.86rem;
+  line-height: 1.55;
   color: var(--l-cinza-texto);
   max-width: 780px;
 }
@@ -702,14 +711,16 @@
 
 .l-plano-total {
   text-align: center;
-  font-size: 0.86rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
   color: var(--l-cinza-texto);
   margin-bottom: 20px;
 }
 
 .l-plano-desc {
   text-align: center;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
+  line-height: 1.5;
   color: var(--l-cinza-texto);
   margin-bottom: 24px;
 }
@@ -819,8 +830,9 @@
 }
 
 .l-footer-logo p {
-  font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.72);
   max-width: 320px;
   margin: 0;
 }
@@ -832,8 +844,8 @@
 }
 
 .l-footer-links a {
-  font-size: 0.9rem;
-  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.92rem;
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .l-footer-links a:hover {
@@ -843,8 +855,8 @@
 .l-footer-copy {
   border-top: 1px solid rgba(255, 255, 255, 0.12);
   padding-top: 20px;
-  font-size: 0.78rem;
-  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.6);
   text-align: center;
 }
 
@@ -937,6 +949,14 @@
 
   .l-hero-ctas .l-btn {
     width: 100%;
+    min-width: 0;
+  }
+
+  .l-btn--grande {
+    white-space: normal;
+    width: 100%;
+    min-width: 0;
+    text-align: center;
   }
 }
 
