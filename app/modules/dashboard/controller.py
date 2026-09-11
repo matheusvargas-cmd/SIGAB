@@ -5,9 +5,10 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.core.config import TEMPLATES_DIR
-from app.core.contexto import ContextoSessao, obter_contexto_atual
+from app.core.contexto import obter_contexto_atual, obter_usuario_atual
 from app.core.database import get_db
 from app.models.eleitor import Eleitor
+from app.modules.landing.view import renderizar_landing
 from app.services.agenda_service import AgendaService
 from app.services.demanda_service import DemandaService
 from app.services.eleitor_service import EleitorService
@@ -77,8 +78,21 @@ def _preparar_aniversariantes(
 async def dashboard(
     request: Request,
     db: Session = Depends(get_db),
-    contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
+    # A raiz é pública: sem sessão autenticada, mostra a landing page
+    # comercial (app/modules/landing/view.py) — nunca o dashboard interno.
+    # Checagem direta na sessão (não Depends(obter_contexto_atual), que
+    # levantaria NaoAutenticado/GabineteNaoSelecionado antes mesmo do corpo
+    # da função rodar) — é exatamente esse "levantar antes" que impediria
+    # a ramificação aqui. Autenticado, o restante da função é idêntico ao
+    # que já era: obter_usuario_atual/obter_contexto_atual continuam sendo
+    # a única fonte de verdade sobre sessão/gabinete, só chamados
+    # manualmente em vez de via Depends.
+    if not request.session.get("usuario_id"):
+        return renderizar_landing(request)
+
+    usuario = obter_usuario_atual(request, db)
+    contexto = obter_contexto_atual(request, db, usuario)
     gabinete_id = contexto.gabinete_id
     hoje = date.today()
     demandas_por_status = DemandaService.relatorio_por_status(db, gabinete_id)
