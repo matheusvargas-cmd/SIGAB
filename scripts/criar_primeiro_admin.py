@@ -36,6 +36,7 @@ import getpass
 import os
 import secrets
 import sys
+from datetime import date, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -45,7 +46,7 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.core.database import Base, SessionLocal, engine
 from app.core.security import gerar_hash_senha
-from app.models.gabinete import Gabinete
+from app.models.gabinete import DIAS_TRIAL_PADRAO, Gabinete
 from app.models.membro_gabinete import MembroGabinete
 from app.models.usuario import Usuario
 from app.services.migration_service import MigrationService
@@ -129,7 +130,21 @@ def main() -> int:
             print(f"\nJá existe um usuário com o e-mail '{email}'. Nada foi criado.")
             return 1
 
-        gabinete = Gabinete(nome=nome_gabinete, ativo=True, public_token=_gerar_public_token(db))
+        hoje = date.today()
+        gabinete = Gabinete(
+            nome=nome_gabinete,
+            ativo=True,
+            public_token=_gerar_public_token(db),
+            # Mesmo padrão de GabineteService.criar_gabinete_com_admin —
+            # este script cria gabinete diretamente (propositalmente
+            # autossuficiente, ver comentário acima), então precisa
+            # replicar o mesmo default de trial, nunca deixar as colunas
+            # NOT NULL de assinatura sem valor.
+            status_assinatura="TRIAL",
+            plano=None,
+            assinatura_inicio=hoje,
+            assinatura_vencimento=hoje + timedelta(days=DIAS_TRIAL_PADRAO),
+        )
         db.add(gabinete)
         db.flush()
 

@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -164,6 +166,45 @@ def atualizar(
             status_code=400,
         )
     return flash_message("Gabinete atualizado.", "success")
+
+
+@router.post("/{gabinete_id}/assinatura", response_class=HTMLResponse)
+def atualizar_assinatura(
+    request: Request,
+    gabinete_id: int,
+    status_assinatura: str = Form(...),
+    plano: str = Form(""),
+    assinatura_inicio: str = Form(...),
+    assinatura_vencimento: str = Form(...),
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(exigir_superadmin),
+):
+    gabinete = GabineteService.obter_por_id(db, gabinete_id)
+    if gabinete is None:
+        return flash_message("Gabinete não encontrado.", "danger")
+    try:
+        GabineteService.atualizar_assinatura_superadmin(
+            db,
+            gabinete,
+            status_assinatura,
+            plano,
+            date.fromisoformat(assinatura_inicio),
+            date.fromisoformat(assinatura_vencimento),
+        )
+    except ValueError as error:
+        return templates.TemplateResponse(
+            request=request,
+            name="superadmin/gabinete_editar.html",
+            context={
+                "titulo": "Editar gabinete",
+                "usuario_nome": usuario.nome,
+                "gabinete": gabinete,
+                "contadores": GabineteService.contadores(db, gabinete.id),
+                "erro": str(error),
+            },
+            status_code=400,
+        )
+    return RedirectResponse(f"/superadmin/gabinetes/{gabinete_id}/editar", status_code=303)
 
 
 @router.post("/{gabinete_id}/enviar-diario", response_class=HTMLResponse)

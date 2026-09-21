@@ -22,6 +22,7 @@
                         <th class="ps-3">Gabinete</th>
                         <th>Responsável</th>
                         <th>Status</th>
+                        <th>Assinatura</th>
                         <th class="text-end">Usuários</th>
                         <th class="text-end">Eleitores</th>
                         <th class="text-end">Demandas</th>
@@ -35,6 +36,12 @@
                         <td class="ps-3">{{ linha.gabinete.nome }}</td>
                         <td>{{ linha.gabinete.responsavel or '-' }}</td>
                         <td><span class="badge {{ 'text-bg-success' if linha.gabinete.ativo else 'text-bg-secondary' }}">{{ 'Ativo' if linha.gabinete.ativo else 'Inativo' }}</span></td>
+                        <td>
+                            <span class="badge {{ 'text-bg-danger' if linha.gabinete.assinatura_vencida else 'text-bg-info' }}">
+                                {{ linha.gabinete.status_assinatura }}{% if linha.gabinete.assinatura_vencida %} · vencida{% endif %}
+                            </span>
+                            <div class="small text-muted">até {{ linha.gabinete.assinatura_vencimento.strftime('%d/%m/%Y') }}</div>
+                        </td>
                         <td class="text-end">{{ linha.contadores.usuarios }}</td>
                         <td class="text-end">{{ linha.contadores.eleitores }}</td>
                         <td class="text-end">{{ linha.contadores.demandas }}</td>
@@ -44,7 +51,7 @@
                         </td>
                     </tr>
                     {% else %}
-                    <tr><td class="text-center text-muted py-4" colspan="8">Nenhum gabinete cadastrado.</td></tr>
+                    <tr><td class="text-center text-muted py-4" colspan="9">Nenhum gabinete cadastrado.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>

@@ -1,5 +1,5 @@
 import secrets
-from datetime import date
+from datetime import date, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -10,7 +10,7 @@ from app.models.agenda import Agenda
 from app.models.categoria import Categoria
 from app.models.demanda import Demanda
 from app.models.eleitor import Eleitor
-from app.models.gabinete import Gabinete
+from app.models.gabinete import DIAS_TRIAL_PADRAO, PLANO_OPCOES, STATUS_ASSINATURA_OPCOES, Gabinete
 from app.models.membro_gabinete import MembroGabinete
 from app.models.usuario import Usuario
 from app.services.demanda_service import CATEGORIAS
@@ -189,11 +189,21 @@ class GabineteService:
             raise ValueError("Já existe um usuário com este e-mail.")
 
         try:
+            hoje = date.today()
             gabinete = Gabinete(
                 nome=nome_gabinete_normalizado,
                 responsavel=responsavel_normalizado,
                 ativo=True,
                 public_token=GabineteService._gerar_public_token_unico(db),
+                # Todo gabinete novo começa em degustação — ver Fase 1
+                # (controle de validade/assinatura). Isso é distinto de
+                # `ativo` acima: um gabinete em TRIAL vencido continua
+                # ativo=True, só perde acesso pela checagem de validade em
+                # app/core/contexto.py, nunca por este campo.
+                status_assinatura="TRIAL",
+                plano=None,
+                assinatura_inicio=hoje,
+                assinatura_vencimento=hoje + timedelta(days=DIAS_TRIAL_PADRAO),
             )
             db.add(gabinete)
             db.flush()
@@ -249,6 +259,39 @@ class GabineteService:
         gabinete.responsavel = (responsavel or "").strip() or None
         gabinete.ativo = ativo
         gabinete.email_institucional = email_normalizado or None
+        db.commit()
+        db.refresh(gabinete)
+        return gabinete
+
+    @staticmethod
+    def atualizar_assinatura_superadmin(
+        db: Session,
+        gabinete: Gabinete,
+        status_assinatura: str,
+        plano: str | None,
+        assinatura_inicio: date,
+        assinatura_vencimento: date,
+    ) -> Gabinete:
+        """Ajuste manual de validade/assinatura (Fase 1) — para testes e
+        operação provisória enquanto o fluxo de pagamento
+        (app/modules/assinatura) ainda não existe de fato. Deliberadamente
+        separado de atualizar_superadmin() acima: são duas preocupações
+        independentes (dados cadastrais do gabinete vs. validade da
+        assinatura), cada uma editável sem depender da outra."""
+        if status_assinatura not in STATUS_ASSINATURA_OPCOES:
+            raise ValueError("Status de assinatura inválido.")
+
+        plano_normalizado = (plano or "").strip().upper() or None
+        if plano_normalizado and plano_normalizado not in PLANO_OPCOES:
+            raise ValueError("Plano inválido.")
+
+        if assinatura_vencimento < assinatura_inicio:
+            raise ValueError("A data de vencimento não pode ser anterior à data de início.")
+
+        gabinete.status_assinatura = status_assinatura
+        gabinete.plano = plano_normalizado
+        gabinete.assinatura_inicio = assinatura_inicio
+        gabinete.assinatura_vencimento = assinatura_vencimento
         db.commit()
         db.refresh(gabinete)
         return gabinete

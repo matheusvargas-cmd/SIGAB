@@ -30,6 +30,14 @@ class GabineteNaoSelecionado(Exception):
     /selecionar-gabinete."""
 
 
+class GabineteVencido(Exception):
+    """Autenticado, gabinete selecionado e ativo, mas a assinatura/trial
+    venceu — redireciona para /assinatura. Nunca levantada para
+    SUPERADMIN (ver exigir_superadmin, trilha separada que nem passa por
+    obter_contexto_atual) nem para gabinete inativo (esse caso já vira
+    GabineteNaoSelecionado antes de chegar na checagem de validade)."""
+
+
 class SemPermissao(Exception):
     """Autenticado, com gabinete, mas o perfil não permite esta ação."""
 
@@ -89,6 +97,15 @@ def obter_contexto_atual(
     if gabinete is None or not gabinete.ativo:
         request.session.pop("gabinete_id", None)
         raise GabineteNaoSelecionado()
+
+    # Ponto único de checagem de validade (Fase 1) — nenhuma outra rota
+    # deve reimplementar esta comparação. SUPERADMIN nunca passa por aqui
+    # de verdade (sua sessão nunca tem gabinete_id, ver exigir_superadmin
+    # e app/modules/auth/controller.py:login), mas o bypass explícito
+    # abaixo é uma segunda trava independente disso — requisito 10 nunca
+    # depende só do fluxo de login não permitir a combinação.
+    if not usuario.super_admin and gabinete.assinatura_vencida:
+        raise GabineteVencido()
 
     contexto = ContextoSessao(usuario=usuario, gabinete=gabinete, membro=membro)
     # Guardado em request.state (não na sessão) só para a topbar exibir

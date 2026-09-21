@@ -9,11 +9,12 @@ from starlette.middleware.sessions import SessionMiddleware
 
 import app.models  # noqa: F401 — garante que todo model é conhecido por Base.metadata
 from app.core.config import APP_NAME, STATIC_DIR, settings
-from app.core.contexto import GabineteNaoSelecionado, NaoAutenticado, SemPermissao
+from app.core.contexto import GabineteNaoSelecionado, GabineteVencido, NaoAutenticado, SemPermissao
 from app.core.database import Base, SessionLocal, engine
 from app.services.migration_service import MigrationService
 
 from app.modules.agenda.controller import router as agenda_router
+from app.modules.assinatura.controller import router as assinatura_router
 from app.modules.auth.controller import router as auth_router
 from app.modules.cidadao.controller import router as cidadao_router
 from app.modules.configuracoes.controller import router as configuracoes_router
@@ -58,6 +59,7 @@ if settings.is_sqlite:
     MigrationService.vincular_categoria_id_demandas()
     MigrationService.semear_categorias_atendimento_historico()
     MigrationService.semear_categorias_demandas_reais()
+    MigrationService.adicionar_controle_assinatura()
     MigrationService.garantir_gabinete_padrao_local()
 
 # debug=True liga páginas de erro do Starlette com traceback completo (e
@@ -95,6 +97,11 @@ async def _redirecionar_login(request: Request, exc: NaoAutenticado):
 @app.exception_handler(GabineteNaoSelecionado)
 async def _redirecionar_selecionar_gabinete(request: Request, exc: GabineteNaoSelecionado):
     return RedirectResponse("/selecionar-gabinete", status_code=303)
+
+
+@app.exception_handler(GabineteVencido)
+async def _redirecionar_assinatura(request: Request, exc: GabineteVencido):
+    return RedirectResponse("/assinatura", status_code=303)
 
 
 @app.exception_handler(SemPermissao)
@@ -147,6 +154,7 @@ def health() -> JSONResponse:
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 app.include_router(auth_router)
+app.include_router(assinatura_router)
 app.include_router(dashboard_router)
 app.include_router(eleitores_router)
 app.include_router(demandas_router)
