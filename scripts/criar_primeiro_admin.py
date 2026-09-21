@@ -36,7 +36,7 @@ import getpass
 import os
 import secrets
 import sys
-from datetime import date, timedelta
+from datetime import timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -46,6 +46,7 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.core.database import Base, SessionLocal, engine
 from app.core.security import gerar_hash_senha
+from app.core.tempo import hoje_operacional
 from app.models.gabinete import DIAS_TRIAL_PADRAO, Gabinete
 from app.models.membro_gabinete import MembroGabinete
 from app.models.usuario import Usuario
@@ -130,7 +131,7 @@ def main() -> int:
             print(f"\nJá existe um usuário com o e-mail '{email}'. Nada foi criado.")
             return 1
 
-        hoje = date.today()
+        hoje = hoje_operacional()
         gabinete = Gabinete(
             nome=nome_gabinete,
             ativo=True,

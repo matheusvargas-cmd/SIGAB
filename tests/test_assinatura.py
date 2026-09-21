@@ -22,8 +22,10 @@ Uso:
 import os
 import sys
 import unittest
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from types import SimpleNamespace
+from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -36,6 +38,7 @@ from app.core.contexto import (  # noqa: E402
 )
 from app.core.database import SessionLocal  # noqa: E402
 from app.core.security import gerar_hash_senha  # noqa: E402
+from app.core.tempo import hoje_operacional  # noqa: E402
 from app.models.categoria import Categoria  # noqa: E402
 from app.models.gabinete import Gabinete  # noqa: E402
 from app.models.membro_gabinete import MembroGabinete  # noqa: E402
@@ -251,6 +254,119 @@ class TesteAjusteManualSuperadmin(BaseTesteAssinatura):
             GabineteService.atualizar_assinatura_superadmin(
                 self.db, gabinete, "ATIVO", "MENSAL", inicio, inicio - timedelta(days=1)
             )
+
+
+class TesteFusoOperacional(BaseTesteAssinatura):
+    """Correção da auditoria (item 10.1): a validade precisa considerar o
+    dia civil de America/Sao_Paulo, nunca o fuso do servidor. Os dois
+    testes abaixo fixam o instante/"hoje" artificialmente — não dependem
+    do relógio real da máquina que roda a suíte, então continuam válidos
+    mesmo fora da janela de 3h em que UTC e Brasília diferem."""
+
+    def test_hoje_operacional_usa_fuso_sao_paulo_nao_utc(self):
+        # 2026-09-22 01:00 UTC == 2026-09-21 22:00 em America/Sao_Paulo.
+        # Um servidor em UTC (o caso comum em Render/Neon) já considera
+        # "hoje" == 22/09 nesse instante; o dia operacional real, em
+        # Brasília, ainda é 21/09.
+        instante_utc = datetime(2026, 9, 22, 1, 0, tzinfo=ZoneInfo("UTC"))
+
+        class _DatetimeFixo(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return instante_utc.astimezone(tz) if tz else instante_utc
+
+        with patch("app.core.tempo.datetime", _DatetimeFixo):
+            resultado = hoje_operacional()
+
+        self.assertEqual(resultado, date(2026, 9, 21))
+        self.assertNotEqual(resultado, instante_utc.date())  # UTC diria 22/09
+
+    def test_assinatura_vencida_respeita_dia_civil_completo(self):
+        gabinete, _usuario = self._criar_gabinete_com_admin()
+        gabinete.assinatura_vencimento = date(2026, 9, 21)
+        self.db.commit()
+
+        with patch("app.models.gabinete.hoje_operacional", return_value=date(2026, 9, 21)):
+            self.assertFalse(
+                gabinete.assinatura_vencida,
+                "no proprio dia do vencimento (fuso operacional) ainda deve funcionar",
+            )
+
+        with patch("app.models.gabinete.hoje_operacional", return_value=date(2026, 9, 22)):
+            self.assertTrue(
+                gabinete.assinatura_vencida,
+                "no dia seguinte (fuso operacional) já deve estar vencido",
+            )
+
+
+class TesteIsolamentoPaginaAssinatura(BaseTesteAssinatura):
+    """Correção da auditoria (item 10.2): /assinatura não pode mais
+    revelar nome/vencimento de um gabinete ao qual o usuário não tem mais
+    vínculo ativo, mesmo com uma sessão antiga que ainda carregue aquele
+    gabinete_id."""
+
+    def test_sessao_antiga_apos_remocao_do_vinculo_nao_revela_gabinete(self):
+        from app.modules.assinatura.controller import vencido as pagina_assinatura
+
+        gabinete, usuario = self._criar_gabinete_com_admin()
+        self._forcar_assinatura(gabinete, "TRIAL", dias_para_vencer=-1)
+
+        request = FakeRequest(gabinete_id=gabinete.id)
+
+        # Com o vínculo intacto, a página mostra o gabinete normalmente.
+        resposta = pagina_assinatura(request, self.db, usuario)
+        corpo = resposta.body.decode("utf-8")
+        self.assertIn(gabinete.nome, corpo)
+
+        # Remove o vínculo (ex.: SUPERADMIN retirou o acesso) sem
+        # invalidar a sessão antiga — o cookie assinado do usuário ainda
+        # carrega o mesmo gabinete_id de antes.
+        membro = self.db.scalar(
+            select(MembroGabinete).where(
+                MembroGabinete.usuario_id == usuario.id,
+                MembroGabinete.gabinete_id == gabinete.id,
+            )
+        )
+        self.db.delete(membro)
+        self.db.commit()
+
+        resposta2 = pagina_assinatura(request, self.db, usuario)
+        corpo2 = resposta2.body.decode("utf-8")
+        self.assertNotIn(gabinete.nome, corpo2)
+        self.assertNotIn(str(gabinete.assinatura_vencimento.year), corpo2)
+        # gabinete_id obsoleto precisa ser removido da sessão — a próxima
+        # navegação (recarregar "/", "Sair") segue o fluxo normal de
+        # contexto inválido já existente.
+        self.assertNotIn("gabinete_id", request.session)
+
+    def test_sem_loop_entre_assinatura_login_selecionar_gabinete(self):
+        """Depois da correção, chamar a página de novo com a sessão já
+        sem gabinete_id não deve levantar NaoAutenticado/GabineteVencido/
+        GabineteNaoSelecionado — /assinatura nunca depende de
+        obter_contexto_atual, então nunca entra nesse ciclo."""
+        from app.modules.assinatura.controller import vencido as pagina_assinatura
+
+        gabinete, usuario = self._criar_gabinete_com_admin()
+        self._forcar_assinatura(gabinete, "TRIAL", dias_para_vencer=-1)
+        request = FakeRequest(gabinete_id=gabinete.id)
+
+        membro = self.db.scalar(
+            select(MembroGabinete).where(
+                MembroGabinete.usuario_id == usuario.id,
+                MembroGabinete.gabinete_id == gabinete.id,
+            )
+        )
+        self.db.delete(membro)
+        self.db.commit()
+
+        # Primeira chamada: detecta o vínculo ausente, remove gabinete_id.
+        pagina_assinatura(request, self.db, usuario)
+        self.assertNotIn("gabinete_id", request.session)
+
+        # Segunda chamada, sessão já sem gabinete_id: continua respondendo
+        # normalmente (200, contexto genérico), sem lançar nada.
+        resposta = pagina_assinatura(request, self.db, usuario)
+        self.assertIsNotNone(resposta.body)
 
 
 if __name__ == "__main__":

@@ -1,8 +1,9 @@
-from datetime import date, datetime
+from datetime import datetime
 
 from sqlalchemy import Boolean, Column, Date, DateTime, Integer, String
 
 from app.core.database import Base
+from app.core.tempo import hoje_operacional
 
 # Vocabulário do próprio schema (mesmo espírito de PERFIS_OPCOES em
 # membro_gabinete.py e STATUS_OPCOES em demanda_service.py) — status da
@@ -84,13 +85,16 @@ class Gabinete(Base):
     # renovação já vir com a opção mais provável destacada).
     plano = Column(String(20), nullable=True)
 
-    assinatura_inicio = Column(Date, nullable=False, default=date.today)
+    assinatura_inicio = Column(Date, nullable=False, default=hoje_operacional)
     assinatura_vencimento = Column(Date, nullable=False)
 
     @property
     def assinatura_vencida(self) -> bool:
         """Única fonte de verdade sobre "venceu ou não" — nunca um terceiro
         valor de status_assinatura armazenado no banco (que exigiria manter
-        dois lugares sincronizados). Comparação simples de data: o gabinete
-        continua funcionando normalmente até o fim do dia de vencimento."""
-        return date.today() > self.assinatura_vencimento
+        dois lugares sincronizados). Comparação simples de data no fuso
+        operacional (America/Sao_Paulo, ver app/core/tempo.py) — nunca no
+        fuso do servidor: o gabinete continua funcionando normalmente até
+        o fim do dia de vencimento *em Brasília*, mesmo que o servidor já
+        esteja em UTC no dia seguinte."""
+        return hoje_operacional() > self.assinatura_vencimento

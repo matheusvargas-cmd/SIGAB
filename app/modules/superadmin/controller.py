@@ -204,7 +204,7 @@ def atualizar_assinatura(
             },
             status_code=400,
         )
-    return RedirectResponse(f"/superadmin/gabinetes/{gabinete_id}/editar", status_code=303)
+    return flash_message("Assinatura atualizada com sucesso.", "success")
 
 
 @router.post("/{gabinete_id}/enviar-diario", response_class=HTMLResponse)

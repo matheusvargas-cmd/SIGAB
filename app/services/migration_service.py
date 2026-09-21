@@ -1,10 +1,12 @@
 import logging
 import secrets
+from datetime import timedelta
 
 from sqlalchemy import inspect, select, text
 from sqlalchemy.orm import Session
 
 from app.core.database import engine
+from app.core.tempo import hoje_operacional
 
 logger = logging.getLogger(__name__)
 
@@ -450,7 +452,8 @@ class MigrationService:
             conexao.execute(text("ALTER TABLE gabinetes ADD COLUMN assinatura_vencimento DATE"))
             conexao.execute(text("UPDATE gabinetes SET assinatura_inicio = substr(criado_em, 1, 10)"))
             conexao.execute(
-                text("UPDATE gabinetes SET assinatura_inicio = date('now') WHERE assinatura_inicio IS NULL")
+                text("UPDATE gabinetes SET assinatura_inicio = :hoje WHERE assinatura_inicio IS NULL"),
+                {"hoje": hoje_operacional().isoformat()},
             )
             conexao.execute(
                 text("UPDATE gabinetes SET status_assinatura = 'ATIVO' WHERE status_assinatura IS NULL")
@@ -499,9 +502,7 @@ class MigrationService:
                     if sessao.scalar(select(Gabinete).where(Gabinete.public_token == candidato)) is None:
                         token = candidato
                         break
-                from datetime import date, timedelta
-
-                hoje = date.today()
+                hoje = hoje_operacional()
                 gabinete = Gabinete(
                     nome="Gabinete Principal",
                     ativo=True,

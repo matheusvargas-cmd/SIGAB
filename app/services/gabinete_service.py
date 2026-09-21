@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.security import gerar_hash_senha
+from app.core.tempo import hoje_operacional
 from app.models.agenda import Agenda
 from app.models.categoria import Categoria
 from app.models.demanda import Demanda
@@ -189,7 +190,7 @@ class GabineteService:
             raise ValueError("Já existe um usuário com este e-mail.")
 
         try:
-            hoje = date.today()
+            hoje = hoje_operacional()
             gabinete = Gabinete(
                 nome=nome_gabinete_normalizado,
                 responsavel=responsavel_normalizado,
