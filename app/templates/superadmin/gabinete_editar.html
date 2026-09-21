@@ -39,6 +39,50 @@
                 <button class="btn btn-primary" type="submit">Salvar</button>
             </div>
         </form>
+        <form class="card mt-4" method="post" action="/superadmin/gabinetes/{{ gabinete.id }}/assinatura">
+            <div class="card-body p-4">
+                <h3 class="h6 text-muted mb-3">Assinatura</h3>
+                <p class="small text-muted">
+                    Status atual:
+                    <span class="badge {{ 'text-bg-danger' if gabinete.assinatura_vencida else 'text-bg-info' }}">
+                        {{ gabinete.status_assinatura }}{% if gabinete.assinatura_vencida %} · vencida{% endif %}
+                    </span>
+                </p>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label" for="status_assinatura">Status</label>
+                        <select class="form-select" id="status_assinatura" name="status_assinatura">
+                            <option value="TRIAL" {% if gabinete.status_assinatura == 'TRIAL' %}selected{% endif %}>TRIAL</option>
+                            <option value="ATIVO" {% if gabinete.status_assinatura == 'ATIVO' %}selected{% endif %}>ATIVO</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="plano">Plano</label>
+                        <select class="form-select" id="plano" name="plano">
+                            <option value="" {% if not gabinete.plano %}selected{% endif %}>Nenhum</option>
+                            <option value="MENSAL" {% if gabinete.plano == 'MENSAL' %}selected{% endif %}>Mensal</option>
+                            <option value="ANUAL" {% if gabinete.plano == 'ANUAL' %}selected{% endif %}>Anual</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="assinatura_inicio">Início</label>
+                        <input class="form-control" type="date" id="assinatura_inicio" name="assinatura_inicio" value="{{ gabinete.assinatura_inicio.isoformat() }}" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="assinatura_vencimento">Vencimento</label>
+                        <input class="form-control" type="date" id="assinatura_vencimento" name="assinatura_vencimento" value="{{ gabinete.assinatura_vencimento.isoformat() }}" required>
+                    </div>
+                </div>
+                <p class="small text-muted mt-3 mb-0">
+                    Ajuste manual para testes e operação provisória, enquanto o fluxo de pagamento
+                    (<code>/assinatura</code>) ainda não existe. Gabinete vencido é redirecionado para lá
+                    automaticamente ao tentar acessar o sistema.
+                </p>
+            </div>
+            <div class="card-footer bg-white text-end">
+                <button class="btn btn-primary" type="submit">Salvar assinatura</button>
+            </div>
+        </form>
     </div>
     <div class="col-lg-5">
         <div class="card">

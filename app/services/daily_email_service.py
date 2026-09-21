@@ -1,11 +1,11 @@
 import logging
 from datetime import date, datetime, time
-from zoneinfo import ZoneInfo
 
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.core.config import TEMPLATES_DIR
+from app.core.tempo import hoje_operacional as _hoje_operacional_core
 from app.models.gabinete import Gabinete
 from app.services.agenda_service import AgendaService
 from app.services.demanda_service import DemandaService
@@ -15,8 +15,6 @@ from app.services.gabinete_service import GabineteService
 from app.services.whatsapp_link_service import WhatsappLinkService
 
 logger = logging.getLogger(__name__)
-
-FUSO_OPERACIONAL = ZoneInfo("America/Sao_Paulo")
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
@@ -36,8 +34,11 @@ class DailyEmailService:
         """"Hoje" no fuso operacional do gabinete (America/Sao_Paulo), não
         no fuso do servidor — o Render normalmente roda em UTC, e
         date.today() ali pode já estar num dia diferente do horário real
-        de Brasília, principalmente à noite."""
-        return datetime.now(FUSO_OPERACIONAL).date()
+        de Brasília, principalmente à noite. Delega para app.core.tempo
+        (mesma fonte usada pelo controle de validade/assinatura) — nunca
+        redeclara a lógica aqui; método mantido por compatibilidade com
+        quem já chama DailyEmailService.hoje_operacional()."""
+        return _hoje_operacional_core()
 
     @staticmethod
     def _formatar_horario_compromisso(inicio: datetime, fim: datetime | None) -> str:

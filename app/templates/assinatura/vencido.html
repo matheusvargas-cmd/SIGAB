@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Assinatura · Gabinete 360</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" type="image/png" sizes="128x128" href="/static/img/icone-128.png">
+<link href="/static/css/landing.css" rel="stylesheet">
+</head>
+<body class="l-page">
+
+<header class="l-header">
+    <div class="l-container l-header-conteudo">
+        <span class="l-header-logo" aria-label="Gabinete 360">
+            <img src="/static/img/logo-horizontal.png" alt="Gabinete 360 — Gestão Inteligente de Gabinetes">
+        </span>
+        <form action="/logout" method="post">
+            <button type="submit" class="l-btn l-btn--outline">Sair</button>
+        </form>
+    </div>
+</header>
+
+<section class="l-secao">
+    <div class="l-container" style="max-width:860px;">
+        <h1 class="l-titulo-secao" style="text-align:center;">
+            {% if gabinete %}
+                A assinatura do {{ gabinete.nome }} venceu em {{ gabinete.assinatura_vencimento.strftime('%d/%m/%Y') }}.
+            {% else %}
+                A assinatura deste gabinete está vencida.
+            {% endif %}
+        </h1>
+        <p style="text-align:center; max-width:620px; margin:0 auto 40px; color:var(--l-cinza-texto); font-size:1.05rem;">
+            Olá, {{ usuario_nome }}. Para continuar usando o Gabinete 360 — eleitores, demandas, atendimento ao
+            cidadão, agenda e relatórios — escolha um plano abaixo. Nenhum dado do seu gabinete foi apagado: tudo
+            continua guardado, esperando a renovação.
+        </p>
+
+        <div class="l-precos-grid">
+            <div class="l-plano">
+                <div class="l-plano-nome">PLANO MENSAL</div>
+                <div class="l-plano-preco"><span class="l-valor">R$ 99,90</span></div>
+                <div class="l-plano-total">por mês</div>
+                <p class="l-plano-desc">Simples, direto e sem compromisso anual.</p>
+                <a href="#renovacao" class="l-btn l-btn--outline-azul l-btn--bloco" data-cta="renovar-mensal">QUERO RENOVAR</a>
+            </div>
+            <div class="l-plano l-plano--destaque">
+                <div class="l-plano-badge">MELHOR CUSTO-BENEFÍCIO</div>
+                <div class="l-plano-nome">PLANO ANUAL</div>
+                <div class="l-plano-preco"><span class="l-valor">10x R$ 79,90</span></div>
+                <div class="l-plano-total">no cartão de crédito<br>Total: R$ 799,00 · equivalente a R$ 66,58/mês</div>
+                <p class="l-plano-desc">O melhor valor para organizar seu gabinete durante todo o ano.</p>
+                <a href="#renovacao" class="l-btn l-btn--verde l-btn--bloco" data-cta="renovar-anual">QUERO RENOVAR</a>
+            </div>
+        </div>
+
+        <div id="renovacao" class="l-aviso-legal" style="text-align:center; margin-top:32px;">
+            Estamos finalizando o fluxo de renovação e pagamento. Nossa equipe pode concluir sua renovação
+            manualmente enquanto isso — fale com o administrador responsável pelo cadastro do seu gabinete.
+        </div>
+    </div>
+</section>
+
+</body>
+</html>

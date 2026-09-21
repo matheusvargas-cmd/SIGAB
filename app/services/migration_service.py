@@ -1,10 +1,12 @@
 import logging
 import secrets
+from datetime import timedelta
 
 from sqlalchemy import inspect, select, text
 from sqlalchemy.orm import Session
 
 from app.core.database import engine
+from app.core.tempo import hoje_operacional
 
 logger = logging.getLogger(__name__)
 
@@ -421,6 +423,52 @@ class MigrationService:
                     logger.info("Coluna %s.gabinete_id adicionada (multi-tenant, nullable).", tabela)
 
     @staticmethod
+    def adicionar_controle_assinatura() -> None:
+        """Ponte de compatibilidade só para SQLite local que já existia
+        antes da Fase 1 (controle de validade/assinatura) — mesmo padrão de
+        `adicionar_gabinete_id()`/`adicionar_data_solicitacao_demandas()`:
+        `Base.metadata.create_all()` não adiciona coluna nova a uma tabela
+        "gabinetes" que já existia antes desta etapa. Faz o mesmo backfill
+        da migration Alembic equivalente (082b4c3629e0): todo gabinete já
+        existente recebe status_assinatura='ATIVO' e vencimento bem no
+        futuro — nunca TRIAL com 7 dias, que bloquearia quem já usa a
+        instalação local. Precisa rodar antes de
+        `garantir_gabinete_padrao_local()` (que lê/cria linhas de Gabinete
+        já esperando essas colunas existirem). Idempotente: só executa se
+        a coluna ainda não existir.
+        """
+        inspector = inspect(engine)
+        if "gabinetes" not in inspector.get_table_names():
+            return
+
+        colunas = {coluna["name"] for coluna in inspector.get_columns("gabinetes")}
+        if "status_assinatura" in colunas:
+            return
+
+        with engine.begin() as conexao:
+            conexao.execute(text("ALTER TABLE gabinetes ADD COLUMN status_assinatura VARCHAR(20)"))
+            conexao.execute(text("ALTER TABLE gabinetes ADD COLUMN plano VARCHAR(20)"))
+            conexao.execute(text("ALTER TABLE gabinetes ADD COLUMN assinatura_inicio DATE"))
+            conexao.execute(text("ALTER TABLE gabinetes ADD COLUMN assinatura_vencimento DATE"))
+            conexao.execute(text("UPDATE gabinetes SET assinatura_inicio = substr(criado_em, 1, 10)"))
+            conexao.execute(
+                text("UPDATE gabinetes SET assinatura_inicio = :hoje WHERE assinatura_inicio IS NULL"),
+                {"hoje": hoje_operacional().isoformat()},
+            )
+            conexao.execute(
+                text("UPDATE gabinetes SET status_assinatura = 'ATIVO' WHERE status_assinatura IS NULL")
+            )
+            conexao.execute(
+                text(
+                    "UPDATE gabinetes SET assinatura_vencimento = date(assinatura_inicio, '+10 years') "
+                    "WHERE assinatura_vencimento IS NULL"
+                )
+            )
+        logger.info(
+            "Colunas de assinatura adicionadas a gabinetes (SQLite local) — gabinetes existentes marcados ATIVO."
+        )
+
+    @staticmethod
     def garantir_gabinete_padrao_local() -> None:
         """Só para SQLite local (instalação single-tenant já existente antes
         da Fase 1): garante um Gabinete padrão e vincula a ele qualquer dado
@@ -454,7 +502,22 @@ class MigrationService:
                     if sessao.scalar(select(Gabinete).where(Gabinete.public_token == candidato)) is None:
                         token = candidato
                         break
-                gabinete = Gabinete(nome="Gabinete Principal", ativo=True, public_token=token)
+                hoje = hoje_operacional()
+                gabinete = Gabinete(
+                    nome="Gabinete Principal",
+                    ativo=True,
+                    public_token=token,
+                    # Instalação desktop/standalone (SQLite local) — não é
+                    # um cadastro comercial novo, então nunca entra em
+                    # TRIAL de 7 dias: mesmo default seguro usado pela
+                    # migration para gabinetes já existentes (ATIVO, bem
+                    # no futuro), para nunca bloquear quem já usa o
+                    # sistema localmente.
+                    status_assinatura="ATIVO",
+                    plano=None,
+                    assinatura_inicio=hoje,
+                    assinatura_vencimento=hoje + timedelta(days=3650),
+                )
                 sessao.add(gabinete)
                 sessao.flush()
                 logger.info("Gabinete padrão '%s' criado para a instalação local.", gabinete.nome)
