@@ -23,6 +23,12 @@
 
 <section class="l-secao">
     <div class="l-container" style="max-width:860px;">
+        {% if asaas_sandbox %}
+        <p style="text-align:center; margin:0 0 16px;">
+            <span class="l-plano-badge" style="background:#8a6d1a;">AMBIENTE DE TESTES (SANDBOX)</span>
+        </p>
+        {% endif %}
+
         <h1 class="l-titulo-secao" style="text-align:center;">
             {% if gabinete %}
                 A assinatura do {{ gabinete.nome }} venceu em {{ gabinete.assinatura_vencimento.strftime('%d/%m/%Y') }}.
@@ -30,19 +36,59 @@
                 A assinatura deste gabinete está vencida.
             {% endif %}
         </h1>
-        <p style="text-align:center; max-width:620px; margin:0 auto 40px; color:var(--l-cinza-texto); font-size:1.05rem;">
+        <p style="text-align:center; max-width:620px; margin:0 auto 32px; color:var(--l-cinza-texto); font-size:1.05rem;">
             Olá, {{ usuario_nome }}. Para continuar usando o Gabinete 360 — eleitores, demandas, atendimento ao
             cidadão, agenda e relatórios — escolha um plano abaixo. Nenhum dado do seu gabinete foi apagado: tudo
             continua guardado, esperando a renovação.
         </p>
 
+        {% if erro %}
+        <div class="l-aviso-legal" style="text-align:center; background:#fdecea; color:#8a1f11; margin-bottom:24px;">
+            {{ erro }}
+        </div>
+        {% endif %}
+
+        {% if asaas_disponivel %}
+        <form method="post" action="/assinatura/checkout">
+            <div style="max-width:420px; margin:0 auto 28px;">
+                <label class="l-plano-desc" style="display:block; text-align:left; margin-bottom:6px;" for="nome">Nome do responsável</label>
+                <input type="text" id="nome" name="nome" placeholder="Nome de quem está contratando" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid #d0d5dd; margin-bottom:14px;">
+                <label class="l-plano-desc" style="display:block; text-align:left; margin-bottom:6px;" for="cpf_cnpj">CPF ou CNPJ *</label>
+                <input type="text" id="cpf_cnpj" name="cpf_cnpj" required placeholder="Somente números" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid #d0d5dd;">
+                <p class="l-plano-desc" style="text-align:left; margin-top:6px;">Exigido pelo Asaas para identificar quem está pagando — nunca pedimos dados de cartão aqui.</p>
+            </div>
+
+            <div class="l-precos-grid">
+                <div class="l-plano">
+                    <div class="l-plano-nome">PLANO MENSAL</div>
+                    <div class="l-plano-preco"><span class="l-valor">R$ 99,90</span></div>
+                    <div class="l-plano-total">por mês</div>
+                    <p class="l-plano-desc">Simples, direto e sem compromisso anual.</p>
+                    <button type="submit" name="plano" value="MENSAL" class="l-btn l-btn--outline-azul l-btn--bloco" data-cta="renovar-mensal">QUERO RENOVAR</button>
+                </div>
+                <div class="l-plano l-plano--destaque">
+                    <div class="l-plano-badge">MELHOR CUSTO-BENEFÍCIO</div>
+                    <div class="l-plano-nome">PLANO ANUAL</div>
+                    <div class="l-plano-preco"><span class="l-valor">10x R$ 79,90</span></div>
+                    <div class="l-plano-total">no cartão de crédito<br>Total: R$ 799,00 · equivalente a R$ 66,58/mês</div>
+                    <p class="l-plano-desc">O melhor valor para organizar seu gabinete durante todo o ano.</p>
+                    <button type="submit" name="plano" value="ANUAL" class="l-btn l-btn--verde l-btn--bloco" data-cta="renovar-anual">QUERO RENOVAR</button>
+                </div>
+            </div>
+        </form>
+
+        <div class="l-aviso-legal" style="text-align:center; margin-top:32px;">
+            Você será redirecionado para a página de pagamento hospedada pelo Asaas. O SIGAB nunca recebe nem
+            armazena dados de cartão. A confirmação do pagamento é automática — pode levar alguns instantes após
+            você concluir o pagamento.
+        </div>
+        {% else %}
         <div class="l-precos-grid">
             <div class="l-plano">
                 <div class="l-plano-nome">PLANO MENSAL</div>
                 <div class="l-plano-preco"><span class="l-valor">R$ 99,90</span></div>
                 <div class="l-plano-total">por mês</div>
                 <p class="l-plano-desc">Simples, direto e sem compromisso anual.</p>
-                <a href="#renovacao" class="l-btn l-btn--outline-azul l-btn--bloco" data-cta="renovar-mensal">QUERO RENOVAR</a>
             </div>
             <div class="l-plano l-plano--destaque">
                 <div class="l-plano-badge">MELHOR CUSTO-BENEFÍCIO</div>
@@ -50,14 +96,13 @@
                 <div class="l-plano-preco"><span class="l-valor">10x R$ 79,90</span></div>
                 <div class="l-plano-total">no cartão de crédito<br>Total: R$ 799,00 · equivalente a R$ 66,58/mês</div>
                 <p class="l-plano-desc">O melhor valor para organizar seu gabinete durante todo o ano.</p>
-                <a href="#renovacao" class="l-btn l-btn--verde l-btn--bloco" data-cta="renovar-anual">QUERO RENOVAR</a>
             </div>
         </div>
-
-        <div id="renovacao" class="l-aviso-legal" style="text-align:center; margin-top:32px;">
+        <div class="l-aviso-legal" style="text-align:center; margin-top:32px;">
             Estamos finalizando o fluxo de renovação e pagamento. Nossa equipe pode concluir sua renovação
             manualmente enquanto isso — fale com o administrador responsável pelo cadastro do seu gabinete.
         </div>
+        {% endif %}
     </div>
 </section>
 

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pagamento recebido · Gabinete 360</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" type="image/png" sizes="128x128" href="/static/img/icone-128.png">
+<link href="/static/css/landing.css" rel="stylesheet">
+</head>
+<body class="l-page">
+
+<header class="l-header">
+    <div class="l-container l-header-conteudo">
+        <span class="l-header-logo" aria-label="Gabinete 360">
+            <img src="/static/img/logo-horizontal.png" alt="Gabinete 360 — Gestão Inteligente de Gabinetes">
+        </span>
+    </div>
+</header>
+
+<section class="l-secao">
+    <div class="l-container" style="max-width:640px; text-align:center;">
+        <h1 class="l-titulo-secao">Pagamento recebido.</h1>
+        <p style="color:var(--l-cinza-texto); font-size:1.05rem; margin-bottom:28px;">
+            A ativação será confirmada automaticamente em poucos instantes, assim que o Asaas notificar o
+            SIGAB. Você não precisa fazer nada — pode voltar para o sistema agora.
+        </p>
+
+        {% if gabinete and not gabinete.assinatura_vencida %}
+        <div class="l-aviso-legal" style="background:#eafbea; color:#1e6b2f;">
+            O {{ gabinete.nome }} já está com a assinatura em dia (vence em
+            {{ gabinete.assinatura_vencimento.strftime('%d/%m/%Y') }}).
+        </div>
+        {% else %}
+        <div class="l-aviso-legal">
+            A confirmação ainda está sendo processada. Se depois de alguns minutos a assinatura continuar
+            aparecendo como vencida, entre em contato com o suporte.
+        </div>
+        {% endif %}
+
+        <a href="/" class="l-btn l-btn--verde l-btn--grande" style="margin-top:28px;">VOLTAR AO SISTEMA</a>
+    </div>
+</section>
+
+</body>
+</html>

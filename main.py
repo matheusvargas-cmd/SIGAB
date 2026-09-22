@@ -28,6 +28,7 @@ from app.modules.relatorios.controller import router as relatorios_router
 from app.modules.superadmin.controller import router as superadmin_router
 from app.modules.superadmin.usuarios_controller import router as superadmin_usuarios_router
 from app.modules.usuarios.controller import router as usuarios_router
+from app.modules.webhooks.controller import router as webhooks_router
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,7 @@ if settings.is_sqlite:
     MigrationService.semear_categorias_atendimento_historico()
     MigrationService.semear_categorias_demandas_reais()
     MigrationService.adicionar_controle_assinatura()
+    MigrationService.adicionar_integracao_asaas()
     MigrationService.garantir_gabinete_padrao_local()
 
 # debug=True liga páginas de erro do Starlette com traceback completo (e
@@ -168,3 +170,4 @@ app.include_router(superadmin_router)
 app.include_router(superadmin_usuarios_router)
 app.include_router(jobs_router)
 app.include_router(cidadao_router)
+app.include_router(webhooks_router)
