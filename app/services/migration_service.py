@@ -475,9 +475,10 @@ class MigrationService:
         padrão de `adicionar_controle_assinatura()`. Diferente daquela,
         aqui não há nenhum backfill: os três identificadores são
         opcionais desde o início (nenhum gabinete existente tem
-        cliente/checkout no Asaas ainda), e a tabela de eventos de
-        webhook começa vazia. Idempotente: só executa o que ainda não
-        existir."""
+        cliente/checkout no Asaas ainda), e as tabelas de eventos de
+        webhook (entrega) e de pagamentos processados (idempotência
+        financeira, correção pós-auditoria) começam vazias. Idempotente:
+        só executa o que ainda não existir."""
         inspector = inspect(engine)
         if "gabinetes" in inspector.get_table_names():
             colunas = {coluna["name"] for coluna in inspector.get_columns("gabinetes")}
@@ -506,6 +507,29 @@ class MigrationService:
                     )
                 )
             logger.info("Tabela asaas_webhook_events criada (SQLite local).")
+
+        if "asaas_pagamentos_processados" not in inspector.get_table_names():
+            # Idempotência FINANCEIRA (correção pós-auditoria) — distinta
+            # da idempotência de entrega acima (event_id). UNIQUE em
+            # asaas_identificador_cobranca garante que a mesma cobrança
+            # real (payment.id, ou checkout.id para CHECKOUT_PAID) nunca
+            # renova mais de uma vez, mesmo descrita por eventos
+            # diferentes — ver app/services/assinatura_service.py.
+            with engine.begin() as conexao:
+                conexao.execute(
+                    text(
+                        "CREATE TABLE asaas_pagamentos_processados ("
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                        "asaas_identificador_cobranca VARCHAR(64) NOT NULL UNIQUE, "
+                        "gabinete_id INTEGER NOT NULL REFERENCES gabinetes(id), "
+                        "asaas_subscription_id VARCHAR(64), "
+                        "event_id VARCHAR(100) NOT NULL, "
+                        "plano VARCHAR(20) NOT NULL, "
+                        "processado_em DATETIME NOT NULL"
+                        ")"
+                    )
+                )
+            logger.info("Tabela asaas_pagamentos_processados criada (SQLite local).")
 
     @staticmethod
     def garantir_gabinete_padrao_local() -> None:

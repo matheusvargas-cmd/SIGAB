@@ -69,19 +69,50 @@ HTTP é sempre mockado).
    boleto). Isso **não** libera nada no SIGAB — só o Webhook confirma.
 4. O Asaas chama `POST /webhooks/asaas` com o evento (`CHECKOUT_PAID`
    na primeira cobrança; `PAYMENT_CONFIRMED`/`PAYMENT_RECEIVED` nas
-   cobranças seguintes da assinatura recorrente). O SIGAB:
+   cobranças seguintes da assinatura recorrente). O SIGAB aplica **duas
+   camadas de idempotência distintas**, que nunca devem ser confundidas:
+
+   - **Idempotência de entrega** (`event_id`, tabela
+     `asaas_webhook_events`): esta *notificação específica* já chegou
+     antes? O Asaas entrega "at-least-once" — a mesma notificação pode
+     ser reenviada. `CHECKOUT_PAID` **não é equivalente** a
+     `PAYMENT_RECEIVED`: são eventos diferentes, com `event_id`
+     diferentes, mesmo quando descrevem a mesma cobrança real.
+   - **Idempotência financeira** (`payment.id`/`checkout.id`, tabela
+     `asaas_pagamentos_processados`): esta *cobrança real* já gerou uma
+     renovação, por **qualquer** evento? Isso é o que impede que
+     `PAYMENT_CONFIRMED` e, depois, `PAYMENT_RECEIVED` da mesma cobrança
+     — dois eventos com `event_id` diferentes — renovem o gabinete duas
+     vezes. A coluna `asaas_identificador_cobranca` é UNIQUE; o INSERT é
+     feito antes de qualquer mutação no gabinete e ambos são commitados
+     juntos, numa única transação — testado sob concorrência real (duas
+     requisições HTTP simultâneas, mesmo `payment.id`, `event_id`
+     diferentes: só uma renova, a outra recebe `"duplicado"`).
+
+   Passo a passo de cada entrega:
    - valida o header `asaas-access-token`;
-   - verifica se o `id` do evento já foi processado (idempotência —
-     tabela `asaas_webhook_events`, `event_id` único); se já foi,
-     responde 200 sem processar de novo;
+   - se o `event_id` já tem um resultado terminal
+     (`PROCESSADO`/`IGNORADO`/`DUPLICADO`), responde 200 sem reprocessar;
+     se a tentativa anterior daquele `event_id` terminou em `ERRO`,
+     processa de novo (nunca fica travado para sempre);
    - localiza o gabinete pelo `externalReference`
      (`gabinete-<id>-<PLANO>`, gerado pelo próprio SIGAB, nunca aceito
      cru vindo de qualquer requisição do navegador);
-   - renova (`AssinaturaService.aplicar_pagamento_confirmado`): se a
-     assinatura já tinha vencido, o novo período conta a partir de
+   - **`SUBSCRIPTION_CREATED` nunca renova** — só registra
+     `asaas_subscription_id` para conciliação das cobranças seguintes;
+   - para `CHECKOUT_PAID`/`PAYMENT_CONFIRMED`/`PAYMENT_RECEIVED`: tenta
+     registrar a cobrança (`checkout.id` ou `payment.id`, conforme o
+     evento) em `asaas_pagamentos_processados`; se já existir, marca o
+     evento como `DUPLICADO` e não toca no gabinete; se for a primeira
+     vez, renova (`AssinaturaService.aplicar_pagamento_confirmado`): se
+     a assinatura já tinha vencido, o novo período conta a partir de
      hoje (`hoje_operacional()`, `America/Sao_Paulo`); se ainda estava
      válida, conta a partir do vencimento atual — nunca perde dias já
-     pagos.
+     pagos;
+   - uma falha real de processamento nunca é mascarada como sucesso: o
+     evento é marcado `ERRO` e a resposta HTTP é diferente de 200
+     (atualmente 500), justamente para que o Asaas reenvie a notificação
+     automaticamente depois — só assim ela é reprocessada.
 5. O pagador retorna para `/assinatura/sucesso`, `/cancelado` ou
    `/expirado` (conforme `successUrl`/`cancelUrl`/`expiredUrl`) — essas
    páginas só informam a situação; **nunca** liberam a assinatura por
@@ -147,11 +178,17 @@ python3 -m unittest tests.test_asaas -v
   `PAYMENT_OVERDUE`, `PAYMENT_DELETED`, `PAYMENT_REFUNDED`) — um evento
   fora dessa lista é apenas ignorado (200, sem ação), nunca causa erro;
 - Um evento de webhook que falha durante o processamento (bug, banco
-  indisponível etc.) é registrado com `status = 'ERRO'` e não é
-  reprocessado automaticamente nem por uma nova entrega do mesmo
-  `event_id` — precisa de intervenção manual (reenviar o evento pelo
-  painel do Asaas, ou reprocessar manualmente a partir do registro em
-  `asaas_webhook_events`);
+  indisponível etc.) é registrado com `status = 'ERRO'` e a resposta
+  HTTP é diferente de 200 — o Asaas reentrega automaticamente depois, e
+  essa reentrega **é** reprocessada de verdade (correção pós-auditoria:
+  só `PROCESSADO`/`IGNORADO`/`DUPLICADO` são estados terminais; `ERRO`
+  nunca é). Um reenvio manual pelo painel do Asaas com o mesmo
+  `event_id` também funciona;
+- A idempotência financeira (`asaas_pagamentos_processados`) cobre
+  `CHECKOUT_PAID`, `PAYMENT_CONFIRMED` e `PAYMENT_RECEIVED` — a mesma
+  cobrança real (mesmo `payment.id`, ou `checkout.id` para
+  `CHECKOUT_PAID`) nunca renova mais de uma vez, mesmo descrita por
+  eventos diferentes;
 - CPF/CNPJ é validado só por formato (11 ou 14 dígitos), sem checagem de
   dígito verificador — o Asaas faz a validação definitiva do lado dele;
 - Este ambiente de desenvolvimento não tem acesso de rede ao Asaas

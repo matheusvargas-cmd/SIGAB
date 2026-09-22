@@ -5,11 +5,19 @@ controller.py, mas com o mecanismo de token específico do Asaas: header
 "asaas-access-token", comparado ao ASAAS_WEBHOOK_TOKEN configurado no
 painel — nunca a própria API Key).
 
-Idempotência é o requisito central desta rota: o Asaas entrega eventos
-"at-least-once" (o mesmo evento pode chegar mais de uma vez). O campo
-"id" do payload é o identificador único do evento — persistido com
-UNIQUE em asaas_webhook_events antes de qualquer processamento; um
-evento já registrado nunca é reprocessado, só responde 200 de novo."""
+Duas camadas de idempotência, nunca confundidas:
+  - Entrega: `event_id` (esta notificação específica já chegou?) — ver
+    AsaasWebhookEvent. O Asaas entrega "at-least-once" — a mesma
+    notificação pode chegar mais de uma vez.
+  - Financeira: `payment.id`/`checkout.id` (esta cobrança real já gerou
+    uma renovação, por QUALQUER evento?) — ver
+    app/services/assinatura_service.py e AsaasPagamentoProcessado.
+
+Retentativa: um event_id cuja última tentativa terminou em ERRO É
+reprocessado numa nova entrega — só PROCESSADO/IGNORADO/DUPLICADO são
+terminais. Uma falha real de processamento responde um status HTTP
+diferente de 200 (nunca mascarada como sucesso), exatamente para que o
+Asaas reenvie automaticamente depois."""
 
 import json
 import logging
@@ -40,6 +48,41 @@ def _exigir_token_valido(asaas_access_token: str | None) -> None:
         raise HTTPException(status_code=401, detail="Token inválido.")
 
 
+def _obter_ou_registrar_evento(
+    db, event_id: str, event_type: str, payload_texto: str
+) -> tuple[AsaasWebhookEvent | None, JSONResponse | None]:
+    """Decide o que fazer com este event_id ANTES de qualquer
+    processamento. Retorna (evento, None) quando é preciso processar
+    agora (evento novo, ou uma tentativa anterior que terminou em ERRO)
+    — ou (None, resposta_pronta) quando já existe um resultado terminal
+    (PROCESSADO/IGNORADO/DUPLICADO) e a regra de negócio NUNCA deve
+    rodar de novo."""
+    existente = db.scalar(select(AsaasWebhookEvent).where(AsaasWebhookEvent.event_id == event_id))
+    if existente is not None and existente.status != "ERRO":
+        return None, JSONResponse({"status": existente.status.lower()})
+    if existente is not None:
+        # status == "ERRO" — nova tentativa autorizada, reaproveita a
+        # mesma linha (nunca insere outra: colidiria com o UNIQUE).
+        return existente, None
+
+    evento = AsaasWebhookEvent(
+        event_id=event_id, event_type=event_type, payload=payload_texto, status="RECEBIDO"
+    )
+    db.add(evento)
+    try:
+        db.commit()
+    except IntegrityError:
+        # Corrida real: outra requisição inseriu o mesmo event_id entre
+        # nossa consulta e este commit. Decide de novo com a linha que
+        # de fato existe agora.
+        db.rollback()
+        concorrente = db.scalar(select(AsaasWebhookEvent).where(AsaasWebhookEvent.event_id == event_id))
+        if concorrente is not None and concorrente.status != "ERRO":
+            return None, JSONResponse({"status": concorrente.status.lower()})
+        return concorrente, None
+    return evento, None
+
+
 @router.post("/webhooks/asaas")
 async def receber_webhook_asaas(
     request: Request,
@@ -58,41 +101,28 @@ async def receber_webhook_asaas(
     if not event_id or not event_type:
         raise HTTPException(status_code=400, detail="Payload sem 'id'/'event'.")
 
+    payload_texto = corpo_bruto.decode("utf-8", errors="replace")[:8000]
+
     with SessionLocal() as db:
-        existente = db.scalar(select(AsaasWebhookEvent).where(AsaasWebhookEvent.event_id == event_id))
-        if existente is not None:
-            # Já registrado — segunda (ou terceira...) entrega do mesmo
-            # evento. Nunca reprocessa: nunca soma dias de novo, nunca
-            # duplica renovação.
-            return JSONResponse({"status": "ja_processado"})
-
-        evento = AsaasWebhookEvent(
-            event_id=event_id,
-            event_type=event_type,
-            payload=corpo_bruto.decode("utf-8", errors="replace")[:8000],
-            status="RECEBIDO",
-        )
-        db.add(evento)
-        try:
-            db.commit()
-        except IntegrityError:
-            # Concorrência real: duas entregas quase simultâneas do mesmo
-            # evento — a constraint UNIQUE em event_id pegou o que a
-            # consulta acima, por timing, não viu a tempo.
-            db.rollback()
-            return JSONResponse({"status": "ja_processado"})
+        evento, resposta_pronta = _obter_ou_registrar_evento(db, event_id, event_type, payload_texto)
+        if resposta_pronta is not None:
+            return resposta_pronta
 
         try:
-            status_processamento = processar_evento_webhook(db, event_type, payload)
+            status_processamento = processar_evento_webhook(db, event_type, payload, event_id)
         except Exception:
             logger.exception("Erro ao processar evento Asaas %s (event_id=%s).", event_type, event_id)
+            # Desfaz qualquer mutação parcial desta tentativa (a linha do
+            # evento em si já está persistida desde antes — ver
+            # _obter_ou_registrar_evento — então o rollback aqui nunca
+            # perde o registro de que este event_id existe).
+            db.rollback()
             evento.status = "ERRO"
             db.commit()
-            # 200 mesmo em erro interno — evita uma tempestade de
-            # reentregas para um evento que, sem alteração de código, vai
-            # falhar de novo; o registro em asaas_webhook_events (status
-            # ERRO) fica disponível para reprocessamento manual/suporte.
-            return JSONResponse({"status": "erro_interno"})
+            # Status != 2xx de propósito: é o mecanismo que o próprio
+            # Asaas usa para decidir reenviar a notificação depois —
+            # nunca mascarar uma falha real de processamento como 200.
+            raise HTTPException(status_code=500, detail="Erro interno ao processar o evento.")
 
         evento.status = status_processamento
         evento.processed_at = datetime.utcnow()

@@ -16,9 +16,11 @@ import re
 from datetime import date
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.tempo import hoje_operacional
+from app.models.asaas_pagamento_processado import AsaasPagamentoProcessado
 from app.models.gabinete import PLANO_OPCOES, Gabinete
 
 logger = logging.getLogger(__name__)
@@ -79,12 +81,15 @@ def calcular_novo_vencimento(gabinete: Gabinete, plano: str) -> date:
     return _somar_meses(base, PLANOS[plano]["meses"])
 
 
-def aplicar_pagamento_confirmado(db: Session, gabinete: Gabinete, plano: str) -> None:
-    """Único ponto que efetivamente libera/renova um gabinete após
-    confirmação de pagamento (chamado só pelo Webhook, nunca pelas
-    páginas de callback successUrl/cancelUrl/expiredUrl — ver
-    app/modules/webhooks/controller.py). Nunca altera gabinete.ativo nem
-    apaga nenhum dado."""
+def _aplicar_renovacao(gabinete: Gabinete, plano: str) -> None:
+    """Só muta os atributos em memória — nunca commita por conta própria.
+    Existe separada de aplicar_pagamento_confirmado() para que
+    processar_evento_webhook() possa agrupar esta mutação com o INSERT
+    de AsaasPagamentoProcessado num único commit atômico (ver
+    processar_evento_webhook abaixo) — nunca deixar "renovação aplicada"
+    e "cobrança marcada como processada" em transações separadas, o que
+    abriria uma janela para reprocessar a mesma cobrança se o processo
+    caísse exatamente entre as duas."""
     if plano not in PLANOS:
         raise ValueError(f"Plano inválido: {plano!r}")
 
@@ -96,8 +101,6 @@ def aplicar_pagamento_confirmado(db: Session, gabinete: Gabinete, plano: str) ->
     gabinete.assinatura_vencimento = novo_vencimento
     gabinete.status_assinatura = "ATIVO"
     gabinete.plano = plano
-    db.commit()
-    db.refresh(gabinete)
     logger.info(
         "Gabinete %s renovado (plano=%s, vencimento=%s, estava_vencida=%s).",
         gabinete.id,
@@ -105,6 +108,15 @@ def aplicar_pagamento_confirmado(db: Session, gabinete: Gabinete, plano: str) ->
         novo_vencimento,
         estava_vencida,
     )
+
+
+def aplicar_pagamento_confirmado(db: Session, gabinete: Gabinete, plano: str) -> None:
+    """Wrapper que commita — usado por quem chama a renovação isoladamente
+    (ex.: testes), fora do fluxo atômico do Webhook. Nunca altera
+    gabinete.ativo nem apaga nenhum dado."""
+    _aplicar_renovacao(gabinete, plano)
+    db.commit()
+    db.refresh(gabinete)
 
 
 # Eventos que efetivamente liberam/renovam um gabinete. CHECKOUT_PAID é a
@@ -153,35 +165,73 @@ def _resolver_gabinete(db: Session, entidade: dict) -> tuple[Gabinete | None, st
 
 
 def _atualizar_identificadores(db: Session, gabinete: Gabinete, entidade: dict, event_type: str) -> None:
-    """Persistência só de bookkeeping (nunca decide validade) — guarda o
-    id da assinatura/checkout do Asaas na primeira vez que aparece, para
-    a conciliação por asaas_subscription_id em _resolver_gabinete acima
-    funcionar nas cobranças seguintes."""
-    alterou = False
+    """Só muta os atributos em memória (nunca decide validade, nunca
+    commita por conta própria) — guarda o id da assinatura/checkout do
+    Asaas na primeira vez que aparece, para a conciliação por
+    asaas_subscription_id em _resolver_gabinete acima funcionar nas
+    cobranças seguintes. Quem chama decide quando commitar, para poder
+    agrupar com outras mutações da mesma unidade atômica."""
     if event_type == "SUBSCRIPTION_CREATED" and entidade.get("id") and not gabinete.asaas_subscription_id:
         gabinete.asaas_subscription_id = entidade["id"]
-        alterou = True
     if event_type.startswith("CHECKOUT_") and entidade.get("id") and gabinete.asaas_checkout_id != entidade["id"]:
         gabinete.asaas_checkout_id = entidade["id"]
-        alterou = True
-    if alterou:
-        db.commit()
 
 
-def processar_evento_webhook(db: Session, event_type: str, payload: dict) -> str:
+def _marcar_cobranca_como_processada(
+    db: Session, identificador_cobranca: str, gabinete: Gabinete, event_id: str, plano: str
+) -> bool:
+    """Idempotência FINANCEIRA (distinta da idempotência de entrega por
+    event_id) — INSERT protegido por UNIQUE em
+    AsaasPagamentoProcessado.asaas_identificador_cobranca, nunca um
+    "select depois insere" vulnerável a corrida: sob concorrência real
+    (duas entregas de eventos diferentes para a MESMA cobrança
+    processadas em paralelo), o banco garante que só uma das duas
+    transações consegue commitar esse INSERT — a outra recebe
+    IntegrityError e é tratada aqui como "já processada". Retorna True
+    só quando esta é, de fato, a primeira vez que esta cobrança é vista."""
+    db.add(
+        AsaasPagamentoProcessado(
+            asaas_identificador_cobranca=identificador_cobranca,
+            gabinete_id=gabinete.id,
+            asaas_subscription_id=gabinete.asaas_subscription_id,
+            event_id=event_id,
+            plano=plano,
+        )
+    )
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        return False
+    return True
+
+
+def processar_evento_webhook(db: Session, event_type: str, payload: dict, event_id: str) -> str:
     """Ponto único de dispatch dos eventos do Asaas — chamado só por
     POST /webhooks/asaas, depois que o token do Webhook já foi validado e
-    a idempotência por event_id já foi garantida (ver
+    a idempotência de ENTREGA por event_id já foi garantida (ver
     app/models/asaas_webhook_event.py). Retorna o status a gravar no
     registro do evento: nunca levanta por evento desconhecido ou sem
     externalReference reconhecível — o Webhook sempre responde 200 nesses
-    casos (evento fora do que o SIGAB trata ainda), só não renova nada."""
+    casos (evento fora do que o SIGAB trata ainda), só não renova nada.
+
+    Duas camadas de idempotência, nunca confundidas: event_id (este
+    evento específico já foi entregue?) e
+    AsaasPagamentoProcessado.asaas_identificador_cobranca (esta cobrança
+    real — payment.id, ou checkout.id para CHECKOUT_PAID — já gerou uma
+    renovação, através de QUALQUER evento?). CHECKOUT_PAID,
+    PAYMENT_CONFIRMED e PAYMENT_RECEIVED chegam a esta função como
+    eventos diferentes (event_id diferentes) — só a segunda camada
+    impede que descrevam a mesma cobrança duas vezes."""
     entidade = _extrair_entidade(payload)
     gabinete, plano = _resolver_gabinete(db, entidade)
 
     if event_type in EVENTOS_RECONHECIDOS_SEM_RENOVACAO:
+        # SUBSCRIPTION_CREATED nunca renova — só registra o id da
+        # assinatura para conciliação futura (ver _resolver_gabinete).
         if gabinete is not None:
             _atualizar_identificadores(db, gabinete, entidade, event_type)
+            db.commit()
         return "IGNORADO"
 
     if event_type not in EVENTOS_QUE_RENOVAM:
@@ -196,6 +246,24 @@ def processar_evento_webhook(db: Session, event_type: str, payload: dict) -> str
         )
         return "ERRO"
 
+    identificador_cobranca = entidade.get("id")
+    if not identificador_cobranca:
+        logger.warning(
+            "Evento %s sem id da cobrança (checkout.id/payment.id) — não é seguro renovar sem ele.",
+            event_type,
+        )
+        return "ERRO"
+
+    if not _marcar_cobranca_como_processada(db, identificador_cobranca, gabinete, event_id, plano):
+        logger.info(
+            "Cobrança %s já havia sido processada antes (idempotência financeira) — ignorando.",
+            identificador_cobranca,
+        )
+        return "DUPLICADO"
+
     _atualizar_identificadores(db, gabinete, entidade, event_type)
-    aplicar_pagamento_confirmado(db, gabinete, plano)
+    _aplicar_renovacao(gabinete, plano)
+    # Único commit: o registro de idempotência financeira e a renovação
+    # do gabinete são gravados juntos — nunca um sem o outro.
+    db.commit()
     return "PROCESSADO"

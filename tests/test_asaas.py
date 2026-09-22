@@ -38,6 +38,7 @@ from app.core.config import settings  # noqa: E402
 from app.core.database import SessionLocal  # noqa: E402
 from app.core.security import gerar_hash_senha  # noqa: E402
 from app.core.tempo import hoje_operacional  # noqa: E402
+from app.models.asaas_pagamento_processado import AsaasPagamentoProcessado  # noqa: E402
 from app.models.asaas_webhook_event import AsaasWebhookEvent  # noqa: E402
 from app.models.categoria import Categoria  # noqa: E402
 from app.models.gabinete import Gabinete  # noqa: E402
@@ -96,6 +97,9 @@ class BaseTesteAsaas(unittest.TestCase):
                 synchronize_session=False
             )
         if self._gabinetes_ids:
+            self.db.query(AsaasPagamentoProcessado).filter(
+                AsaasPagamentoProcessado.gabinete_id.in_(self._gabinetes_ids)
+            ).delete(synchronize_session=False)
             self.db.query(Categoria).filter(Categoria.gabinete_id.in_(self._gabinetes_ids)).delete(
                 synchronize_session=False
             )
@@ -256,6 +260,33 @@ class TesteWebhook(BaseTesteAsaas):
             },
         }
 
+    def _payload_pagamento(
+        self, event_id: str, event_type: str, payment_id: str, gabinete_id: int, plano: str
+    ) -> dict:
+        """PAYMENT_CONFIRMED/PAYMENT_RECEIVED trazem o objeto "payment", com
+        seu próprio "id" (payment.id) — diferente do "checkout.id". O
+        mesmo payment_id pode aparecer em vários eventos (event_id)
+        diferentes, exatamente o cenário que a idempotência financeira
+        precisa proteger."""
+        return {
+            "id": event_id,
+            "event": event_type,
+            "payment": {
+                "id": payment_id,
+                "externalReference": montar_external_reference(gabinete_id, plano),
+            },
+        }
+
+    def _payload_subscription(self, event_id: str, subscription_id: str, gabinete_id: int, plano: str) -> dict:
+        return {
+            "id": event_id,
+            "event": "SUBSCRIPTION_CREATED",
+            "subscription": {
+                "id": subscription_id,
+                "externalReference": montar_external_reference(gabinete_id, plano),
+            },
+        }
+
     def _chamar_webhook(self, corpo: dict, token: str | None):
         request = FakeWebhookRequest(corpo)
         return asyncio.run(receber_webhook_asaas(request, asaas_access_token=token))
@@ -278,6 +309,14 @@ class TesteWebhook(BaseTesteAsaas):
         self.assertEqual(gabinete.status_assinatura, "ATIVO")
         self.assertEqual(gabinete.plano, "MENSAL")
         self.assertFalse(gabinete.assinatura_vencida)
+        # Idempotência financeira: a cobrança (checkout.id) foi registrada.
+        registro = self.db.scalar(
+            select(AsaasPagamentoProcessado).where(
+                AsaasPagamentoProcessado.asaas_identificador_cobranca == "che_fake_evt_paid_1"
+            )
+        )
+        self.assertIsNotNone(registro)
+        self.assertEqual(registro.gabinete_id, gabinete.id)
 
     def test_webhook_duplicado_nao_reprocessa(self):
         gabinete, _usuario = self._criar_gabinete_com_admin()
@@ -346,6 +385,214 @@ class TesteWebhook(BaseTesteAsaas):
             select(AsaasWebhookEvent).where(AsaasWebhookEvent.event_id == "evt_no_token")
         )
         self.assertIsNone(evento)
+
+
+# ---------------------------------------------------------------------------
+# Correção pós-auditoria: idempotência FINANCEIRA (payment.id) — distinta
+# da idempotência de ENTREGA (event_id) já testada acima.
+# ---------------------------------------------------------------------------
+class TesteIdempotenciaFinanceira(BaseTesteAsaas):
+    def _payload_pagamento(self, event_id, event_type, payment_id, gabinete_id, plano):
+        return {
+            "id": event_id,
+            "event": event_type,
+            "payment": {"id": payment_id, "externalReference": montar_external_reference(gabinete_id, plano)},
+        }
+
+    def _payload_subscription(self, event_id, subscription_id, gabinete_id, plano):
+        return {
+            "id": event_id,
+            "event": "SUBSCRIPTION_CREATED",
+            "subscription": {
+                "id": subscription_id,
+                "externalReference": montar_external_reference(gabinete_id, plano),
+            },
+        }
+
+    def _chamar_webhook(self, corpo, token):
+        request = FakeWebhookRequest(corpo)
+        return asyncio.run(receber_webhook_asaas(request, asaas_access_token=token))
+
+    def _registrar_evento_para_limpeza(self, event_id):
+        evento = self.db.scalar(select(AsaasWebhookEvent).where(AsaasWebhookEvent.event_id == event_id))
+        if evento is not None:
+            self._eventos_ids.append(evento.id)
+
+    def test_subscription_created_nao_renova_apenas_registra_subscription_id(self):
+        gabinete, _usuario = self._criar_gabinete_com_admin()
+        self._forcar_assinatura(gabinete, "TRIAL", dias_para_vencer=-1)
+        vencimento_antes = gabinete.assinatura_vencimento
+        payload = self._payload_subscription("evt_sub_1", "sub_ABC", gabinete.id, "MENSAL")
+
+        resposta = self._chamar_webhook(payload, settings.asaas_webhook_token)
+        self._registrar_evento_para_limpeza("evt_sub_1")
+
+        self.assertEqual(resposta.status_code, 200)
+        self.db.refresh(gabinete)
+        self.assertEqual(gabinete.assinatura_vencimento, vencimento_antes)
+        self.assertEqual(gabinete.status_assinatura, "TRIAL")
+        self.assertEqual(gabinete.asaas_subscription_id, "sub_ABC")
+
+    def test_payment_confirmed_primeiro_evento_do_payment_renova(self):
+        gabinete, _usuario = self._criar_gabinete_com_admin()
+        self._forcar_assinatura(gabinete, "TRIAL", dias_para_vencer=-1)
+        payload = self._payload_pagamento("evt_pc_1", "PAYMENT_CONFIRMED", "pay_TESTE", gabinete.id, "MENSAL")
+
+        resposta = self._chamar_webhook(payload, settings.asaas_webhook_token)
+        self._registrar_evento_para_limpeza("evt_pc_1")
+
+        self.assertEqual(resposta.status_code, 200)
+        self.db.refresh(gabinete)
+        self.assertEqual(gabinete.status_assinatura, "ATIVO")
+        self.assertFalse(gabinete.assinatura_vencida)
+
+    def test_payment_received_mesmo_payment_id_do_confirmed_nao_renova_de_novo(self):
+        """O cenário exato da auditoria: PAYMENT_CONFIRMED (event_id=E1) e
+        PAYMENT_RECEIVED (event_id=E2) para o MESMO payment.id — só a
+        primeira entrega pode renovar."""
+        gabinete, _usuario = self._criar_gabinete_com_admin()
+        self._forcar_assinatura(gabinete, "TRIAL", dias_para_vencer=-1)
+
+        payload_confirmed = self._payload_pagamento(
+            "evt_pc_2", "PAYMENT_CONFIRMED", "pay_TESTE_2", gabinete.id, "MENSAL"
+        )
+        self._chamar_webhook(payload_confirmed, settings.asaas_webhook_token)
+        self._registrar_evento_para_limpeza("evt_pc_2")
+        self.db.refresh(gabinete)
+        vencimento_apos_confirmed = gabinete.assinatura_vencimento
+
+        payload_received = self._payload_pagamento(
+            "evt_pr_2", "PAYMENT_RECEIVED", "pay_TESTE_2", gabinete.id, "MENSAL"
+        )
+        resposta2 = self._chamar_webhook(payload_received, settings.asaas_webhook_token)
+        self._registrar_evento_para_limpeza("evt_pr_2")
+        self.db.refresh(gabinete)
+
+        self.assertEqual(resposta2.status_code, 200)
+        # Um único pagamento real — vencimento NÃO avança pela segunda vez.
+        self.assertEqual(gabinete.assinatura_vencimento, vencimento_apos_confirmed)
+        # Só um registro de idempotência financeira para este payment.id.
+        total_registros = self.db.scalars(
+            select(AsaasPagamentoProcessado).where(
+                AsaasPagamentoProcessado.asaas_identificador_cobranca == "pay_TESTE_2"
+            )
+        ).all()
+        self.assertEqual(len(total_registros), 1)
+
+    def test_dois_payment_received_mesmo_payment_id_event_id_diferente_apenas_uma_renovacao(self):
+        gabinete, _usuario = self._criar_gabinete_com_admin()
+        self._forcar_assinatura(gabinete, "TRIAL", dias_para_vencer=-1)
+
+        payload1 = self._payload_pagamento("evt_pr_3a", "PAYMENT_RECEIVED", "pay_TESTE_3", gabinete.id, "MENSAL")
+        self._chamar_webhook(payload1, settings.asaas_webhook_token)
+        self._registrar_evento_para_limpeza("evt_pr_3a")
+        self.db.refresh(gabinete)
+        vencimento_apos_primeira = gabinete.assinatura_vencimento
+
+        payload2 = self._payload_pagamento("evt_pr_3b", "PAYMENT_RECEIVED", "pay_TESTE_3", gabinete.id, "MENSAL")
+        self._chamar_webhook(payload2, settings.asaas_webhook_token)
+        self._registrar_evento_para_limpeza("evt_pr_3b")
+        self.db.refresh(gabinete)
+
+        self.assertEqual(gabinete.assinatura_vencimento, vencimento_apos_primeira)
+
+    def test_dois_pagamentos_diferentes_geram_duas_renovacoes_legitimas(self):
+        gabinete, _usuario = self._criar_gabinete_com_admin()
+        self._forcar_assinatura(gabinete, "ATIVO", dias_para_vencer=10, plano="MENSAL")
+        vencimento_inicial = gabinete.assinatura_vencimento
+
+        payload_a = self._payload_pagamento("evt_pa_1", "PAYMENT_CONFIRMED", "pay_A", gabinete.id, "MENSAL")
+        self._chamar_webhook(payload_a, settings.asaas_webhook_token)
+        self._registrar_evento_para_limpeza("evt_pa_1")
+        self.db.refresh(gabinete)
+        vencimento_apos_a = gabinete.assinatura_vencimento
+        self.assertGreater(vencimento_apos_a, vencimento_inicial)
+
+        payload_b = self._payload_pagamento("evt_pb_1", "PAYMENT_CONFIRMED", "pay_B", gabinete.id, "MENSAL")
+        self._chamar_webhook(payload_b, settings.asaas_webhook_token)
+        self._registrar_evento_para_limpeza("evt_pb_1")
+        self.db.refresh(gabinete)
+
+        # Dois pagamentos reais e distintos — duas renovações legítimas.
+        self.assertGreater(gabinete.assinatura_vencimento, vencimento_apos_a)
+
+    def test_isolamento_payment_de_gabinete_a_nunca_renova_gabinete_b(self):
+        gabinete_a, _usuario_a = self._criar_gabinete_com_admin("A")
+        gabinete_b, _usuario_b = self._criar_gabinete_com_admin("B")
+        self._forcar_assinatura(gabinete_a, "TRIAL", dias_para_vencer=-1)
+        self._forcar_assinatura(gabinete_b, "TRIAL", dias_para_vencer=-1)
+        vencimento_b_antes = gabinete_b.assinatura_vencimento
+
+        payload = self._payload_pagamento(
+            "evt_isolamento_1", "PAYMENT_CONFIRMED", "pay_ISOLAMENTO", gabinete_a.id, "MENSAL"
+        )
+        self._chamar_webhook(payload, settings.asaas_webhook_token)
+        self._registrar_evento_para_limpeza("evt_isolamento_1")
+
+        self.db.refresh(gabinete_a)
+        self.db.refresh(gabinete_b)
+        self.assertFalse(gabinete_a.assinatura_vencida)
+        self.assertEqual(gabinete_b.assinatura_vencimento, vencimento_b_antes)
+        self.assertEqual(gabinete_b.status_assinatura, "TRIAL")
+
+    def test_evento_com_status_erro_permite_nova_tentativa(self):
+        gabinete, _usuario = self._criar_gabinete_com_admin()
+        self._forcar_assinatura(gabinete, "TRIAL", dias_para_vencer=-1)
+
+        # Simula uma tentativa anterior que falhou: a linha já existe,
+        # marcada ERRO (nunca chegou a renovar nada).
+        evento_com_erro = AsaasWebhookEvent(
+            event_id="evt_retry_1", event_type="PAYMENT_CONFIRMED", status="ERRO", payload="{}"
+        )
+        self.db.add(evento_com_erro)
+        self.db.commit()
+        self._eventos_ids.append(evento_com_erro.id)
+
+        payload = self._payload_pagamento(
+            "evt_retry_1", "PAYMENT_CONFIRMED", "pay_RETRY", gabinete.id, "MENSAL"
+        )
+        resposta = self._chamar_webhook(payload, settings.asaas_webhook_token)
+
+        self.assertEqual(resposta.status_code, 200)
+        self.db.refresh(gabinete)
+        self.assertFalse(gabinete.assinatura_vencida)
+        self.db.refresh(evento_com_erro)
+        self.assertEqual(evento_com_erro.status, "PROCESSADO")
+
+    @patch("app.modules.webhooks.controller.processar_evento_webhook")
+    def test_falha_de_processamento_retorna_http_diferente_de_200_e_permite_retry(self, mock_processar):
+        gabinete, _usuario = self._criar_gabinete_com_admin()
+        self._forcar_assinatura(gabinete, "TRIAL", dias_para_vencer=-1)
+        payload = self._payload_pagamento(
+            "evt_falha_1", "PAYMENT_CONFIRMED", "pay_FALHA", gabinete.id, "MENSAL"
+        )
+
+        mock_processar.side_effect = RuntimeError("falha simulada de processamento")
+        with self.assertRaises(Exception) as contexto:
+            self._chamar_webhook(payload, settings.asaas_webhook_token)
+        self.assertEqual(getattr(contexto.exception, "status_code", None), 500)
+        self._registrar_evento_para_limpeza("evt_falha_1")
+
+        evento = self.db.scalar(select(AsaasWebhookEvent).where(AsaasWebhookEvent.event_id == "evt_falha_1"))
+        self.assertEqual(evento.status, "ERRO")
+        self.db.refresh(gabinete)
+        self.assertTrue(gabinete.assinatura_vencida)  # nada foi renovado na tentativa que falhou
+
+        # Nova tentativa, agora sem a falha simulada — precisa reprocessar
+        # de verdade (não pode responder "ja_processado").
+        mock_processar.side_effect = None
+        mock_processar.reset_mock()
+
+        from app.services.assinatura_service import processar_evento_webhook as processar_real
+
+        mock_processar.side_effect = processar_real
+        resposta2 = self._chamar_webhook(payload, settings.asaas_webhook_token)
+
+        self.assertEqual(resposta2.status_code, 200)
+        self.db.refresh(gabinete)
+        self.assertFalse(gabinete.assinatura_vencida)
+        self.db.refresh(evento)
+        self.assertEqual(evento.status, "PROCESSADO")
 
 
 # ---------------------------------------------------------------------------
