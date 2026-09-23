@@ -15,11 +15,12 @@ docs.asaas.com (setembro de 2026):
   - Autenticação da API: header "access_token" com a API Key
     (docs.asaas.com/docs/autenticacao).
   - "Create new checkout" (POST /v3/checkouts): billingTypes, chargeTypes
-    (RECURRENT para cobrança recorrente), items (description/value/
-    quantity), subscription (cycle/nextDueDate), callback (successUrl/
-    cancelUrl/expiredUrl), customer ou customerData, externalReference —
-    a criação do Checkout NÃO é confirmação de pagamento; isso só chega
-    depois, por Webhook.
+    (RECURRENT para cobrança recorrente), items (name/description/value/
+    quantity — "name" é obrigatório, "description" é campo separado),
+    subscription (cycle/nextDueDate), callback (successUrl/cancelUrl/
+    expiredUrl), customer ou customerData, externalReference — a criação
+    do Checkout NÃO é confirmação de pagamento; isso só chega depois,
+    por Webhook.
   - "Create new customer" / "List customers" (POST e GET /v3/customers):
     name e cpfCnpj obrigatórios; GET aceita filtro por externalReference.
   - Webhooks: header "asaas-access-token" comparado ao authToken
@@ -138,7 +139,12 @@ class AsaasService:
         pagador). Criar o Checkout NUNCA significa pagamento confirmado —
         isso só é decidido pelo Webhook (ver app/modules/webhooks)."""
         corpo = {
-            "billingTypes": ["CREDIT_CARD", "PIX", "BOLETO"],
+            # Checkout recorrente (chargeTypes=RECURRENT): a documentação
+            # oficial ("Checkout com Assinatura (recorrente)") só
+            # documenta o exemplo com CREDIT_CARD; não há confirmação de
+            # BOLETO nesse modo, então mantemos só os dois meios com
+            # suporte documentado a cobrança recorrente.
+            "billingTypes": ["CREDIT_CARD", "PIX"],
             "chargeTypes": ["RECURRENT"],
             "minutesToExpire": 60,
             "callback": {
@@ -146,7 +152,11 @@ class AsaasService:
                 "cancelUrl": cancel_url,
                 "expiredUrl": expired_url,
             },
-            "items": [{"description": descricao, "quantity": 1, "value": valor}],
+            # "name" é obrigatório em cada item do Checkout (erro
+            # parse_error "O campo 'name' precisa ser informado." sem
+            # ele) — "description" continua enviado separadamente, são
+            # campos distintos aceitos pela API.
+            "items": [{"name": descricao, "description": descricao, "quantity": 1, "value": valor}],
             "customer": customer_id,
             "subscription": {"cycle": ciclo, "nextDueDate": hoje_operacional().isoformat()},
             "externalReference": external_reference,

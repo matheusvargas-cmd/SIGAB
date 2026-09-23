@@ -46,6 +46,7 @@ from app.models.membro_gabinete import MembroGabinete  # noqa: E402
 from app.models.usuario import Usuario  # noqa: E402
 from app.modules.assinatura.controller import iniciar_checkout  # noqa: E402
 from app.modules.webhooks.controller import receber_webhook_asaas  # noqa: E402
+from app.services.asaas_service import AsaasService  # noqa: E402
 from app.services.assinatura_service import (  # noqa: E402
     aplicar_pagamento_confirmado,
     calcular_novo_vencimento,
@@ -244,6 +245,64 @@ class TesteCriacaoCheckout(BaseTesteAsaas):
         self.assertEqual(resposta.headers["location"], "/superadmin/gabinetes")
         mock_cliente.assert_not_called()
         mock_checkout.assert_not_called()
+
+
+class TesteCheckoutPayload(unittest.TestCase):
+    """AsaasService.criar_checkout isolado (sem banco, sem chamada real —
+    só o payload montado, via _requisitar mockado). Cobre a correção do
+    erro parse_error "O campo 'name' precisa ser informado." devolvido
+    pelo Sandbox do Asaas em POST /checkouts."""
+
+    @patch("app.services.asaas_service.AsaasService._requisitar")
+    def test_item_do_checkout_contem_campo_name_obrigatorio(self, mock_requisitar):
+        mock_requisitar.return_value = {"id": "che_fake_payload", "link": "https://sandbox.asaas.com/c/x"}
+
+        AsaasService.criar_checkout(
+            customer_id="cus_fake123",
+            descricao="Gabinete 360 — Plano Mensal",
+            valor=99.90,
+            ciclo="MONTHLY",
+            external_reference="gabinete-1-MENSAL",
+            success_url="https://gabinetes360.com.br/assinatura/sucesso",
+            cancel_url="https://gabinetes360.com.br/assinatura/cancelado",
+            expired_url="https://gabinetes360.com.br/assinatura/expirado",
+        )
+
+        mock_requisitar.assert_called_once()
+        _metodo, _caminho = mock_requisitar.call_args.args
+        corpo = mock_requisitar.call_args.kwargs["corpo"]
+        self.assertEqual(_metodo, "POST")
+        self.assertEqual(_caminho, "/checkouts")
+        self.assertEqual(len(corpo["items"]), 1)
+        self.assertEqual(corpo["items"][0]["name"], "Gabinete 360 — Plano Mensal")
+        self.assertEqual(corpo["items"][0]["description"], "Gabinete 360 — Plano Mensal")
+        self.assertEqual(corpo["items"][0]["quantity"], 1)
+        self.assertEqual(corpo["items"][0]["value"], 99.90)
+
+    @patch("app.services.asaas_service.AsaasService._requisitar")
+    def test_billing_types_do_checkout_recorrente_nao_inclui_boleto(self, mock_requisitar):
+        """billingTypes do Checkout recorrente (chargeTypes=RECURRENT) —
+        a documentação oficial só confirma CREDIT_CARD/PIX para este
+        modo; BOLETO foi removido por não ter suporte documentado aqui
+        (era a causa raiz suspeita, mas o erro real do Sandbox foi o
+        'name' ausente em items, testado acima)."""
+        mock_requisitar.return_value = {"id": "che_fake_payload2", "link": "https://sandbox.asaas.com/c/y"}
+
+        AsaasService.criar_checkout(
+            customer_id="cus_fake123",
+            descricao="Gabinete 360 — Plano Anual",
+            valor=799.00,
+            ciclo="YEARLY",
+            external_reference="gabinete-1-ANUAL",
+            success_url="https://gabinetes360.com.br/assinatura/sucesso",
+            cancel_url="https://gabinetes360.com.br/assinatura/cancelado",
+            expired_url="https://gabinetes360.com.br/assinatura/expirado",
+        )
+
+        corpo = mock_requisitar.call_args.kwargs["corpo"]
+        self.assertEqual(corpo["billingTypes"], ["CREDIT_CARD", "PIX"])
+        self.assertNotIn("BOLETO", corpo["billingTypes"])
+        self.assertEqual(corpo["chargeTypes"], ["RECURRENT"])
 
 
 # ---------------------------------------------------------------------------
