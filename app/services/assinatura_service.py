@@ -119,17 +119,30 @@ def aplicar_pagamento_confirmado(db: Session, gabinete: Gabinete, plano: str) ->
     db.refresh(gabinete)
 
 
-# Eventos que efetivamente liberam/renovam um gabinete. CHECKOUT_PAID é a
-# primeira cobrança (concluída na própria tela do Checkout);
-# PAYMENT_CONFIRMED/PAYMENT_RECEIVED cobrem as cobranças seguintes da
-# assinatura recorrente criada a partir daquele Checkout.
-EVENTOS_QUE_RENOVAM = {"CHECKOUT_PAID", "PAYMENT_CONFIRMED", "PAYMENT_RECEIVED"}
+# Únicos eventos que efetivamente liberam/renovam um gabinete — decisão
+# arquitetural pós-auditoria: CHECKOUT_PAID usa checkout.id e
+# PAYMENT_CONFIRMED/PAYMENT_RECEIVED usam payment.id, identificadores de
+# entidades diferentes do Asaas que não têm correlação segura entre si
+# (namespaces distintos, sem um campo confirmado na documentação que
+# traduza um no outro). Tentar renovar em CHECKOUT_PAID e também nos
+# eventos de pagamento da mesma cobrança inicial abriria de novo a
+# janela de dupla renovação — a mesma cobrança real, descrita por dois
+# identificadores que a idempotência por UNIQUE nunca poderia saber que
+# são "a mesma coisa". Por isso a renovação passou a depender
+# EXCLUSIVAMENTE de payment.id, tanto para a cobrança inicial quanto
+# para as recorrentes seguintes — nunca de checkout.id.
+EVENTOS_QUE_RENOVAM = {"PAYMENT_CONFIRMED", "PAYMENT_RECEIVED"}
 
-# Reconhecidos, mas sem ação sobre a assinatura nesta fase — só existem
+# Reconhecidos, mas sem ação sobre a validade da assinatura — só existem
 # aqui para o Webhook responder 200 (evento tratado) sem cair no ramo de
-# "evento desconhecido". SUBSCRIPTION_CREATED só atualiza o identificador
-# de assinatura para suporte/conciliação (ver _atualizar_identificadores).
+# "evento desconhecido". CHECKOUT_PAID confirma que a jornada de
+# Checkout foi concluída (registra asaas_checkout_id para bookkeeping/
+# suporte), mas nunca concede período de assinatura — quem faz isso é
+# exclusivamente PAYMENT_CONFIRMED/PAYMENT_RECEIVED, acima. Mesma lógica
+# para SUBSCRIPTION_CREATED (registra asaas_subscription_id, nunca
+# renova) — ver _atualizar_identificadores.
 EVENTOS_RECONHECIDOS_SEM_RENOVACAO = {
+    "CHECKOUT_PAID",
     "CHECKOUT_CANCELED",
     "CHECKOUT_EXPIRED",
     "SUBSCRIPTION_CREATED",
@@ -218,17 +231,24 @@ def processar_evento_webhook(db: Session, event_type: str, payload: dict, event_
     Duas camadas de idempotência, nunca confundidas: event_id (este
     evento específico já foi entregue?) e
     AsaasPagamentoProcessado.asaas_identificador_cobranca (esta cobrança
-    real — payment.id, ou checkout.id para CHECKOUT_PAID — já gerou uma
-    renovação, através de QUALQUER evento?). CHECKOUT_PAID,
-    PAYMENT_CONFIRMED e PAYMENT_RECEIVED chegam a esta função como
-    eventos diferentes (event_id diferentes) — só a segunda camada
-    impede que descrevam a mesma cobrança duas vezes."""
+    real — payment.id — já gerou uma renovação, através de QUALQUER
+    evento de pagamento?). PAYMENT_CONFIRMED e PAYMENT_RECEIVED chegam a
+    esta função como eventos diferentes (event_id diferentes) — só a
+    segunda camada impede que descrevam a mesma cobrança duas vezes.
+    CHECKOUT_PAID nunca chega até aqui como evento de renovação (ver
+    EVENTOS_RECONHECIDOS_SEM_RENOVACAO) — checkout.id e payment.id são
+    identificadores de entidades diferentes do Asaas, sem correlação
+    segura entre si, então CHECKOUT_PAID só faz bookkeeping
+    (asaas_checkout_id); quem renova é exclusivamente payment.id."""
     entidade = _extrair_entidade(payload)
     gabinete, plano = _resolver_gabinete(db, entidade)
 
     if event_type in EVENTOS_RECONHECIDOS_SEM_RENOVACAO:
-        # SUBSCRIPTION_CREATED nunca renova — só registra o id da
-        # assinatura para conciliação futura (ver _resolver_gabinete).
+        # CHECKOUT_PAID e SUBSCRIPTION_CREATED nunca renovam — só
+        # registram, respectivamente, asaas_checkout_id/
+        # asaas_subscription_id (bookkeeping/conciliação — ver
+        # _atualizar_identificadores e _resolver_gabinete). A renovação
+        # em si é exclusiva de PAYMENT_CONFIRMED/PAYMENT_RECEIVED, abaixo.
         if gabinete is not None:
             _atualizar_identificadores(db, gabinete, entidade, event_type)
             db.commit()
@@ -249,7 +269,7 @@ def processar_evento_webhook(db: Session, event_type: str, payload: dict, event_
     identificador_cobranca = entidade.get("id")
     if not identificador_cobranca:
         logger.warning(
-            "Evento %s sem id da cobrança (checkout.id/payment.id) — não é seguro renovar sem ele.",
+            "Evento %s sem payment.id — não é seguro renovar sem ele.",
             event_type,
         )
         return "ERRO"

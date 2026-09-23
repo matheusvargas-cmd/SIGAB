@@ -511,10 +511,11 @@ class MigrationService:
         if "asaas_pagamentos_processados" not in inspector.get_table_names():
             # Idempotência FINANCEIRA (correção pós-auditoria) — distinta
             # da idempotência de entrega acima (event_id). UNIQUE em
-            # asaas_identificador_cobranca garante que a mesma cobrança
-            # real (payment.id, ou checkout.id para CHECKOUT_PAID) nunca
-            # renova mais de uma vez, mesmo descrita por eventos
-            # diferentes — ver app/services/assinatura_service.py.
+            # asaas_identificador_cobranca (sempre um payment.id — nunca
+            # checkout.id, ver app/services/assinatura_service.py)
+            # garante que a mesma cobrança real nunca renova mais de uma
+            # vez, mesmo descrita por eventos diferentes
+            # (PAYMENT_CONFIRMED e depois PAYMENT_RECEIVED).
             with engine.begin() as conexao:
                 conexao.execute(
                     text(

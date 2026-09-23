@@ -13,13 +13,16 @@ class AsaasPagamentoProcessado(Base):
     para a mesma cobrança) — deduplicar só por event_id não impede que
     cada um desses eventos, individualmente novo, dispare uma renovação.
 
-    `asaas_identificador_cobranca` é o `id` do objeto Asaas que
-    efetivamente originou a renovação — o `payment.id` para
-    PAYMENT_CONFIRMED/PAYMENT_RECEIVED, ou o `checkout.id` para
-    CHECKOUT_PAID (o Checkout não expõe um payment.id confiável no
-    payload consultado; ver docs/05_PAGAMENTOS_ASAAS.md). UNIQUE nessa
-    coluna garante, com o próprio banco, que a mesma cobrança real nunca
-    aplica `aplicar_pagamento_confirmado` mais de uma vez — inclusive sob
+    `asaas_identificador_cobranca` é sempre o `payment.id` do evento
+    PAYMENT_CONFIRMED/PAYMENT_RECEIVED que efetivamente originou a
+    renovação — nunca o `checkout.id` de CHECKOUT_PAID: checkout.id e
+    payment.id são identificadores de entidades diferentes do Asaas,
+    sem correlação segura entre si (decisão pós-auditoria — ver
+    docs/05_PAGAMENTOS_ASAAS.md), então CHECKOUT_PAID nunca chega a
+    inserir nada aqui, só faz bookkeeping em
+    Gabinete.asaas_checkout_id. UNIQUE nesta coluna garante, com o
+    próprio banco, que o mesmo payment.id nunca aplica
+    `aplicar_pagamento_confirmado` mais de uma vez — inclusive sob
     concorrência (INSERT + tratamento de conflito de UNIQUE, nunca um
     "select depois insere" sem proteção)."""
 

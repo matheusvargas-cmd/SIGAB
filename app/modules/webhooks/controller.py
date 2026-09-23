@@ -9,9 +9,12 @@ Duas camadas de idempotência, nunca confundidas:
   - Entrega: `event_id` (esta notificação específica já chegou?) — ver
     AsaasWebhookEvent. O Asaas entrega "at-least-once" — a mesma
     notificação pode chegar mais de uma vez.
-  - Financeira: `payment.id`/`checkout.id` (esta cobrança real já gerou
-    uma renovação, por QUALQUER evento?) — ver
+  - Financeira: `payment.id` (esta cobrança real já gerou uma renovação,
+    por QUALQUER evento de pagamento?) — ver
     app/services/assinatura_service.py e AsaasPagamentoProcessado.
+    CHECKOUT_PAID nunca renova nem participa desta camada (decisão
+    pós-auditoria: checkout.id e payment.id não têm correlação segura
+    entre si) — só registra asaas_checkout_id como bookkeeping.
 
 Retentativa: um event_id cuja última tentativa terminou em ERRO É
 reprocessado numa nova entrega — só PROCESSADO/IGNORADO/DUPLICADO são

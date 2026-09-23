@@ -67,27 +67,49 @@ HTTP é sempre mockado).
    redireciona o navegador para a URL hospedada pelo Asaas.
 3. O pagador conclui o pagamento na tela do Asaas (cartão, Pix ou
    boleto). Isso **não** libera nada no SIGAB — só o Webhook confirma.
-4. O Asaas chama `POST /webhooks/asaas` com o evento (`CHECKOUT_PAID`
-   na primeira cobrança; `PAYMENT_CONFIRMED`/`PAYMENT_RECEIVED` nas
-   cobranças seguintes da assinatura recorrente). O SIGAB aplica **duas
-   camadas de idempotência distintas**, que nunca devem ser confundidas:
+4. O Asaas chama `POST /webhooks/asaas` com o evento. **Regra final
+   (pós-auditoria) de quem renova e quem não renova:**
+
+   | Evento | Renova a assinatura? | O que faz |
+   |---|---|---|
+   | `CHECKOUT_PAID` | **Não** | Confirma que a jornada de Checkout foi concluída; registra `asaas_checkout_id` (bookkeeping/suporte) |
+   | `SUBSCRIPTION_CREATED` | **Não** | Registra `asaas_subscription_id` (conciliação das cobranças seguintes) |
+   | `PAYMENT_CONFIRMED` | **Sim** | Renova uma vez por `payment.id` — cobre inclusive a cobrança inicial da assinatura |
+   | `PAYMENT_RECEIVED` | **Sim** | Renova uma vez por `payment.id` — mesma regra |
+
+   `CHECKOUT_PAID` **não concede nenhum período de assinatura** — quem
+   faz isso é exclusivamente `PAYMENT_CONFIRMED`/`PAYMENT_RECEIVED`.
+   Essa é uma decisão arquitetural deliberada: `checkout.id` e
+   `payment.id` são identificadores de entidades diferentes do Asaas,
+   sem correlação segura e confirmada entre si (namespaces distintos,
+   sem um campo documentado que traduza um no outro) — tentar renovar
+   em `CHECKOUT_PAID` e também no evento de pagamento da mesma cobrança
+   inicial reabriria a mesma janela de dupla renovação que esta
+   correção elimina. O objetivo — cliente conclui o Checkout → Asaas
+   cria a assinatura → a primeira cobrança gera um evento de pagamento
+   → esse `payment.id` é processado → o gabinete é renovado — continua
+   sendo cumprido, só que inteiramente através dos eventos de pagamento,
+   nunca do Checkout.
+
+   O SIGAB aplica **duas camadas de idempotência distintas**, que nunca
+   devem ser confundidas:
 
    - **Idempotência de entrega** (`event_id`, tabela
      `asaas_webhook_events`): esta *notificação específica* já chegou
      antes? O Asaas entrega "at-least-once" — a mesma notificação pode
-     ser reenviada. `CHECKOUT_PAID` **não é equivalente** a
-     `PAYMENT_RECEIVED`: são eventos diferentes, com `event_id`
-     diferentes, mesmo quando descrevem a mesma cobrança real.
-   - **Idempotência financeira** (`payment.id`/`checkout.id`, tabela
+     ser reenviada.
+   - **Idempotência financeira** (`payment.id`, tabela
      `asaas_pagamentos_processados`): esta *cobrança real* já gerou uma
-     renovação, por **qualquer** evento? Isso é o que impede que
-     `PAYMENT_CONFIRMED` e, depois, `PAYMENT_RECEIVED` da mesma cobrança
-     — dois eventos com `event_id` diferentes — renovem o gabinete duas
-     vezes. A coluna `asaas_identificador_cobranca` é UNIQUE; o INSERT é
-     feito antes de qualquer mutação no gabinete e ambos são commitados
-     juntos, numa única transação — testado sob concorrência real (duas
-     requisições HTTP simultâneas, mesmo `payment.id`, `event_id`
-     diferentes: só uma renova, a outra recebe `"duplicado"`).
+     renovação, por **qualquer** evento de pagamento? Isso é o que
+     impede que `PAYMENT_CONFIRMED` e, depois, `PAYMENT_RECEIVED` da
+     mesma cobrança — dois eventos com `event_id` diferentes — renovem
+     o gabinete duas vezes. A coluna `asaas_identificador_cobranca` é
+     UNIQUE, sempre um `payment.id` (nunca um `checkout.id`); o INSERT
+     é feito antes de qualquer mutação no gabinete e ambos são
+     commitados juntos, numa única transação — testado sob concorrência
+     real (duas requisições HTTP simultâneas, mesmo `payment.id`,
+     `event_id` diferentes: só uma renova, a outra recebe
+     `"duplicado"`).
 
    Passo a passo de cada entrega:
    - valida o header `asaas-access-token`;
@@ -97,15 +119,15 @@ HTTP é sempre mockado).
      processa de novo (nunca fica travado para sempre);
    - localiza o gabinete pelo `externalReference`
      (`gabinete-<id>-<PLANO>`, gerado pelo próprio SIGAB, nunca aceito
-     cru vindo de qualquer requisição do navegador);
-   - **`SUBSCRIPTION_CREATED` nunca renova** — só registra
-     `asaas_subscription_id` para conciliação das cobranças seguintes;
-   - para `CHECKOUT_PAID`/`PAYMENT_CONFIRMED`/`PAYMENT_RECEIVED`: tenta
-     registrar a cobrança (`checkout.id` ou `payment.id`, conforme o
-     evento) em `asaas_pagamentos_processados`; se já existir, marca o
-     evento como `DUPLICADO` e não toca no gabinete; se for a primeira
-     vez, renova (`AssinaturaService.aplicar_pagamento_confirmado`): se
-     a assinatura já tinha vencido, o novo período conta a partir de
+     cru vindo de qualquer requisição do navegador), com fallback por
+     `asaas_subscription_id` já persistido;
+   - `CHECKOUT_PAID`/`SUBSCRIPTION_CREATED`: só bookkeeping, nunca
+     renovação (tabela acima);
+   - `PAYMENT_CONFIRMED`/`PAYMENT_RECEIVED`: tenta registrar o
+     `payment.id` em `asaas_pagamentos_processados`; se já existir,
+     marca o evento como `DUPLICADO` e não toca no gabinete; se for a
+     primeira vez, renova (`AssinaturaService.aplicar_pagamento_confirmado`):
+     se a assinatura já tinha vencido, o novo período conta a partir de
      hoje (`hoje_operacional()`, `America/Sao_Paulo`); se ainda estava
      válida, conta a partir do vencimento atual — nunca perde dias já
      pagos;
@@ -185,10 +207,12 @@ python3 -m unittest tests.test_asaas -v
   nunca é). Um reenvio manual pelo painel do Asaas com o mesmo
   `event_id` também funciona;
 - A idempotência financeira (`asaas_pagamentos_processados`) cobre
-  `CHECKOUT_PAID`, `PAYMENT_CONFIRMED` e `PAYMENT_RECEIVED` — a mesma
-  cobrança real (mesmo `payment.id`, ou `checkout.id` para
-  `CHECKOUT_PAID`) nunca renova mais de uma vez, mesmo descrita por
-  eventos diferentes;
+  exclusivamente `PAYMENT_CONFIRMED`/`PAYMENT_RECEIVED` — a mesma
+  cobrança real (mesmo `payment.id`) nunca renova mais de uma vez,
+  mesmo descrita por eventos diferentes. `CHECKOUT_PAID` nunca renova e
+  nunca participa desta camada (ver seção 3) — decisão deliberada para
+  não depender de uma correlação não confirmada entre `checkout.id` e
+  `payment.id`;
 - CPF/CNPJ é validado só por formato (11 ou 14 dígitos), sem checagem de
   dígito verificador — o Asaas faz a validação definitiva do lado dele;
 - Este ambiente de desenvolvimento não tem acesso de rede ao Asaas
