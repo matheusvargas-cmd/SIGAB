@@ -116,6 +116,30 @@ def obter_contexto_atual(
     return contexto
 
 
+def obter_gabinete_vinculado(db: Session, usuario_id: int, gabinete_id: int | None) -> Gabinete | None:
+    """Mesma checagem de vínculo de obter_contexto_atual (usuário_id +
+    gabinete_id + MembroGabinete.ativo), sem a parte de ativo/validade do
+    próprio Gabinete — para uso em rotas que precisam saber "o usuário
+    realmente pertence a este gabinete" sem poder levantar
+    GabineteNaoSelecionado/GabineteVencido (a página /assinatura e o
+    checkout de renovação em app/modules/assinatura/controller.py: se
+    levantassem essas exceções, criariam um loop de redirecionamento de
+    volta para si mesmas). Retorna None sem vínculo válido ou sem
+    gabinete_id — nunca expõe nome/dado do gabinete nesse caso."""
+    if not gabinete_id:
+        return None
+    membro = db.scalar(
+        select(MembroGabinete).where(
+            MembroGabinete.usuario_id == usuario_id,
+            MembroGabinete.gabinete_id == gabinete_id,
+            MembroGabinete.ativo.is_(True),
+        )
+    )
+    if membro is None:
+        return None
+    return db.get(Gabinete, gabinete_id)
+
+
 def exigir_superadmin(usuario: Usuario = Depends(obter_usuario_atual)) -> Usuario:
     """Dependency para as rotas globais de /superadmin — trilha de
     autorização inteiramente separada de exigir_perfil()/ContextoSessao.

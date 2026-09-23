@@ -88,6 +88,18 @@ class Gabinete(Base):
     assinatura_inicio = Column(Date, nullable=False, default=hoje_operacional)
     assinatura_vencimento = Column(Date, nullable=False)
 
+    # Identificadores externos da Fase 2 (integração de pagamentos com o
+    # Asaas, ver app/services/asaas_service.py) — só isso, nenhum dado de
+    # cartão/pagamento é armazenado aqui. status_assinatura/plano/
+    # assinatura_inicio/assinatura_vencimento acima continuam sendo a
+    # ÚNICA fonte de verdade sobre validade; estes três campos servem
+    # apenas para o SIGAB conseguir *localizar* o cliente/checkout
+    # correspondente no Asaas (criar sem duplicar, dar suporte,
+    # conciliar) — nunca para decidir se o gabinete está liberado.
+    asaas_customer_id = Column(String(64), nullable=True)
+    asaas_subscription_id = Column(String(64), nullable=True)
+    asaas_checkout_id = Column(String(64), nullable=True)
+
     @property
     def assinatura_vencida(self) -> bool:
         """Única fonte de verdade sobre "venceu ou não" — nunca um terceiro

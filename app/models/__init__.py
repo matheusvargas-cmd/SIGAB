@@ -5,6 +5,8 @@
 # Usuario tinha: nunca era importado em lugar nenhum, então sua tabela
 # nunca era criada. main.py importa este pacote antes de create_all().
 from app.models.agenda import Agenda
+from app.models.asaas_pagamento_processado import AsaasPagamentoProcessado
+from app.models.asaas_webhook_event import AsaasWebhookEvent
 from app.models.categoria import Categoria
 from app.models.demanda import Demanda
 from app.models.demanda_anexo import DemandaAnexo
@@ -19,6 +21,8 @@ from app.models.usuario import Usuario
 
 __all__ = [
     "Agenda",
+    "AsaasPagamentoProcessado",
+    "AsaasWebhookEvent",
     "Categoria",
     "Demanda",
     "DemandaAnexo",

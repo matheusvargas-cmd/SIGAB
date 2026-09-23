@@ -469,6 +469,70 @@ class MigrationService:
         )
 
     @staticmethod
+    def adicionar_integracao_asaas() -> None:
+        """Ponte de compatibilidade só para SQLite local que já existia
+        antes da Fase 2 (integração de pagamentos com o Asaas) — mesmo
+        padrão de `adicionar_controle_assinatura()`. Diferente daquela,
+        aqui não há nenhum backfill: os três identificadores são
+        opcionais desde o início (nenhum gabinete existente tem
+        cliente/checkout no Asaas ainda), e as tabelas de eventos de
+        webhook (entrega) e de pagamentos processados (idempotência
+        financeira, correção pós-auditoria) começam vazias. Idempotente:
+        só executa o que ainda não existir."""
+        inspector = inspect(engine)
+        if "gabinetes" in inspector.get_table_names():
+            colunas = {coluna["name"] for coluna in inspector.get_columns("gabinetes")}
+            if "asaas_customer_id" not in colunas:
+                with engine.begin() as conexao:
+                    conexao.execute(text("ALTER TABLE gabinetes ADD COLUMN asaas_customer_id VARCHAR(64)"))
+                    conexao.execute(
+                        text("ALTER TABLE gabinetes ADD COLUMN asaas_subscription_id VARCHAR(64)")
+                    )
+                    conexao.execute(text("ALTER TABLE gabinetes ADD COLUMN asaas_checkout_id VARCHAR(64)"))
+                logger.info("Colunas de integração Asaas adicionadas a gabinetes (SQLite local).")
+
+        if "asaas_webhook_events" not in inspector.get_table_names():
+            with engine.begin() as conexao:
+                conexao.execute(
+                    text(
+                        "CREATE TABLE asaas_webhook_events ("
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                        "event_id VARCHAR(100) NOT NULL UNIQUE, "
+                        "event_type VARCHAR(60) NOT NULL, "
+                        "received_at DATETIME NOT NULL, "
+                        "processed_at DATETIME, "
+                        "status VARCHAR(20) NOT NULL, "
+                        "payload TEXT"
+                        ")"
+                    )
+                )
+            logger.info("Tabela asaas_webhook_events criada (SQLite local).")
+
+        if "asaas_pagamentos_processados" not in inspector.get_table_names():
+            # Idempotência FINANCEIRA (correção pós-auditoria) — distinta
+            # da idempotência de entrega acima (event_id). UNIQUE em
+            # asaas_identificador_cobranca (sempre um payment.id — nunca
+            # checkout.id, ver app/services/assinatura_service.py)
+            # garante que a mesma cobrança real nunca renova mais de uma
+            # vez, mesmo descrita por eventos diferentes
+            # (PAYMENT_CONFIRMED e depois PAYMENT_RECEIVED).
+            with engine.begin() as conexao:
+                conexao.execute(
+                    text(
+                        "CREATE TABLE asaas_pagamentos_processados ("
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                        "asaas_identificador_cobranca VARCHAR(64) NOT NULL UNIQUE, "
+                        "gabinete_id INTEGER NOT NULL REFERENCES gabinetes(id), "
+                        "asaas_subscription_id VARCHAR(64), "
+                        "event_id VARCHAR(100) NOT NULL, "
+                        "plano VARCHAR(20) NOT NULL, "
+                        "processado_em DATETIME NOT NULL"
+                        ")"
+                    )
+                )
+            logger.info("Tabela asaas_pagamentos_processados criada (SQLite local).")
+
+    @staticmethod
     def garantir_gabinete_padrao_local() -> None:
         """Só para SQLite local (instalação single-tenant já existente antes
         da Fase 1): garante um Gabinete padrão e vincula a ele qualquer dado

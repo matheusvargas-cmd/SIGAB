@@ -166,6 +166,29 @@ class Settings(BaseSettings):
             and self.r2_endpoint
         )
 
+    # --- Pagamentos (Asaas) — app/services/asaas_service.py ---
+    # ASAAS_AMBIENTE só decide qual URL de API é usada por padrão
+    # (ASAAS_API_URL sempre pode sobrescrever isso explicitamente). Nunca
+    # existe um valor padrão para ASAAS_API_KEY nem ASAAS_WEBHOOK_TOKEN —
+    # sem os dois configurados, o checkout e o webhook ficam indisponíveis
+    # (ver asaas_configurado), nunca um "modo demo" com chave inventada.
+    asaas_ambiente: Literal["sandbox", "producao"] = "sandbox"
+    asaas_api_url: str = ""
+    asaas_api_key: str = ""
+    asaas_webhook_token: str = ""
+
+    @property
+    def asaas_api_url_efetiva(self) -> str:
+        if self.asaas_api_url:
+            return self.asaas_api_url.rstrip("/")
+        if self.asaas_ambiente == "producao":
+            return "https://api.asaas.com/v3"
+        return "https://api-sandbox.asaas.com/v3"
+
+    @property
+    def asaas_configurado(self) -> bool:
+        return bool(self.asaas_api_key and self.asaas_webhook_token)
+
     @property
     def cors_origins_lista(self) -> list[str]:
         return [origem.strip() for origem in self.cors_origins.split(",") if origem.strip()]
