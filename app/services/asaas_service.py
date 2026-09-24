@@ -160,7 +160,18 @@ class AsaasService:
             # ele) — "description" continua enviado separadamente, são
             # campos distintos aceitos pela API.
             "items": [{"name": descricao, "description": descricao, "quantity": 1, "value": valor}],
-            "customer": customer_id,
+            # "customer" foi removido de propósito (nunca "customerData"):
+            # o Sandbox rejeitava o Checkout porque o cadastro do
+            # customer não tinha phone/address/postalCode/province/city
+            # — dados que o SIGAB não coleta nem armazena hoje (nem no
+            # Gabinete, nem no Usuario). Sem "customer" nem
+            # "customerData" no payload, o próprio Asaas deixa o
+            # pagador informar esses dados na tela hospedada do
+            # Checkout (comportamento documentado pelo Asaas) — evita
+            # inventar/coletar dado cadastral que o SIGAB não tem.
+            # customer_id continua recebido aqui (obter_ou_criar_cliente
+            # não foi removido, ver app/modules/assinatura/controller.py)
+            # só não é mais enviado ao Checkout.
             "subscription": {"cycle": ciclo, "nextDueDate": hoje_operacional().isoformat()},
             "externalReference": external_reference,
         }

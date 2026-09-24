@@ -303,6 +303,35 @@ class TesteCheckoutPayload(unittest.TestCase):
         self.assertEqual(corpo["billingTypes"], ["CREDIT_CARD"])
         self.assertEqual(corpo["chargeTypes"], ["RECURRENT"])
 
+    @patch("app.services.asaas_service.AsaasService._requisitar")
+    def test_checkout_nao_envia_customer_nem_customer_data(self, mock_requisitar):
+        """O Sandbox rejeitava o Checkout porque o cadastro do customer
+        não tinha phone/address/postalCode/province/city — dados que o
+        SIGAB não coleta hoje. Sem "customer" nem "customerData" no
+        payload, o próprio Asaas deixa o pagador informar esses dados
+        na tela hospedada do Checkout."""
+        mock_requisitar.return_value = {"id": "che_fake_payload3", "link": "https://sandbox.asaas.com/c/z"}
+
+        AsaasService.criar_checkout(
+            customer_id="cus_fake123",
+            descricao="Gabinete 360 — Plano Mensal",
+            valor=99.90,
+            ciclo="MONTHLY",
+            external_reference="gabinete-1-MENSAL",
+            success_url="https://gabinetes360.com.br/assinatura/sucesso",
+            cancel_url="https://gabinetes360.com.br/assinatura/cancelado",
+            expired_url="https://gabinetes360.com.br/assinatura/expirado",
+        )
+
+        corpo = mock_requisitar.call_args.kwargs["corpo"]
+        self.assertNotIn("customer", corpo)
+        self.assertNotIn("customerData", corpo)
+        # Demais campos do payload continuam intactos.
+        self.assertEqual(corpo["billingTypes"], ["CREDIT_CARD"])
+        self.assertEqual(corpo["chargeTypes"], ["RECURRENT"])
+        self.assertEqual(corpo["items"][0]["name"], "Gabinete 360 — Plano Mensal")
+        self.assertEqual(corpo["externalReference"], "gabinete-1-MENSAL")
+
 
 # ---------------------------------------------------------------------------
 # 6-7, 11-14: webhook + idempotência
