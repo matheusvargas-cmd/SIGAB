@@ -139,12 +139,15 @@ class AsaasService:
         pagador). Criar o Checkout NUNCA significa pagamento confirmado —
         isso só é decidido pelo Webhook (ver app/modules/webhooks)."""
         corpo = {
-            # Checkout recorrente (chargeTypes=RECURRENT): a documentação
-            # oficial ("Checkout com Assinatura (recorrente)") só
-            # documenta o exemplo com CREDIT_CARD; não há confirmação de
-            # BOLETO nesse modo, então mantemos só os dois meios com
-            # suporte documentado a cobrança recorrente.
-            "billingTypes": ["CREDIT_CARD", "PIX"],
+            # Checkout recorrente (chargeTypes=RECURRENT): confirmado no
+            # Sandbox real que CREDIT_CARD é o único billingType aceito
+            # para RECURRENT — o próprio Asaas rejeita PIX aqui ("O
+            # método de pagamento CREDIT_CARD é o único método de
+            # pagamento permitido para operações RECURRENT"; PIX exige
+            # chargeTypes=DETACHED, um fluxo diferente). Mesma conclusão
+            # da documentação oficial ("Checkout com Assinatura
+            # (recorrente)"), que só documenta o exemplo com CREDIT_CARD.
+            "billingTypes": ["CREDIT_CARD"],
             "chargeTypes": ["RECURRENT"],
             "minutesToExpire": 60,
             "callback": {

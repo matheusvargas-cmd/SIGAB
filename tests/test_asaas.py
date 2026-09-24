@@ -280,12 +280,12 @@ class TesteCheckoutPayload(unittest.TestCase):
         self.assertEqual(corpo["items"][0]["value"], 99.90)
 
     @patch("app.services.asaas_service.AsaasService._requisitar")
-    def test_billing_types_do_checkout_recorrente_nao_inclui_boleto(self, mock_requisitar):
+    def test_billing_types_do_checkout_recorrente_e_somente_credit_card(self, mock_requisitar):
         """billingTypes do Checkout recorrente (chargeTypes=RECURRENT) —
-        a documentação oficial só confirma CREDIT_CARD/PIX para este
-        modo; BOLETO foi removido por não ter suporte documentado aqui
-        (era a causa raiz suspeita, mas o erro real do Sandbox foi o
-        'name' ausente em items, testado acima)."""
+        confirmado no Sandbox real que CREDIT_CARD é o único método
+        aceito para RECURRENT (Asaas rejeita PIX/BOLETO aqui com 400:
+        "O método de pagamento CREDIT_CARD é o único método de
+        pagamento permitido para operações RECURRENT")."""
         mock_requisitar.return_value = {"id": "che_fake_payload2", "link": "https://sandbox.asaas.com/c/y"}
 
         AsaasService.criar_checkout(
@@ -300,8 +300,7 @@ class TesteCheckoutPayload(unittest.TestCase):
         )
 
         corpo = mock_requisitar.call_args.kwargs["corpo"]
-        self.assertEqual(corpo["billingTypes"], ["CREDIT_CARD", "PIX"])
-        self.assertNotIn("BOLETO", corpo["billingTypes"])
+        self.assertEqual(corpo["billingTypes"], ["CREDIT_CARD"])
         self.assertEqual(corpo["chargeTypes"], ["RECURRENT"])
 
 
