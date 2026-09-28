@@ -136,19 +136,34 @@ def heartbeat() -> dict:
 
 @app.get("/health")
 def health() -> JSONResponse:
-    """Health check para orquestração de deploy (Render ou similar) — não
+    """Liveness check para orquestração de deploy (Render ou similar) — não
     exige autenticação de propósito, é chamado pela infraestrutura, não por
-    um usuário logado. Não retorna nada além de "ok"/"erro": nunca
-    DATABASE_URL, hostname, SECRET_KEY ou stack trace, mesmo quando o banco
-    está fora do ar. Distinto de /_heartbeat (que é só do launcher desktop
-    e não verifica banco nenhum) — este endpoint prova que a aplicação
-    consegue de fato consultar o banco, não só que o processo está de pé.
-    """
+    um usuário logado. Só confirma que o processo FastAPI está de pé —
+    NUNCA abre conexão com o banco (ver /ready para isso). Motivo: o
+    Render usa este caminho como healthCheckPath e bate nele com frequência
+    maior que os 5 minutos de ociosidade que fariam o compute do Neon
+    escalar a zero — consultar o banco aqui mantinha o Neon artificialmente
+    sempre ativo (auditoria de consumo de CU-h, set/2026). Nunca retorna
+    nada além de "ok": nunca DATABASE_URL, hostname, SECRET_KEY ou stack
+    trace."""
+    return JSONResponse({"status": "ok"})
+
+
+@app.get("/ready")
+def ready() -> JSONResponse:
+    """Readiness check — prova que a aplicação consegue de fato consultar
+    o banco, não só que o processo está de pé (mesma verificação que
+    /health fazia antes da separação liveness/readiness acima). Uso
+    manual/diagnóstico ou por uma orquestração que precise saber se o
+    banco está acessível — não é o healthCheckPath do Render, de
+    propósito: bater aqui periodicamente reintroduziria o mesmo problema
+    de manter o Neon sempre ativo que motivou a separação. Nunca retorna
+    nada além de "ok"/"erro", mesmo quando o banco está fora do ar."""
     try:
         with SessionLocal() as db:
             db.execute(text("SELECT 1"))
     except Exception:
-        logger.exception("Health check: banco de dados inacessível.")
+        logger.exception("Readiness check: banco de dados inacessível.")
         return JSONResponse({"status": "erro"}, status_code=503)
     return JSONResponse({"status": "ok"})
 
