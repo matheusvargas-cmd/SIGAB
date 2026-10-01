@@ -1,0 +1,11 @@
+{% extends 'auth/base_auth.html' %}
+
+{% block conteudo_auth %}
+<h1 class="h5 text-center mb-3" style="color: var(--c360-azul-principal);">Cadastro concluído</h1>
+
+<div class="alert alert-success py-2 small" role="alert">
+    Seu teste gratuito de 7 dias começou. Você já pode começar a organizar o {{ nome_gabinete }}.
+</div>
+
+<a class="btn btn-success w-100" href="/">Entrar no sistema</a>
+{% endblock %}

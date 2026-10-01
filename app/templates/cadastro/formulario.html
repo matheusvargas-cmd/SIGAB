@@ -1,0 +1,46 @@
+{% extends 'auth/base_auth.html' %}
+
+{% block conteudo_auth %}
+<h1 class="h5 text-center mb-1" style="color: var(--c360-azul-principal);">Criar conta gratuita</h1>
+<p class="text-center small mb-4" style="color: var(--c360-cinza-texto);">
+    7 dias grátis, acesso completo ao sistema. Sem cartão de crédito.
+</p>
+
+{% if erro %}
+<div class="alert alert-danger py-2 small" role="alert">{{ erro }}</div>
+{% endif %}
+
+<form method="post" action="/cadastro">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+    <div class="mb-3">
+        <label class="form-label" for="nome_admin">Seu nome</label>
+        <input class="form-control" type="text" id="nome_admin" name="nome_admin" maxlength="150"
+               value="{{ dados.nome_admin or '' }}" required autofocus>
+    </div>
+    <div class="mb-3">
+        <label class="form-label" for="email_admin">E-mail</label>
+        <input class="form-control" type="email" id="email_admin" name="email_admin" maxlength="150"
+               value="{{ dados.email_admin or '' }}" required>
+    </div>
+    <div class="mb-3">
+        <label class="form-label" for="senha_admin">Senha</label>
+        <input class="form-control" type="password" id="senha_admin" name="senha_admin"
+               minlength="8" maxlength="128" required>
+    </div>
+    <div class="mb-3">
+        <label class="form-label" for="confirmar_senha">Confirmar senha</label>
+        <input class="form-control" type="password" id="confirmar_senha" name="confirmar_senha"
+               minlength="8" maxlength="128" required>
+    </div>
+    <div class="mb-3">
+        <label class="form-label" for="nome_gabinete">Nome do gabinete</label>
+        <input class="form-control" type="text" id="nome_gabinete" name="nome_gabinete" maxlength="150"
+               value="{{ dados.nome_gabinete or '' }}" required>
+    </div>
+    <button class="btn btn-success w-100" type="submit">Criar minha conta gratuita</button>
+    <div class="text-center mt-3">
+        <a class="small" href="/login">Já tenho conta — entrar</a>
+    </div>
+</form>
+{% endblock %}

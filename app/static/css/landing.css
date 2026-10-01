@@ -725,6 +725,60 @@
   margin-bottom: 24px;
 }
 
+/* Destaque do teste gratuito de 7 dias, acima dos cards de preço — mesma
+   paleta institucional (azul claro de fundo, selo verde), sem criar uma
+   linguagem visual nova. */
+.l-trial-destaque {
+  max-width: 580px;
+  margin: 0 auto 36px;
+  background: var(--l-azul-claro);
+  border: 1px solid var(--l-borda);
+  border-radius: var(--l-raio);
+  padding: 22px 28px;
+  text-align: center;
+}
+
+.l-trial-destaque .l-trial-selo {
+  display: inline-block;
+  background: var(--l-verde);
+  color: var(--l-branco);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 5px 14px;
+  border-radius: 999px;
+  margin-bottom: 10px;
+}
+
+.l-trial-destaque h3 {
+  font-size: 1.05rem;
+  color: var(--l-azul);
+  margin: 0 0 8px;
+}
+
+.l-trial-destaque p {
+  font-size: 0.92rem;
+  color: var(--l-cinza-texto);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* Mesmo selo verde, reaproveitado dentro de cada card para "7 dias
+   grátis para testar" — nunca em posição absoluta como .l-plano-badge,
+   que era exclusiva do selo de comparação removido. */
+.l-plano-trial {
+  display: block;
+  width: fit-content;
+  margin: 2px auto 10px;
+  background: var(--l-verde);
+  color: var(--l-branco);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 4px 14px;
+  border-radius: 999px;
+}
+
 /* ---------- Incluído ---------- */
 
 .l-incluido-grid {

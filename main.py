@@ -16,6 +16,7 @@ from app.services.migration_service import MigrationService
 from app.modules.agenda.controller import router as agenda_router
 from app.modules.assinatura.controller import router as assinatura_router
 from app.modules.auth.controller import router as auth_router
+from app.modules.cadastro.controller import router as cadastro_router
 from app.modules.cidadao.controller import router as cidadao_router
 from app.modules.configuracoes.controller import router as configuracoes_router
 from app.modules.dashboard.controller import router as dashboard_router
@@ -171,6 +172,7 @@ def ready() -> JSONResponse:
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 app.include_router(auth_router)
+app.include_router(cadastro_router)
 app.include_router(assinatura_router)
 app.include_router(dashboard_router)
 app.include_router(eleitores_router)
