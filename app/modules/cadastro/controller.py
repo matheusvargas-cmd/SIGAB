@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.config import TEMPLATES_DIR
 from app.core.database import get_db
 from app.core.security import gerar_hash_senha
+from app.services.assinatura_service import PLANOS
 from app.services.gabinete_service import GabineteService
 from app.services.usuario_service import UsuarioService
 
@@ -48,6 +49,18 @@ MENSAGEM_ERRO_GENERICA = (
 _SENHA_FICTICIA = "senha-ficticia-somente-para-normalizar-tempo-de-resposta"
 
 
+def _plano_da_query(request: Request) -> str | None:
+    """Lê "plano" só da querystring (nunca de Form) — o valor só decide
+    para onde redirecionar depois do cadastro (UX), nunca o que é
+    cobrado (isso continua sendo exclusivamente o botão clicado em
+    /assinatura/checkout, inalterado). Allowlist estrita: qualquer coisa
+    fora de PLANOS (reaproveitado de assinatura_service, nunca uma
+    segunda lista de planos) vira None — mesmo comportamento de "sem
+    plano", nunca um erro."""
+    valor = (request.query_params.get("plano") or "").strip().upper()
+    return valor if valor in PLANOS else None
+
+
 def _gerar_e_guardar_csrf(request: Request) -> str:
     token = secrets.token_urlsafe(32)
     request.session[CHAVE_SESSAO_CSRF] = token
@@ -80,7 +93,7 @@ def _validar_campos(
 
 
 def _formulario(
-    request: Request, *, erro: str | None, dados: dict, status_code: int = 200
+    request: Request, *, erro: str | None, dados: dict, status_code: int = 200, plano: str | None = None
 ) -> HTMLResponse:
     return templates.TemplateResponse(
         request=request,
@@ -90,6 +103,7 @@ def _formulario(
             "erro": erro,
             "dados": dados,
             "csrf_token": _gerar_e_guardar_csrf(request),
+            "plano": plano,
         },
         status_code=status_code,
     )
@@ -102,7 +116,7 @@ def formulario_cadastro(request: Request):
         # aqui; quem quer um gabinete adicional passa por /superadmin (fora
         # do alcance do autocadastro público).
         return RedirectResponse("/", status_code=303)
-    return _formulario(request, erro=None, dados={})
+    return _formulario(request, erro=None, dados={}, plano=_plano_da_query(request))
 
 
 @router.post("/cadastro", response_class=HTMLResponse)
@@ -122,6 +136,8 @@ def criar_cadastro(
     # criado do zero pelo servidor (GabineteService.criar_gabinete_com_admin
     # gera o Gabinete e o public_token internamente) e o Usuario criado aqui
     # nunca recebe super_admin=True (nem é oferecido como opção no form).
+    plano = _plano_da_query(request)
+
     if request.session.get("usuario_id"):
         # Sessão já autenticada tentando submeter o formulário (ex.: aba
         # antiga, duplo submit) — nunca cria um segundo gabinete em
@@ -135,7 +151,7 @@ def criar_cadastro(
     }
 
     if not _csrf_valido(request, csrf_token):
-        return _formulario(request, erro=MENSAGEM_ERRO_GENERICA, dados=dados_echo, status_code=400)
+        return _formulario(request, erro=MENSAGEM_ERRO_GENERICA, dados=dados_echo, status_code=400, plano=plano)
 
     nome_gabinete_normalizado = (nome_gabinete or "").strip()
     nome_admin_normalizado = (nome_admin or "").strip()
@@ -146,11 +162,11 @@ def criar_cadastro(
         nome_gabinete_normalizado, nome_admin_normalizado, email_normalizado, senha, confirmar_senha
     )
     if erro:
-        return _formulario(request, erro=erro, dados=dados_echo, status_code=400)
+        return _formulario(request, erro=erro, dados=dados_echo, status_code=400, plano=plano)
 
     if UsuarioService.buscar_usuario_por_email(db, email_normalizado) is not None:
         gerar_hash_senha(_SENHA_FICTICIA)
-        return _formulario(request, erro=MENSAGEM_ERRO_GENERICA, dados=dados_echo, status_code=400)
+        return _formulario(request, erro=MENSAGEM_ERRO_GENERICA, dados=dados_echo, status_code=400, plano=plano)
 
     try:
         gabinete = GabineteService.criar_gabinete_com_admin(
@@ -162,10 +178,10 @@ def criar_cadastro(
         # duplicidade de novo, antes de qualquer insert — mesma mensagem
         # genérica, nunca a específica do service ("Já existe um usuário
         # com este e-mail.").
-        return _formulario(request, erro=MENSAGEM_ERRO_GENERICA, dados=dados_echo, status_code=400)
+        return _formulario(request, erro=MENSAGEM_ERRO_GENERICA, dados=dados_echo, status_code=400, plano=plano)
     except IntegrityError:
         db.rollback()
-        return _formulario(request, erro=MENSAGEM_ERRO_GENERICA, dados=dados_echo, status_code=400)
+        return _formulario(request, erro=MENSAGEM_ERRO_GENERICA, dados=dados_echo, status_code=400, plano=plano)
 
     usuario = UsuarioService.buscar_usuario_por_email(db, email_normalizado)
 
@@ -177,6 +193,18 @@ def criar_cadastro(
     # — nenhuma sessão paralela: só os dois valores que obter_contexto_atual
     # já sabe ler, revalidados no banco a cada requisição como qualquer
     # outra sessão.
+    if plano is not None:
+        # Contratação direta (Fase 4): o gabinete já nasceu em TRIAL (nada
+        # muda nisso) e o usuário já está autenticado no gabinete certo —
+        # só falta levá-lo até o Checkout. /assinatura/checkout continua
+        # inteiramente inalterado: lê gabinete_id exclusivamente da sessão
+        # (nunca deste "plano"), então o Checkout criado ali só pode
+        # pertencer a este gabinete recém-criado. O próprio usuário ainda
+        # escolhe/confirma o plano clicando um dos botões em /assinatura —
+        # este redirecionamento é só uma sugestão de navegação, nunca uma
+        # cobrança ou ativação.
+        return RedirectResponse(f"/assinatura?plano={plano.lower()}", status_code=303)
+
     return templates.TemplateResponse(
         request=request,
         name="cadastro/sucesso.html",

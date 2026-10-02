@@ -60,12 +60,13 @@ SENHA_PADRAO = "senha12345"
 class FakeRequest:
     """Mesmo substituto mínimo de fastapi.Request usado em
     test_assinatura.py/test_asaas.py — os handlers de /cadastro só leem e
-    escrevem request.session (aqui, um dict simples), nunca mais nada do
-    objeto real."""
+    escrevem request.session (aqui, um dict simples) e, desde a Fase 4,
+    request.query_params.get("plano") — nunca mais nada do objeto real."""
 
-    def __init__(self):
+    def __init__(self, query_params: dict | None = None):
         self.session: dict = {}
         self.state = SimpleNamespace()
+        self.query_params = query_params or {}
 
 
 class BaseTesteCadastro(unittest.TestCase):
@@ -363,6 +364,108 @@ class TesteMultiTenant(BaseTesteCadastro):
 
         # Dados preservados — nada é apagado quando o trial vence.
         self.assertIsNotNone(self.db.scalar(select(Gabinete).where(Gabinete.id == gabinete.id)))
+
+
+class TestePlanoFase4(BaseTesteCadastro):
+    """Fase 4 — "plano" na querystring só decide PARA ONDE redirecionar
+    depois do cadastro; nunca cria Checkout, nunca ativa/renova nada
+    (isso continua exclusivo de /assinatura/checkout + webhook,
+    nenhum dos dois tocado nesta fase)."""
+
+    def test_sem_plano_comportamento_identico_ao_atual(self):
+        request = FakeRequest()
+        resposta = self._submeter(request)
+        self.assertEqual(resposta.template.name, "cadastro/sucesso.html")
+        gabinete = self.db.scalar(
+            select(Gabinete).where(Gabinete.nome == f"Gabinete {self.sufixo}")
+        )
+        usuario = self.db.scalar(select(Usuario).where(Usuario.email == self._email()))
+        self._gabinetes_ids.append(gabinete.id)
+        self._usuarios_ids.append(usuario.id)
+
+    def test_plano_mensal_redireciona_para_assinatura(self):
+        request = FakeRequest(query_params={"plano": "mensal"})
+        resposta = self._submeter(request)
+        self.assertEqual(resposta.status_code, 303)
+        self.assertEqual(resposta.headers["location"], "/assinatura?plano=mensal")
+
+        gabinete = self.db.scalar(
+            select(Gabinete).where(Gabinete.nome == f"Gabinete {self.sufixo}")
+        )
+        usuario = self.db.scalar(select(Usuario).where(Usuario.email == self._email()))
+        self._gabinetes_ids.append(gabinete.id)
+        self._usuarios_ids.append(usuario.id)
+
+        # Gabinete nasceu em TRIAL normalmente — "plano" na querystring
+        # nunca ativa nem renova nada por si só.
+        self.assertEqual(gabinete.status_assinatura, "TRIAL")
+        # Login automático preservado (mesma garantia da Fase 3).
+        self.assertEqual(request.session["usuario_id"], usuario.id)
+        self.assertEqual(request.session["gabinete_id"], gabinete.id)
+
+    def test_plano_anual_redireciona_para_assinatura(self):
+        request = FakeRequest(query_params={"plano": "anual"})
+        resposta = self._submeter(request)
+        self.assertEqual(resposta.status_code, 303)
+        self.assertEqual(resposta.headers["location"], "/assinatura?plano=anual")
+
+        gabinete = self.db.scalar(
+            select(Gabinete).where(Gabinete.nome == f"Gabinete {self.sufixo}")
+        )
+        self._gabinetes_ids.append(gabinete.id)
+        self._usuarios_ids.append(
+            self.db.scalar(select(Usuario).where(Usuario.email == self._email())).id
+        )
+        self.assertEqual(gabinete.status_assinatura, "TRIAL")
+
+    def test_plano_invalido_tratado_como_ausente(self):
+        for indice, valor in enumerate(
+            ["trimestral", "", "MENSAL;DROP TABLE gabinetes", "<script>", "mensalx"]
+        ):
+            with self.subTest(valor=valor):
+                request = FakeRequest(query_params={"plano": valor})
+                email = self._email(f"inv{indice}")
+                nome_gabinete = f"Gabinete {self.sufixo}-inv{indice}"
+                resposta = self._submeter(
+                    request, nome_gabinete=nome_gabinete, email_admin=email
+                )
+                # Mesmo comportamento de "sem plano" — nunca um erro, nunca
+                # um redirect para /assinatura com um valor não permitido.
+                self.assertEqual(resposta.template.name, "cadastro/sucesso.html")
+                gabinete = self.db.scalar(select(Gabinete).where(Gabinete.nome == nome_gabinete))
+                usuario = self.db.scalar(select(Usuario).where(Usuario.email == email))
+                self._gabinetes_ids.append(gabinete.id)
+                self._usuarios_ids.append(usuario.id)
+
+    def test_plano_manipulado_nunca_afeta_tenant_criado(self):
+        """Mesmo com "plano" adulterado, o Checkout subsequente (fora
+        desta função — ver test_asaas.py) só poderia pertencer ao
+        gabinete que a sessão aponta, que é sempre o recém-criado — este
+        teste confirma que o valor de "plano" não influencia em nada além
+        do redirect: nenhum segundo gabinete, nenhuma mudança de tenant."""
+        total_antes = self._contar_gabinetes()
+        request = FakeRequest(query_params={"plano": "ANUAL"})
+        resposta = self._submeter(request)
+        self.assertEqual(self._contar_gabinetes(), total_antes + 1)
+
+        gabinete = self.db.scalar(
+            select(Gabinete).where(Gabinete.nome == f"Gabinete {self.sufixo}")
+        )
+        self._gabinetes_ids.append(gabinete.id)
+        self._usuarios_ids.append(
+            self.db.scalar(select(Usuario).where(Usuario.email == self._email())).id
+        )
+        self.assertEqual(resposta.headers["location"], "/assinatura?plano=anual")
+        self.assertEqual(request.session["gabinete_id"], gabinete.id)
+
+    def test_formulario_get_preserva_plano_para_o_template(self):
+        request = FakeRequest(query_params={"plano": "mensal"})
+        resposta = formulario_cadastro(request)
+        self.assertEqual(resposta.context["plano"], "MENSAL")
+
+        request_invalido = FakeRequest(query_params={"plano": "vitalicio"})
+        resposta_invalida = formulario_cadastro(request_invalido)
+        self.assertIsNone(resposta_invalida.context["plano"])
 
 
 if __name__ == "__main__":

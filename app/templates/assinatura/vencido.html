@@ -31,15 +31,25 @@
 
         <h1 class="l-titulo-secao" style="text-align:center;">
             {% if gabinete %}
-                A assinatura do {{ gabinete.nome }} venceu em {{ gabinete.assinatura_vencimento.strftime('%d/%m/%Y') }}.
+                {% if gabinete.assinatura_vencida %}
+                    A assinatura do {{ gabinete.nome }} venceu em {{ gabinete.assinatura_vencimento.strftime('%d/%m/%Y') }}.
+                {% else %}
+                    Finalize a assinatura do {{ gabinete.nome }} para continuar após o período de teste.
+                {% endif %}
             {% else %}
                 A assinatura deste gabinete está vencida.
             {% endif %}
         </h1>
         <p style="text-align:center; max-width:620px; margin:0 auto 32px; color:var(--l-cinza-texto); font-size:1.05rem;">
+            {% if gabinete and not gabinete.assinatura_vencida %}
+            Olá, {{ usuario_nome }}. Escolha um plano abaixo para continuar usando o Gabinete 360 — eleitores,
+            demandas, atendimento ao cidadão, agenda e relatórios — sem interrupção quando o período de teste
+            terminar.
+            {% else %}
             Olá, {{ usuario_nome }}. Para continuar usando o Gabinete 360 — eleitores, demandas, atendimento ao
             cidadão, agenda e relatórios — escolha um plano abaixo. Nenhum dado do seu gabinete foi apagado: tudo
             continua guardado, esperando a renovação.
+            {% endif %}
         </p>
 
         {% if erro %}
