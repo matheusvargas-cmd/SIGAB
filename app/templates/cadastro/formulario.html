@@ -1,10 +1,21 @@
 {% extends 'auth/base_auth.html' %}
 
 {% block conteudo_auth %}
+{% if plano == 'MENSAL' %}
+<h1 class="h5 text-center mb-1" style="color: var(--c360-azul-principal);">Assine o Gabinete 360</h1>
+<p class="text-center small mb-1" style="color: var(--c360-cinza-texto); font-weight:600;">Plano Mensal — R$ 99,90/mês</p>
+<p class="text-center small mb-4" style="color: var(--c360-cinza-texto);">Cadastre seu gabinete para continuar para o pagamento.</p>
+{% elif plano == 'ANUAL' %}
+<h1 class="h5 text-center mb-1" style="color: var(--c360-azul-principal);">Assine o Gabinete 360</h1>
+<p class="text-center small mb-1" style="color: var(--c360-cinza-texto); font-weight:600;">Plano Anual — 10x R$ 79,90</p>
+<p class="text-center small mb-1" style="color: var(--c360-cinza-texto);">Total de R$ 799,00/ano</p>
+<p class="text-center small mb-4" style="color: var(--c360-cinza-texto);">Cadastre seu gabinete para continuar para o pagamento.</p>
+{% else %}
 <h1 class="h5 text-center mb-1" style="color: var(--c360-azul-principal);">Criar conta gratuita</h1>
 <p class="text-center small mb-4" style="color: var(--c360-cinza-texto);">
     7 dias grátis, acesso completo ao sistema. Sem cartão de crédito.
 </p>
+{% endif %}
 
 {% if erro %}
 <div class="alert alert-danger py-2 small" role="alert">{{ erro }}</div>
@@ -38,7 +49,9 @@
         <input class="form-control" type="text" id="nome_gabinete" name="nome_gabinete" maxlength="150"
                value="{{ dados.nome_gabinete or '' }}" required>
     </div>
-    <button class="btn btn-success w-100" type="submit">Criar minha conta gratuita</button>
+    <button class="btn btn-success w-100" type="submit">
+        {% if plano in ('MENSAL', 'ANUAL') %}CONTINUAR PARA PAGAMENTO{% else %}CRIAR MINHA CONTA GRATUITA{% endif %}
+    </button>
     <div class="text-center mt-3">
         <a class="small" href="/login">Já tenho conta — entrar</a>
     </div>

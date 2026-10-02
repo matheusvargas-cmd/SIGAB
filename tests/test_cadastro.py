@@ -468,5 +468,43 @@ class TestePlanoFase4(BaseTesteCadastro):
         self.assertIsNone(resposta_invalida.context["plano"])
 
 
+class TesteFormularioContextualAoPlano(BaseTesteCadastro):
+    """Ajuste de UX (pós-Fase 4): o texto de /cadastro reflete o plano da
+    querystring — puramente apresentação, reaproveitando o "plano" que o
+    controller já disponibilizava no contexto desde a Fase 4. Nenhum
+    destes testes toca o banco (GET /cadastro não cria nada)."""
+
+    def test_sem_plano_mostra_texto_de_teste_gratis(self):
+        html = formulario_cadastro(FakeRequest()).body.decode("utf-8")
+        self.assertIn("Criar conta gratuita", html)
+        self.assertIn("CRIAR MINHA CONTA GRATUITA", html)
+        self.assertNotIn("Assine o Gabinete 360", html)
+
+    def test_plano_mensal_mostra_texto_de_assinatura_mensal(self):
+        request = FakeRequest(query_params={"plano": "mensal"})
+        html = formulario_cadastro(request).body.decode("utf-8")
+        self.assertIn("Assine o Gabinete 360", html)
+        self.assertIn("Plano Mensal", html)
+        self.assertIn("R$ 99,90/mês", html)
+        self.assertIn("CONTINUAR PARA PAGAMENTO", html)
+        self.assertNotIn("CRIAR MINHA CONTA GRATUITA", html)
+
+    def test_plano_anual_mostra_texto_de_assinatura_anual(self):
+        request = FakeRequest(query_params={"plano": "anual"})
+        html = formulario_cadastro(request).body.decode("utf-8")
+        self.assertIn("Assine o Gabinete 360", html)
+        self.assertIn("Plano Anual", html)
+        self.assertIn("Total de R$ 799,00/ano", html)
+        self.assertIn("CONTINUAR PARA PAGAMENTO", html)
+        self.assertNotIn("CRIAR MINHA CONTA GRATUITA", html)
+
+    def test_plano_invalido_mostra_texto_de_teste_gratis(self):
+        request = FakeRequest(query_params={"plano": "vitalicio"})
+        html = formulario_cadastro(request).body.decode("utf-8")
+        self.assertIn("Criar conta gratuita", html)
+        self.assertIn("CRIAR MINHA CONTA GRATUITA", html)
+        self.assertNotIn("Assine o Gabinete 360", html)
+
+
 if __name__ == "__main__":
     unittest.main()
