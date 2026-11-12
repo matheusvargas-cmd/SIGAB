@@ -102,6 +102,7 @@ class DemandaService:
         origem: str | None,
         status: str | None,
         atrasada: bool,
+        prioridade: str | None = None,
     ):
         """Monta a base de `select(Demanda)` com todos os filtros da tela
         de demandas aplicados (gabinete, origem, status, atrasada,
@@ -130,6 +131,9 @@ class DemandaService:
 
         if status and status in STATUS_OPCOES:
             consulta = consulta.where(Demanda.status == status)
+
+        if prioridade and prioridade in PRIORIDADE_OPCOES:
+            consulta = consulta.where(Demanda.prioridade == prioridade)
 
         # "Atrasada" nunca é um status gravado — é sempre calculado na hora
         # (prazo vencido + status ainda não finalizado), mesma regra de
@@ -187,8 +191,11 @@ class DemandaService:
         atrasada: bool = False,
         ordenar_por: str | None = None,
         ordenar_direcao: str = "asc",
+        prioridade: str | None = None,
     ) -> tuple[list[Demanda], int, int]:
-        consulta = DemandaService._consulta_filtrada(gabinete_id, pesquisa, origem, status, atrasada)
+        consulta = DemandaService._consulta_filtrada(
+            gabinete_id, pesquisa, origem, status, atrasada, prioridade
+        )
         total_registros = db.scalar(
             select(func.count()).select_from(consulta.with_only_columns(Demanda.id).subquery())
         ) or 0
@@ -210,6 +217,7 @@ class DemandaService:
         atrasada: bool = False,
         ordenar_por: str | None = None,
         ordenar_direcao: str = "asc",
+        prioridade: str | None = None,
     ) -> list[Demanda]:
         """Mesmos filtros e mesma ordenação de listar() (reaproveita
         _consulta_filtrada/_ordenar — nunca uma segunda implementação que
@@ -217,7 +225,9 @@ class DemandaService:
         impressão do relatório (app/modules/demandas/controller.py), que
         precisa do conjunto completo que corresponde ao filtro, nunca
         apenas a página exibida na tela."""
-        consulta = DemandaService._consulta_filtrada(gabinete_id, pesquisa, origem, status, atrasada)
+        consulta = DemandaService._consulta_filtrada(
+            gabinete_id, pesquisa, origem, status, atrasada, prioridade
+        )
         consulta = DemandaService._ordenar(consulta, ordenar_por, ordenar_direcao)
         return list(db.scalars(consulta).unique().all())
 
@@ -328,6 +338,42 @@ class DemandaService:
             .options(joinedload(Demanda.eleitor))
             .order_by(Demanda.prazo)
         )
+        return list(db.scalars(consulta).unique().all())
+
+    @staticmethod
+    def contar_urgentes(db: Session, gabinete_id: int) -> int:
+        """Mesma regra de listar_urgentes() abaixo — só a contagem, no
+        mesmo padrão de contar_atrasadas()/contar_prazo_proximo()."""
+        consulta = (
+            select(func.count())
+            .select_from(Demanda)
+            .where(Demanda.gabinete_id == gabinete_id)
+            .where(Demanda.prioridade == "Urgente")
+            .where(Demanda.status.notin_(STATUS_FINALIZADOS))
+        )
+        return db.scalar(consulta) or 0
+
+    @staticmethod
+    def listar_urgentes(db: Session, gabinete_id: int, limite: int | None = None) -> list[Demanda]:
+        """Demandas com prioridade "Urgente" ainda não finalizadas — nunca
+        um status próprio gravado no banco, sempre calculado a partir de
+        Demanda.prioridade + STATUS_FINALIZADOS, mesma convenção de
+        listar_atrasadas()/listar_vencendo_hoje(). Pensado para o cartão
+        de destaque do dashboard (gabinetes usam "Urgente" como sinal de
+        que aquela demanda específica precisa de um retorno ativo ao
+        eleitor, não só o fluxo normal de atendimento) — por isso ordena
+        pelo prazo mais próximo primeiro (e sem prazo por último), nunca
+        por data de abertura."""
+        consulta = (
+            select(Demanda)
+            .where(Demanda.gabinete_id == gabinete_id)
+            .where(Demanda.prioridade == "Urgente")
+            .where(Demanda.status.notin_(STATUS_FINALIZADOS))
+            .options(joinedload(Demanda.eleitor))
+            .order_by(Demanda.prazo.is_(None), Demanda.prazo, Demanda.data_abertura.desc())
+        )
+        if limite is not None:
+            consulta = consulta.limit(limite)
         return list(db.scalars(consulta).unique().all())
 
     @staticmethod

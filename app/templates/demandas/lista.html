@@ -21,7 +21,7 @@
    reaproveitado pelos cabeçalhos ordenáveis, pela paginação e pelo
    parâmetro "voltar" de cada linha, sempre a mesma fonte, nunca
    remontado de formas diferentes em lugares diferentes. #}
-{% set filtros_qs %}{% if origem_filtro %}&origem={{ origem_filtro }}{% endif %}{% if status_filtro %}&status={{ status_filtro|urlencode }}{% endif %}{% if atrasada_filtro %}&atrasada=1{% endif %}{% endset %}
+{% set filtros_qs %}{% if origem_filtro %}&origem={{ origem_filtro }}{% endif %}{% if status_filtro %}&status={{ status_filtro|urlencode }}{% endif %}{% if atrasada_filtro %}&atrasada=1{% endif %}{% if prioridade_filtro %}&prioridade={{ prioridade_filtro|urlencode }}{% endif %}{% endset %}
 
 <form class="row g-2 align-items-center mb-3" method="get" action="/demandas">
     <div class="col-sm-8 col-md-4">
@@ -37,6 +37,14 @@
         </select>
     </div>
     <div class="col-auto">
+        <select class="form-select" name="prioridade">
+            <option value="">Todas as prioridades</option>
+            {% for opcao in prioridade_opcoes %}
+            <option value="{{ opcao }}" {% if prioridade_filtro == opcao %}selected{% endif %}>{{ opcao }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-auto">
         <div class="form-check pt-2">
             <input class="form-check-input" type="checkbox" id="atrasada" name="atrasada" value="1" {% if atrasada_filtro %}checked{% endif %}>
             <label class="form-check-label" for="atrasada">Só atrasadas</label>
@@ -45,17 +53,17 @@
     {% if origem_filtro %}<input type="hidden" name="origem" value="{{ origem_filtro }}">{% endif %}
     <div class="col-auto">
         <button class="btn btn-outline-primary" type="submit">Filtrar</button>
-        {% if pesquisa or status_filtro or atrasada_filtro %}<a class="btn btn-outline-secondary" href="/demandas{% if origem_filtro %}?origem={{ origem_filtro }}{% endif %}">Limpar filtros</a>{% endif %}
+        {% if pesquisa or status_filtro or atrasada_filtro or prioridade_filtro %}<a class="btn btn-outline-secondary" href="/demandas{% if origem_filtro %}?origem={{ origem_filtro }}{% endif %}">Limpar filtros</a>{% endif %}
         <a class="btn btn-outline-secondary" href="/demandas/imprimir?pesquisa={{ pesquisa|urlencode }}{{ filtros_qs }}{% if ordenar_por %}&ordenar_por={{ ordenar_por }}&ordenar_direcao={{ ordenar_direcao }}{% endif %}" target="_blank" rel="noopener">Imprimir relatório</a>
     </div>
     <div class="col-auto ms-auto">
         <div class="btn-group" role="group" aria-label="Filtrar por origem">
             <a class="btn btn-sm {{ 'btn-secondary' if not origem_filtro else 'btn-outline-secondary' }}"
-               href="/demandas?pesquisa={{ pesquisa|urlencode }}{% if status_filtro %}&status={{ status_filtro|urlencode }}{% endif %}{% if atrasada_filtro %}&atrasada=1{% endif %}">Todas</a>
+               href="/demandas?pesquisa={{ pesquisa|urlencode }}{% if status_filtro %}&status={{ status_filtro|urlencode }}{% endif %}{% if atrasada_filtro %}&atrasada=1{% endif %}{% if prioridade_filtro %}&prioridade={{ prioridade_filtro|urlencode }}{% endif %}">Todas</a>
             <a class="btn btn-sm {{ 'btn-secondary' if origem_filtro == 'INTERNA' else 'btn-outline-secondary' }}"
-               href="/demandas?pesquisa={{ pesquisa|urlencode }}&origem=INTERNA{% if status_filtro %}&status={{ status_filtro|urlencode }}{% endif %}{% if atrasada_filtro %}&atrasada=1{% endif %}">Internas</a>
+               href="/demandas?pesquisa={{ pesquisa|urlencode }}&origem=INTERNA{% if status_filtro %}&status={{ status_filtro|urlencode }}{% endif %}{% if atrasada_filtro %}&atrasada=1{% endif %}{% if prioridade_filtro %}&prioridade={{ prioridade_filtro|urlencode }}{% endif %}">Internas</a>
             <a class="btn btn-sm {{ 'btn-info' if origem_filtro == 'PUBLICA' else 'btn-outline-info' }}"
-               href="/demandas?pesquisa={{ pesquisa|urlencode }}&origem=PUBLICA{% if status_filtro %}&status={{ status_filtro|urlencode }}{% endif %}{% if atrasada_filtro %}&atrasada=1{% endif %}">Públicas</a>
+               href="/demandas?pesquisa={{ pesquisa|urlencode }}&origem=PUBLICA{% if status_filtro %}&status={{ status_filtro|urlencode }}{% endif %}{% if atrasada_filtro %}&atrasada=1{% endif %}{% if prioridade_filtro %}&prioridade={{ prioridade_filtro|urlencode }}{% endif %}">Públicas</a>
         </div>
     </div>
 </form>

@@ -48,6 +48,8 @@
 
 <p class="text-muted">Total no período: <strong>{{ total }}</strong> · mês no formato AAAA-MM</p>
 
+{% include 'relatorios/_grafico_pizza.html' %}
+
 {% set rotulo_coluna = 'Mês' %}
 {% include 'relatorios/_tabela_rotulo_quantidade.html' %}
 {% endblock %}

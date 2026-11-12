@@ -98,17 +98,19 @@ def listar(
     origem: str = "",
     status: str = "",
     atrasada: bool = False,
+    prioridade: str = "",
     ordenar_por: str = "",
     ordenar_direcao: str = "asc",
     db: Session = Depends(get_db),
     contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
-    # origem/status só são aceitos se forem exatamente um dos valores
-    # reais do respectivo campo — qualquer outra coisa na query string
-    # (adivinhada, digitada errado) é tratada como "sem filtro", nunca
-    # como um erro. ordenar_direcao idem, restrito a "asc"/"desc".
+    # origem/status/prioridade só são aceitos se forem exatamente um dos
+    # valores reais do respectivo campo — qualquer outra coisa na query
+    # string (adivinhada, digitada errado) é tratada como "sem filtro",
+    # nunca como um erro. ordenar_direcao idem, restrito a "asc"/"desc".
     origem_filtro = origem if origem in ("INTERNA", "PUBLICA") else ""
     status_filtro = status if status in STATUS_OPCOES else ""
+    prioridade_filtro = prioridade if prioridade in PRIORIDADE_OPCOES else ""
     ordenar_direcao = "desc" if ordenar_direcao == "desc" else "asc"
     hoje = date.today()
     demandas, pagina_atual, total_paginas = DemandaService.listar(
@@ -121,6 +123,7 @@ def listar(
         atrasada=atrasada,
         ordenar_por=ordenar_por or None,
         ordenar_direcao=ordenar_direcao,
+        prioridade=prioridade_filtro or None,
     )
     # Situação "atrasada" nunca é lida do banco — sempre recalculada aqui
     # a partir da data de hoje (DemandaService.calcular_atraso), a mesma
@@ -139,9 +142,11 @@ def listar(
             "origem_filtro": origem_filtro,
             "status_filtro": status_filtro,
             "atrasada_filtro": atrasada,
+            "prioridade_filtro": prioridade_filtro,
             "ordenar_por": ordenar_por,
             "ordenar_direcao": ordenar_direcao,
             "status_opcoes": STATUS_OPCOES,
+            "prioridade_opcoes": PRIORIDADE_OPCOES,
             "hoje": hoje,
             "flash_message": decodificar_flash(request.cookies.get("flash_message")),
             "flash_category": request.cookies.get("flash_category", "warning"),
@@ -304,7 +309,7 @@ def criar(
 
 
 def _descricao_filtro(
-    pesquisa: str, origem_filtro: str, status_filtro: str, atrasada: bool
+    pesquisa: str, origem_filtro: str, status_filtro: str, atrasada: bool, prioridade_filtro: str = ""
 ) -> str:
     """Texto legível do filtro aplicado, exibido no cabeçalho do relatório
     impresso (app/templates/demandas/imprimir.html) — nunca a query string
@@ -316,6 +321,8 @@ def _descricao_filtro(
         partes.append("origem: Pública")
     if status_filtro:
         partes.append(f"status: {status_filtro}")
+    if prioridade_filtro:
+        partes.append(f"prioridade: {prioridade_filtro}")
     if atrasada:
         partes.append("apenas demandas atrasadas")
     if pesquisa.strip():
@@ -330,6 +337,7 @@ def imprimir(
     origem: str = "",
     status: str = "",
     atrasada: bool = False,
+    prioridade: str = "",
     ordenar_por: str = "",
     ordenar_direcao: str = "asc",
     db: Session = Depends(get_db),
@@ -342,6 +350,7 @@ def imprimir(
     # que corresponde ao filtro, nunca só a página exibida na tela.
     origem_filtro = origem if origem in ("INTERNA", "PUBLICA") else ""
     status_filtro = status if status in STATUS_OPCOES else ""
+    prioridade_filtro = prioridade if prioridade in PRIORIDADE_OPCOES else ""
     ordenar_direcao = "desc" if ordenar_direcao == "desc" else "asc"
     hoje = date.today()
     demandas = DemandaService.listar_todos_filtrados(
@@ -353,6 +362,7 @@ def imprimir(
         atrasada=atrasada,
         ordenar_por=ordenar_por or None,
         ordenar_direcao=ordenar_direcao,
+        prioridade=prioridade_filtro or None,
     )
     for demanda in demandas:
         demanda.dias_atraso = DemandaService.calcular_atraso(demanda, hoje)
@@ -364,7 +374,9 @@ def imprimir(
             "demandas": demandas,
             "total": len(demandas),
             "gerado_em": datetime.now(),
-            "descricao_filtro": _descricao_filtro(pesquisa, origem_filtro, status_filtro, atrasada),
+            "descricao_filtro": _descricao_filtro(
+                pesquisa, origem_filtro, status_filtro, atrasada, prioridade_filtro
+            ),
         },
     )
 

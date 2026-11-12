@@ -1,0 +1,97 @@
+{# Gráfico de pizza opcional — nunca visível por padrão, só depois de um
+   clique no botão (pedido explícito: nunca always-on). Desenhado como SVG
+   puro, sem nenhuma biblioteca de gráficos (projeto não tem nenhuma até
+   agora) — construído uma única vez (jaDesenhado), na primeira exibição.
+   A impressão (botão "Imprimir" de cada página) já funciona sozinha:
+   window.print() imprime o que estiver visível no momento, gráfico
+   incluído quando o usuário o exibiu antes de imprimir. #}
+{% if dados and total %}
+<div class="no-print mb-3">
+    <button class="btn btn-outline-secondary btn-sm" type="button" id="grafico-toggle">Exibir gráfico</button>
+</div>
+<div class="card mb-3 d-none" id="grafico-container">
+    <div class="card-body d-flex flex-wrap align-items-center gap-4">
+        <svg id="grafico-svg" viewBox="0 0 220 220" width="220" height="220" role="img" aria-label="Gráfico de pizza"></svg>
+        <ul id="grafico-legenda" class="list-unstyled mb-0 small"></ul>
+    </div>
+</div>
+<script>
+(function () {
+    var dados = {{ grafico_dados|safe }};
+    var cores = ['#012049', '#2e7ede', '#5DBB2F', '#FD7E14', '#DC3545', '#F0AD00', '#8E44AD', '#17A2B8', '#6C757D', '#A9746E'];
+    var total = dados.reduce(function (soma, item) { return soma + item.quantidade; }, 0);
+    var jaDesenhado = false;
+
+    function desenhar() {
+        if (!total) {
+            return;
+        }
+        var svg = document.getElementById('grafico-svg');
+        var legenda = document.getElementById('grafico-legenda');
+        var cx = 110, cy = 110, raio = 100;
+        var anguloAtual = -Math.PI / 2;
+        dados.forEach(function (item, indice) {
+            if (!item.quantidade) {
+                return;
+            }
+            var fracao = item.quantidade / total;
+            var anguloFim = anguloAtual + fracao * 2 * Math.PI;
+            var cor = cores[indice % cores.length];
+            var caminho;
+            if (fracao >= 0.9999) {
+                caminho = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                caminho.setAttribute('cx', cx);
+                caminho.setAttribute('cy', cy);
+                caminho.setAttribute('r', raio);
+            } else {
+                var x1 = cx + raio * Math.cos(anguloAtual);
+                var y1 = cy + raio * Math.sin(anguloAtual);
+                var x2 = cx + raio * Math.cos(anguloFim);
+                var y2 = cy + raio * Math.sin(anguloFim);
+                var grandeArco = (anguloFim - anguloAtual) > Math.PI ? 1 : 0;
+                caminho = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                caminho.setAttribute('d', 'M' + cx + ',' + cy + ' L' + x1 + ',' + y1 + ' A' + raio + ',' + raio + ' 0 ' + grandeArco + ' 1 ' + x2 + ',' + y2 + ' Z');
+            }
+            caminho.setAttribute('fill', cor);
+            svg.appendChild(caminho);
+
+            var li = document.createElement('li');
+            li.className = 'd-flex align-items-center gap-2 mb-1';
+            var marcador = document.createElement('span');
+            marcador.style.display = 'inline-block';
+            marcador.style.width = '10px';
+            marcador.style.height = '10px';
+            marcador.style.borderRadius = '2px';
+            marcador.style.backgroundColor = cor;
+            li.appendChild(marcador);
+            var texto = document.createElement('span');
+            texto.textContent = item.rotulo + ' — ' + item.quantidade + ' (' + (fracao * 100).toFixed(1) + '%)';
+            li.appendChild(texto);
+            legenda.appendChild(li);
+
+            anguloAtual = anguloFim;
+        });
+    }
+
+    var botao = document.getElementById('grafico-toggle');
+    var container = document.getElementById('grafico-container');
+    if (!botao || !container) {
+        return;
+    }
+    botao.addEventListener('click', function () {
+        var visivel = !container.classList.contains('d-none');
+        if (visivel) {
+            container.classList.add('d-none');
+            botao.textContent = 'Exibir gráfico';
+            return;
+        }
+        if (!jaDesenhado) {
+            desenhar();
+            jaDesenhado = true;
+        }
+        container.classList.remove('d-none');
+        botao.textContent = 'Ocultar gráfico';
+    });
+})();
+</script>
+{% endif %}

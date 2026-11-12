@@ -1,5 +1,6 @@
 import csv
 import io
+import json
 from datetime import date
 from urllib.parse import urlencode
 
@@ -35,6 +36,15 @@ def _data(valor: str | None) -> date | None:
 def _query_string(**kwargs) -> str:
     valores = {chave: valor for chave, valor in kwargs.items() if valor not in (None, "")}
     return urlencode(valores)
+
+
+def _grafico_json(dados: list[dict]) -> str:
+    """JSON de [{"rotulo", "quantidade"}, ...] para o gráfico de pizza
+    opcional (botão "Exibir gráfico" — ver _grafico_pizza.html). Mesmo
+    escape de app/modules/cidadao/controller.py: rotulo pode ser texto
+    livre (ex.: bairro cadastrado pelo próprio gabinete), então um valor
+    como "</script>" não pode fechar a tag antes da hora."""
+    return json.dumps(dados, ensure_ascii=False).replace("</", "<\\/")
 
 
 def _csv_response(cabecalho: list[str], linhas: list[list], nome_arquivo: str) -> Response:
@@ -87,6 +97,7 @@ def demandas_por_status(
             "query_export": _query_string(
                 data_inicio=inicio, data_fim=fim, categoria=categoria, prioridade=prioridade
             ),
+            "grafico_dados": _grafico_json(dados),
         },
     )
 
@@ -138,6 +149,7 @@ def demandas_por_categoria(
             "query_export": _query_string(
                 data_inicio=inicio, data_fim=fim, status=status, prioridade=prioridade
             ),
+            "grafico_dados": _grafico_json(dados),
         },
     )
 
@@ -179,6 +191,7 @@ def eleitores_por_bairro(
             "cidade": cidade,
             "cidades": EleitorService.listar_cidades(db, contexto.gabinete_id),
             "query_export": _query_string(cidade=cidade),
+            "grafico_dados": _grafico_json(dados),
         },
     )
 
@@ -225,6 +238,7 @@ def demandas_por_periodo(
             "query_export": _query_string(
                 data_inicio=inicio, data_fim=fim, status=status, categoria=categoria
             ),
+            "grafico_dados": _grafico_json(dados),
         },
     )
 
