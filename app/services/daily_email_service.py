@@ -106,6 +106,26 @@ class DailyEmailService:
             for d in DemandaService.listar_vencendo_hoje(db, gabinete_id, data)
         ]
 
+        # "Urgente" é usada pelos gabinetes como sinal de que aquela
+        # demanda específica precisa de um retorno ativo ao eleitor (ex.:
+        # confirmar como foi uma cirurgia marcada) — não só o fluxo normal
+        # de atendimento. Mesma regra do cartão de destaque do dashboard
+        # (DemandaService.listar_urgentes): Urgente + ainda não
+        # finalizada. Lista separada de demandas_atrasadas/
+        # demandas_vencendo_hoje mesmo que uma demanda possa aparecer nas
+        # duas (ex.: urgente E atrasada) — nunca a mesma lista reaproveitada,
+        # porque o critério é outro (prioridade, não prazo).
+        demandas_urgentes = [
+            {
+                "protocolo": d.id,
+                "titulo": d.titulo,
+                "eleitor_nome": d.eleitor.nome if d.eleitor else None,
+                "status": d.status,
+                "prazo_formatado": d.prazo.strftime("%d/%m/%Y") if d.prazo else None,
+            }
+            for d in DemandaService.listar_urgentes(db, gabinete_id)
+        ]
+
         return {
             "assunto": DailyEmailService.ASSUNTO,
             "gabinete_nome": gabinete.responsavel or gabinete.nome,
@@ -114,6 +134,7 @@ class DailyEmailService:
             "aniversariantes": aniversariantes,
             "demandas_atrasadas": demandas_atrasadas,
             "demandas_vencendo_hoje": demandas_vencendo_hoje,
+            "demandas_urgentes": demandas_urgentes,
         }
 
     @staticmethod
@@ -145,6 +166,18 @@ class DailyEmailService:
         else:
             linhas.append("Nenhum aniversariante hoje.")
         linhas.append("")
+
+        if dados["demandas_urgentes"]:
+            linhas.append("DEMANDAS URGENTES — PEÇA RETORNO AO ELEITOR")
+            for d in dados["demandas_urgentes"]:
+                linha = f"- Protocolo #{d['protocolo']} — {d['titulo']}"
+                if d["eleitor_nome"]:
+                    linha += f" — {d['eleitor_nome']}"
+                linha += f" — status: {d['status']}"
+                if d["prazo_formatado"]:
+                    linha += f" — prazo {d['prazo_formatado']}"
+                linhas.append(linha)
+            linhas.append("")
 
         if dados["demandas_atrasadas"] or dados["demandas_vencendo_hoje"]:
             linhas.append("DEMANDAS QUE PRECISAM DE ATENÇÃO")

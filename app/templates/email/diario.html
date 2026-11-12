@@ -97,6 +97,23 @@
     </td>
   </tr>
 
+  {% if demandas_urgentes %}
+  <!-- Demandas urgentes -->
+  <tr>
+    <td style="padding:8px 24px 8px 24px;">
+      <div style="font-family:Arial, Helvetica, sans-serif; font-size:16px; font-weight:bold; color:#012049; border-bottom:2px solid #F4F6F8; padding-bottom:8px; margin-bottom:12px;">
+        🔥 Demandas urgentes — peça retorno ao eleitor
+      </div>
+      {% for d in demandas_urgentes %}
+      <div style="font-family:Arial, Helvetica, sans-serif; font-size:13px; color:#5F6B7A; padding:6px 0; border-bottom:1px solid #F4F6F8;">
+        <strong style="color:#012049;">Protocolo #{{ d.protocolo }} — {{ d.titulo }}</strong>{% if d.eleitor_nome %} — {{ d.eleitor_nome }}{% endif %}<br>
+        status: {{ d.status }}{% if d.prazo_formatado %} · prazo {{ d.prazo_formatado }}{% endif %}
+      </div>
+      {% endfor %}
+    </td>
+  </tr>
+  {% endif %}
+
   {% if demandas_atrasadas or demandas_vencendo_hoje %}
   <!-- Demandas -->
   <tr>
