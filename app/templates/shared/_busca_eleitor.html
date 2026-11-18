@@ -33,7 +33,12 @@
             </table>
         </div>
         {% elif pesquisa_eleitor %}
-        <p class="text-muted small mb-2">Nenhum eleitor encontrado para "{{ pesquisa_eleitor }}".</p>
+        <p class="text-muted small mb-0">Nenhum eleitor encontrado para "{{ pesquisa_eleitor }}".</p>
+        {% endif %}
+        {% if pesquisa_eleitor %}
+        {% if resultados_busca_eleitor %}
+        <p class="text-muted small mt-3 mb-1">Não encontrou quem procurava?</p>
+        {% endif %}
         <a class="btn btn-outline-primary btn-sm" href="/eleitores/novo?voltar={{ acao_busca | urlencode }}">Cadastrar novo eleitor</a>
         {% endif %}
     </div>
