@@ -61,12 +61,28 @@ def listar(
     return resposta
 
 
+def _voltar_seguro(voltar: str) -> str:
+    """Só aceita um caminho relativo interno (começa com "/", nunca "//"
+    nem um esquema tipo "http://") — nunca um redirecionamento aberto
+    para fora do sistema. Qualquer outra coisa é tratada como "sem
+    voltar", igual ao comportamento de sempre. Usado pelo atalho
+    "Cadastrar novo eleitor" a partir da busca de Demandas/Agenda (ver
+    shared/_busca_eleitor.html): permite voltar direto para a tela de
+    origem, com o eleitor recém-criado já selecionado, sem precisar
+    fechar a tela e refazer a busca."""
+    if voltar.startswith("/") and not voltar.startswith("//"):
+        return voltar
+    return ""
+
+
 @router.get("/novo", response_class=HTMLResponse)
-def novo(request: Request, contexto: ContextoSessao = Depends(obter_contexto_atual)):
+def novo(
+    request: Request, voltar: str = "", contexto: ContextoSessao = Depends(obter_contexto_atual)
+):
     return templates.TemplateResponse(
         request=request,
         name="eleitores/formulario.html",
-        context={"titulo": "Novo eleitor", "eleitor": None},
+        context={"titulo": "Novo eleitor", "eleitor": None, "voltar": _voltar_seguro(voltar)},
     )
 
 
@@ -86,11 +102,13 @@ def criar(
     cpf: str | None = Form(None),
     titulo_eleitor: str | None = Form(None),
     zona_eleitoral: str | None = Form(None),
+    voltar: str = Form(""),
     db: Session = Depends(get_db),
     contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
+    voltar_seguro = _voltar_seguro(voltar)
     try:
-        EleitorService.criar(
+        eleitor = EleitorService.criar(
             db,
             contexto.gabinete_id,
             nome,
@@ -127,8 +145,24 @@ def criar(
         return templates.TemplateResponse(
             request=request,
             name="eleitores/formulario.html",
-            context={"titulo": "Novo eleitor", "eleitor": eleitor_preenchido, "erro": str(error)},
+            context={
+                "titulo": "Novo eleitor",
+                "eleitor": eleitor_preenchido,
+                "erro": str(error),
+                "voltar": voltar_seguro,
+            },
             status_code=400,
+        )
+
+    if voltar_seguro:
+        # Volta direto para a tela de onde "Cadastrar novo eleitor" foi
+        # clicado (Demandas/Agenda — ver shared/_busca_eleitor.html), já
+        # com o eleitor recém-criado selecionado (mesmo parâmetro que
+        # EleitorService.resolver_selecao já usa quando a pessoa escolhe
+        # um resultado da busca) — nunca precisa refazer a busca.
+        separador = "&" if "?" in voltar_seguro else "?"
+        return RedirectResponse(
+            f"{voltar_seguro}{separador}selecionar_eleitor_id={eleitor.id}", status_code=303
         )
     return flash_message("Eleitor cadastrado.", "success")
 

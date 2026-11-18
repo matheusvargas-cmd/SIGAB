@@ -3,14 +3,19 @@
 {% block conteudo %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="mb-0">{{ titulo }}</h2>
-    <a class="btn btn-outline-secondary" href="/eleitores">Voltar</a>
+    <a class="btn btn-outline-secondary" href="{{ voltar or '/eleitores' }}">Voltar</a>
 </div>
+
+{% if voltar %}
+<div class="alert alert-info" role="alert">Ao salvar, você volta automaticamente para a tela de onde veio, já com este eleitor selecionado.</div>
+{% endif %}
 
 {% if erro %}
 <div class="alert alert-danger" role="alert">{{ erro }}</div>
 {% endif %}
 
 <form class="card" method="post" action="{% if eleitor and eleitor.id %}/eleitores/{{ eleitor.id }}/editar{% else %}/eleitores/novo{% endif %}">
+    {% if voltar %}<input type="hidden" name="voltar" value="{{ voltar }}">{% endif %}
     <div class="card-body p-4">
         <div class="row g-3">
             <div class="col-md-8">
@@ -78,8 +83,8 @@
         </div>
     </div>
     <div class="card-footer bg-white text-end">
-        <a class="btn btn-outline-secondary" href="/eleitores">Cancelar</a>
-        <button class="btn btn-primary" type="submit">Salvar</button>
+        <a class="btn btn-outline-secondary" href="{{ voltar or '/eleitores' }}">Cancelar</a>
+        <button class="btn btn-primary" type="submit">{{ 'Salvar e voltar' if voltar else 'Salvar' }}</button>
     </div>
 </form>
 
