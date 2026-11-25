@@ -231,6 +231,13 @@ def novo(
             "eleitor_atual": eleitor_atual,
             "eleitor_resolvido": eleitor_resolvido,
             "obrigatorio": False,
+            # Só em Agenda (eleitor opcional): o campo Título começa com o
+            # foco, não a busca de eleitor — ela só assume o foco depois de
+            # uma busca de verdade (ver _busca_eleitor_inline.html e o
+            # próprio campo Título abaixo). Demandas nunca declara isso, e
+            # mantém o comportamento de sempre (eleitor obrigatório sempre
+            # focado primeiro).
+            "rascunho": rascunho,
             "acao_busca": "/agenda/novo",
             "pesquisa_eleitor": pesquisa_eleitor,
             "resultados_busca_eleitor": resultados_busca_eleitor,
@@ -384,6 +391,7 @@ def editar(
             "compromisso": compromisso_formulario,
             "eleitor_atual": eleitor_atual,
             "eleitor_resolvido": eleitor_resolvido,
+            "rascunho": rascunho,
             "obrigatorio": False,
             "acao_busca": f"/agenda/{agenda_id}/editar",
             "pesquisa_eleitor": pesquisa_eleitor,

@@ -13,7 +13,14 @@
     <div class="row g-2 mb-3">
         <div class="col-sm-8 col-md-6">
             <label class="visually-hidden" for="pesquisa_eleitor">Pesquisar eleitor</label>
-            <input class="form-control" id="pesquisa_eleitor" name="pesquisa_eleitor" value="{{ pesquisa_eleitor }}" placeholder="Nome ou título de eleitor" autofocus>
+            {# rascunho só existe no contexto de quem o declarou de propósito
+               (ver agenda/formulario.html): nesse caso, só assume o foco
+               depois de uma busca de verdade (rascunho=1), nunca na
+               primeira visita à tela — foco inicial é do Título. Quem não
+               declara rascunho (Demandas) mantém o comportamento de sempre:
+               este campo é obrigatório, então sempre recebe o foco assim
+               que aparece. #}
+            <input class="form-control" id="pesquisa_eleitor" name="pesquisa_eleitor" value="{{ pesquisa_eleitor }}" placeholder="Nome ou título de eleitor" {% if rascunho is not defined or rascunho %}autofocus{% endif %}>
         </div>
         <div class="col-auto">
             <button class="btn btn-primary" type="submit" formmethod="get" formnovalidate formaction="{{ acao_busca }}">Buscar</button>
