@@ -90,6 +90,44 @@ def _opcoes_formulario(
     }
 
 
+def _montar_demanda_preenchida(
+    id: int | None,
+    eleitor_id: str,
+    titulo: str,
+    descricao: str | None,
+    categoria_id: str | None,
+    subcategoria_id: str | None,
+    status: str | None,
+    prioridade: str | None,
+    responsavel: str | None,
+    prazo: date | None,
+    data_solicitacao: date | None,
+    observacoes_internas: str | None,
+) -> SimpleNamespace:
+    """Monta o rascunho (SimpleNamespace, nunca persistido) que o
+    formulário volta a exibir: tanto quando a criação/edição falha
+    (ValueError, ver criar()/atualizar()) quanto quando a pessoa clica em
+    Buscar/Selecionar/Trocar eleitor sem ainda ter salvado nada (ver
+    novo()/editar(), parâmetro `rascunho`) — um único lugar que monta esse
+    objeto, nunca duas versões que podem divergir."""
+    return SimpleNamespace(
+        id=id,
+        eleitor_id=int(eleitor_id) if eleitor_id.isdigit() else None,
+        titulo=titulo,
+        descricao=descricao,
+        categoria_id=int(categoria_id) if categoria_id and categoria_id.isdigit() else None,
+        subcategoria_id=int(subcategoria_id)
+        if subcategoria_id and subcategoria_id.isdigit()
+        else None,
+        status=status,
+        prioridade=prioridade,
+        responsavel=responsavel,
+        prazo=prazo,
+        data_solicitacao=data_solicitacao,
+        observacoes_internas=observacoes_internas,
+    )
+
+
 @router.get("", response_class=HTMLResponse)
 def listar(
     request: Request,
@@ -189,6 +227,17 @@ def novo(
     request: Request,
     pesquisa_eleitor: str = "",
     selecionar_eleitor_id: int | None = None,
+    rascunho: bool = False,
+    titulo: str = "",
+    descricao: str = "",
+    categoria_id: str = "",
+    subcategoria_id: str = "",
+    status: str = "",
+    prioridade: str = "",
+    responsavel: str = "",
+    prazo: date | None = None,
+    data_solicitacao: date | None = None,
+    observacoes_internas: str = "",
     db: Session = Depends(get_db),
     contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
@@ -201,12 +250,39 @@ def novo(
             db, contexto.gabinete_id, pesquisa_eleitor, 1
         )
 
+    # rascunho=1 é o marcador (sempre presente como campo oculto no
+    # próprio formulário — ver demandas/formulario.html) de que esta
+    # requisição GET veio de um clique em Buscar/Selecionar/Trocar/
+    # Cadastrar novo eleitor DENTRO do formulário (nunca de uma navegação
+    # nova para /demandas/novo) — só então os campos abaixo (já digitados
+    # antes de buscar o eleitor) substituem o formulário em branco de
+    # sempre. Sem isso, um GET comum para /demandas/novo (sem nenhum
+    # desses parâmetros) continua idêntico ao que sempre foi.
+    demanda = None
+    categoria_atual = None
+    subcategoria_atual = None
+    if rascunho:
+        demanda = _montar_demanda_preenchida(
+            None, "", titulo, descricao, categoria_id, subcategoria_id, status, prioridade,
+            responsavel, prazo, data_solicitacao, observacoes_internas,
+        )
+        categoria_atual = (
+            CategoriaService.obter_por_id(db, contexto.gabinete_id, demanda.categoria_id)
+            if demanda.categoria_id
+            else None
+        )
+        subcategoria_atual = (
+            SubcategoriaService.obter_por_id(db, contexto.gabinete_id, demanda.subcategoria_id)
+            if demanda.subcategoria_id
+            else None
+        )
+
     return templates.TemplateResponse(
         request=request,
         name="demandas/formulario.html",
         context={
             "titulo": "Nova demanda",
-            "demanda": None,
+            "demanda": demanda,
             "hoje": date.today(),
             "eleitor_atual": eleitor_atual,
             "eleitor_resolvido": eleitor_resolvido,
@@ -214,7 +290,7 @@ def novo(
             "acao_busca": "/demandas/novo",
             "pesquisa_eleitor": pesquisa_eleitor,
             "resultados_busca_eleitor": resultados_busca_eleitor,
-            **_opcoes_formulario(db, contexto.gabinete_id),
+            **_opcoes_formulario(db, contexto.gabinete_id, categoria_atual, subcategoria_atual),
         },
     )
 
@@ -254,21 +330,9 @@ def criar(
             usuario_id=contexto.usuario.id,
         )
     except ValueError as error:
-        demanda_preenchida = SimpleNamespace(
-            id=None,
-            eleitor_id=int(eleitor_id) if eleitor_id.isdigit() else None,
-            titulo=titulo,
-            descricao=descricao,
-            categoria_id=int(categoria_id) if categoria_id and categoria_id.isdigit() else None,
-            subcategoria_id=int(subcategoria_id)
-            if subcategoria_id and subcategoria_id.isdigit()
-            else None,
-            status=status,
-            prioridade=prioridade,
-            responsavel=responsavel,
-            prazo=prazo,
-            data_solicitacao=data_solicitacao,
-            observacoes_internas=observacoes_internas,
+        demanda_preenchida = _montar_demanda_preenchida(
+            None, eleitor_id, titulo, descricao, categoria_id, subcategoria_id, status, prioridade,
+            responsavel, prazo, data_solicitacao, observacoes_internas,
         )
         eleitor_atual = (
             EleitorService.obter_por_id(db, contexto.gabinete_id, demanda_preenchida.eleitor_id)
@@ -295,7 +359,12 @@ def criar(
                 "demanda": demanda_preenchida,
                 "hoje": date.today(),
                 "eleitor_atual": eleitor_atual,
-                "eleitor_resolvido": True,
+                # Nunca True "de propósito" — se o eleitor não foi
+                # resolvido (ex.: erro foi justamente "Eleitor
+                # obrigatório", ninguém selecionou ainda), o formulário
+                # precisa voltar a mostrar a busca, não tentar exibir um
+                # eleitor_atual=None como se fosse um eleitor de verdade.
+                "eleitor_resolvido": eleitor_atual is not None,
                 "obrigatorio": True,
                 "acao_busca": "/demandas/novo",
                 "pesquisa_eleitor": "",
@@ -480,6 +549,17 @@ def editar(
     selecionar_eleitor_id: int | None = None,
     trocar_eleitor: bool = False,
     voltar: str = "",
+    rascunho: bool = False,
+    titulo: str = "",
+    descricao: str = "",
+    categoria_id: str = "",
+    subcategoria_id: str = "",
+    status: str = "",
+    prioridade: str = "",
+    responsavel: str = "",
+    prazo: date | None = None,
+    data_solicitacao: date | None = None,
+    observacoes_internas: str = "",
     db: Session = Depends(get_db),
     contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
@@ -496,12 +576,39 @@ def editar(
             db, contexto.gabinete_id, pesquisa_eleitor, 1
         )
 
+    # Mesmo marcador rascunho=1 de novo() acima: só substitui os campos
+    # já carregados do banco (demanda/categoria_vinculada/
+    # subcategoria_vinculada) pelo que a pessoa já tinha digitado quando
+    # clicou em Buscar/Selecionar/Trocar eleitor no meio da edição — uma
+    # navegação comum para /demandas/{id}/editar (sem rascunho) continua
+    # mostrando exatamente o que está salvo, como sempre.
+    demanda_formulario = demanda
+    categoria_atual = demanda.categoria_vinculada
+    subcategoria_atual = demanda.subcategoria_vinculada
+    if rascunho:
+        demanda_formulario = _montar_demanda_preenchida(
+            demanda_id, "", titulo, descricao, categoria_id, subcategoria_id, status, prioridade,
+            responsavel, prazo, data_solicitacao, observacoes_internas,
+        )
+        categoria_atual = (
+            CategoriaService.obter_por_id(db, contexto.gabinete_id, demanda_formulario.categoria_id)
+            if demanda_formulario.categoria_id
+            else None
+        )
+        subcategoria_atual = (
+            SubcategoriaService.obter_por_id(
+                db, contexto.gabinete_id, demanda_formulario.subcategoria_id
+            )
+            if demanda_formulario.subcategoria_id
+            else None
+        )
+
     return templates.TemplateResponse(
         request=request,
         name="demandas/formulario.html",
         context={
             "titulo": "Editar demanda",
-            "demanda": demanda,
+            "demanda": demanda_formulario,
             "hoje": date.today(),
             "eleitor_atual": eleitor_atual,
             "eleitor_resolvido": eleitor_resolvido,
@@ -511,9 +618,7 @@ def editar(
             "resultados_busca_eleitor": resultados_busca_eleitor,
             "voltar": voltar,
             "voltar_url": _destino_apos_acao(voltar),
-            **_opcoes_formulario(
-                db, contexto.gabinete_id, demanda.categoria_vinculada, demanda.subcategoria_vinculada
-            ),
+            **_opcoes_formulario(db, contexto.gabinete_id, categoria_atual, subcategoria_atual),
         },
     )
 
@@ -560,21 +665,9 @@ def atualizar(
             usuario_id=contexto.usuario.id,
         )
     except ValueError as error:
-        demanda_preenchida = SimpleNamespace(
-            id=demanda_id,
-            eleitor_id=int(eleitor_id) if eleitor_id.isdigit() else None,
-            titulo=titulo,
-            descricao=descricao,
-            categoria_id=int(categoria_id) if categoria_id and categoria_id.isdigit() else None,
-            subcategoria_id=int(subcategoria_id)
-            if subcategoria_id and subcategoria_id.isdigit()
-            else None,
-            status=status,
-            prioridade=prioridade,
-            responsavel=responsavel,
-            prazo=prazo,
-            data_solicitacao=data_solicitacao,
-            observacoes_internas=observacoes_internas,
+        demanda_preenchida = _montar_demanda_preenchida(
+            demanda_id, eleitor_id, titulo, descricao, categoria_id, subcategoria_id, status,
+            prioridade, responsavel, prazo, data_solicitacao, observacoes_internas,
         )
         eleitor_atual = (
             EleitorService.obter_por_id(db, contexto.gabinete_id, demanda_preenchida.eleitor_id)
@@ -601,7 +694,7 @@ def atualizar(
                 "demanda": demanda_preenchida,
                 "hoje": date.today(),
                 "eleitor_atual": eleitor_atual,
-                "eleitor_resolvido": True,
+                "eleitor_resolvido": eleitor_atual is not None,
                 "obrigatorio": True,
                 "acao_busca": f"/demandas/{demanda_id}/editar",
                 "pesquisa_eleitor": "",

@@ -54,6 +54,7 @@
                         <td class="text-end pe-3 text-nowrap">
                             <a class="btn btn-sm btn-outline-secondary" href="/eleitores/{{ eleitor.id }}">Visualizar</a>
                             <a class="btn btn-sm btn-outline-primary" href="/eleitores/{{ eleitor.id }}/editar">Editar</a>
+                            <a class="btn btn-sm btn-outline-success" href="/demandas/novo?selecionar_eleitor_id={{ eleitor.id }}">Demanda</a>
                             <form class="d-inline" method="post" action="/eleitores/{{ eleitor.id }}/excluir" onsubmit="return confirm('Confirma a exclusão deste eleitor?');">
                                 <button class="btn btn-sm btn-outline-danger" type="submit">Excluir</button>
                             </form>

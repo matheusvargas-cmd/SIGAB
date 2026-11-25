@@ -1,0 +1,55 @@
+{# Busca de eleitor embutida DENTRO do <form> principal (nunca um <form>
+   próprio aqui — HTML não permite form aninhado). Cada ação (Buscar,
+   Selecionar, Trocar, Continuar sem eleitor, Cadastrar novo eleitor) é um
+   botão com formmethod="get"/formaction próprios, que sobrepõe o
+   method="post"/action do <form> pai só para aquele clique — o restante
+   dos campos já preenchidos (título, descrição etc.) viaja junto na
+   querystring porque são todos campos nomeados do mesmo formulário, e o
+   <input type="hidden" name="rascunho"> (sempre presente, ver
+   formulario.html) avisa o GET de destino que deve reconstruir o
+   rascunho a partir desses campos em vez de começar do zero/do banco. #}
+<div class="border rounded p-3 bg-light">
+    <p class="mb-3">Busque o eleitor pelo nome ou título de eleitor{{ '' if obrigatorio else ', ou continue sem vincular' }}.</p>
+    <div class="row g-2 mb-3">
+        <div class="col-sm-8 col-md-6">
+            <label class="visually-hidden" for="pesquisa_eleitor">Pesquisar eleitor</label>
+            <input class="form-control" id="pesquisa_eleitor" name="pesquisa_eleitor" value="{{ pesquisa_eleitor }}" placeholder="Nome ou título de eleitor" autofocus>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-primary" type="submit" formmethod="get" formaction="{{ acao_busca }}">Buscar</button>
+            {% if not obrigatorio %}
+            <button class="btn btn-outline-secondary" type="submit" formmethod="get" formaction="{{ acao_busca }}" name="sem_eleitor" value="1">Continuar sem eleitor</button>
+            {% endif %}
+        </div>
+    </div>
+    {% if resultados_busca_eleitor %}
+    <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+            <thead>
+                <tr><th>Nome</th><th>Título de eleitor</th><th>Telefone</th><th>Bairro</th><th class="text-end">Ações</th></tr>
+            </thead>
+            <tbody>
+                {% for resultado in resultados_busca_eleitor %}
+                <tr>
+                    <td>{{ resultado.nome }}</td>
+                    <td>{{ resultado.titulo_eleitor or '-' }}</td>
+                    <td>{{ resultado.telefone or resultado.whatsapp or '-' }}</td>
+                    <td>{{ resultado.bairro or '-' }}</td>
+                    <td class="text-end">
+                        <button class="btn btn-sm btn-outline-primary" type="submit" formmethod="get" formaction="{{ acao_busca }}" name="selecionar_eleitor_id" value="{{ resultado.id }}">Selecionar</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% elif pesquisa_eleitor %}
+    <p class="text-muted small mb-0">Nenhum eleitor encontrado para "{{ pesquisa_eleitor }}".</p>
+    {% endif %}
+    {% if pesquisa_eleitor %}
+    {% if resultados_busca_eleitor %}
+    <p class="text-muted small mt-3 mb-1">Não encontrou quem procurava?</p>
+    {% endif %}
+    <button class="btn btn-outline-primary btn-sm" type="submit" formmethod="get" formaction="/eleitores/novo" name="voltar" value="{{ acao_busca }}">Cadastrar novo eleitor</button>
+    {% endif %}
+</div>

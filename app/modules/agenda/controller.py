@@ -56,6 +56,40 @@ def _para_formulario(compromisso: Agenda) -> SimpleNamespace:
     )
 
 
+def _montar_compromisso_preenchido(
+    id: int | None,
+    eleitor_id: str,
+    titulo: str,
+    descricao: str | None,
+    data: date | None,
+    hora_inicio: time | None,
+    hora_fim: time | None,
+    local: str | None,
+    responsavel: str | None,
+    telefone_contato: str | None,
+    status: str | None,
+) -> SimpleNamespace:
+    """Monta o rascunho (SimpleNamespace, nunca persistido) que o
+    formulário volta a exibir: tanto quando a criação/edição falha
+    (ValueError, ver criar()/atualizar()) quanto quando a pessoa clica em
+    Buscar/Selecionar/Trocar eleitor sem ainda ter salvado nada (ver
+    novo()/editar(), parâmetro `rascunho`) — um único lugar que monta esse
+    objeto, nunca duas versões que podem divergir."""
+    return SimpleNamespace(
+        id=id,
+        eleitor_id=int(eleitor_id) if eleitor_id.isdigit() else None,
+        titulo=titulo,
+        descricao=descricao,
+        data=data,
+        hora_inicio=hora_inicio,
+        hora_fim=hora_fim,
+        local=local,
+        responsavel=responsavel,
+        telefone_contato=telefone_contato,
+        status=status,
+    )
+
+
 @router.get("", response_class=HTMLResponse)
 def listar(
     request: Request,
@@ -119,6 +153,16 @@ def novo(
     pesquisa_eleitor: str = "",
     selecionar_eleitor_id: int | None = None,
     sem_eleitor: bool = False,
+    rascunho: bool = False,
+    titulo: str = "",
+    descricao: str = "",
+    data: date | None = None,
+    hora_inicio: time | None = None,
+    hora_fim: time | None = None,
+    local: str = "",
+    responsavel: str = "",
+    telefone_contato: str = "",
+    status: str = "",
     db: Session = Depends(get_db),
     contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
@@ -131,12 +175,26 @@ def novo(
             db, contexto.gabinete_id, pesquisa_eleitor, 1
         )
 
+    # rascunho=1 é o marcador (sempre presente como campo oculto no
+    # próprio formulário — ver agenda/formulario.html) de que esta
+    # requisição GET veio de um clique em Buscar/Selecionar/Trocar/
+    # Continuar sem eleitor/Cadastrar novo eleitor DENTRO do formulário
+    # (nunca de uma navegação nova para /agenda/novo) — só então os
+    # campos abaixo (já digitados antes de buscar o eleitor) substituem
+    # o formulário em branco de sempre.
+    compromisso = None
+    if rascunho:
+        compromisso = _montar_compromisso_preenchido(
+            None, "", titulo, descricao, data, hora_inicio, hora_fim, local, responsavel,
+            telefone_contato, status,
+        )
+
     return templates.TemplateResponse(
         request=request,
         name="agenda/formulario.html",
         context={
             "titulo": "Novo compromisso",
-            "compromisso": None,
+            "compromisso": compromisso,
             "eleitor_atual": eleitor_atual,
             "eleitor_resolvido": eleitor_resolvido,
             "obrigatorio": False,
@@ -180,18 +238,9 @@ def criar(
             eleitor_id,
         )
     except ValueError as error:
-        compromisso_preenchido = SimpleNamespace(
-            id=None,
-            eleitor_id=int(eleitor_id) if eleitor_id.isdigit() else None,
-            titulo=titulo,
-            descricao=descricao,
-            data=data,
-            hora_inicio=hora_inicio,
-            hora_fim=hora_fim,
-            local=local,
-            responsavel=responsavel,
-            telefone_contato=telefone_contato,
-            status=status,
+        compromisso_preenchido = _montar_compromisso_preenchido(
+            None, eleitor_id, titulo, descricao, data, hora_inicio, hora_fim, local, responsavel,
+            telefone_contato, status,
         )
         eleitor_atual = (
             EleitorService.obter_por_id(db, contexto.gabinete_id, compromisso_preenchido.eleitor_id)
@@ -243,6 +292,16 @@ def editar(
     selecionar_eleitor_id: int | None = None,
     trocar_eleitor: bool = False,
     sem_eleitor: bool = False,
+    rascunho: bool = False,
+    titulo: str = "",
+    descricao: str = "",
+    data: date | None = None,
+    hora_inicio: time | None = None,
+    hora_fim: time | None = None,
+    local: str = "",
+    responsavel: str = "",
+    telefone_contato: str = "",
+    status: str = "",
     db: Session = Depends(get_db),
     contexto: ContextoSessao = Depends(obter_contexto_atual),
 ):
@@ -265,12 +324,26 @@ def editar(
             db, contexto.gabinete_id, pesquisa_eleitor, 1
         )
 
+    # Mesmo marcador rascunho=1 de novo() acima: só substitui os campos
+    # já carregados do banco pelo que a pessoa já tinha digitado quando
+    # clicou em Buscar/Selecionar/Trocar eleitor no meio da edição — uma
+    # navegação comum para /agenda/{id}/editar (sem rascunho) continua
+    # mostrando exatamente o que está salvo, como sempre.
+    compromisso_formulario = (
+        _montar_compromisso_preenchido(
+            agenda_id, "", titulo, descricao, data, hora_inicio, hora_fim, local, responsavel,
+            telefone_contato, status,
+        )
+        if rascunho
+        else _para_formulario(compromisso)
+    )
+
     return templates.TemplateResponse(
         request=request,
         name="agenda/formulario.html",
         context={
             "titulo": "Editar compromisso",
-            "compromisso": _para_formulario(compromisso),
+            "compromisso": compromisso_formulario,
             "eleitor_atual": eleitor_atual,
             "eleitor_resolvido": eleitor_resolvido,
             "obrigatorio": False,
@@ -318,18 +391,9 @@ def atualizar(
             eleitor_id,
         )
     except ValueError as error:
-        compromisso_preenchido = SimpleNamespace(
-            id=agenda_id,
-            eleitor_id=int(eleitor_id) if eleitor_id.isdigit() else None,
-            titulo=titulo,
-            descricao=descricao,
-            data=data,
-            hora_inicio=hora_inicio,
-            hora_fim=hora_fim,
-            local=local,
-            responsavel=responsavel,
-            telefone_contato=telefone_contato,
-            status=status,
+        compromisso_preenchido = _montar_compromisso_preenchido(
+            agenda_id, eleitor_id, titulo, descricao, data, hora_inicio, hora_fim, local,
+            responsavel, telefone_contato, status,
         )
         eleitor_atual = (
             EleitorService.obter_por_id(db, contexto.gabinete_id, compromisso_preenchido.eleitor_id)

@@ -10,15 +10,14 @@
 <div class="alert alert-danger" role="alert">{{ erro }}</div>
 {% endif %}
 
-{% if not eleitor_resolvido %}
-{% include 'shared/_busca_eleitor.html' %}
-{% else %}
 <form class="card" method="post" action="{% if demanda and demanda.id %}/demandas/{{ demanda.id }}/editar{% else %}/demandas/novo{% endif %}">
     {% if voltar %}<input type="hidden" name="voltar" value="{{ voltar }}">{% endif %}
+    <input type="hidden" name="rascunho" value="1">
     <div class="card-body p-4">
         <div class="row g-3">
             <div class="col-12">
                 <label class="form-label">Eleitor *</label>
+                {% if eleitor_resolvido and eleitor_atual %}
                 <div class="d-flex align-items-start justify-content-between gap-2 border rounded p-3 bg-light">
                     <dl class="row mb-0 flex-grow-1">
                         <dt class="col-sm-3">Nome</dt>
@@ -35,9 +34,12 @@
                         <dt class="col-sm-3">Bairro/Cidade</dt>
                         <dd class="col-sm-9 mb-0">{{ eleitor_atual.bairro or '-' }}{% if eleitor_atual.cidade %} · {{ eleitor_atual.cidade }}{% endif %}</dd>
                     </dl>
-                    <a class="btn btn-sm btn-outline-secondary text-nowrap" href="{{ acao_busca }}?trocar_eleitor=1">Trocar</a>
+                    <button class="btn btn-sm btn-outline-secondary text-nowrap" type="submit" formmethod="get" formaction="{{ acao_busca }}" name="trocar_eleitor" value="1">Trocar</button>
                 </div>
                 <input type="hidden" name="eleitor_id" value="{{ eleitor_atual.id }}">
+                {% else %}
+                {% include 'shared/_busca_eleitor_inline.html' %}
+                {% endif %}
             </div>
             <div class="col-md-6">
                 <label class="form-label" for="titulo">Título *</label>
@@ -150,5 +152,4 @@
     atualizarSubcategorias(true);
 })();
 </script>
-{% endif %}
 {% endblock %}
