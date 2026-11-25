@@ -56,6 +56,34 @@ def _para_formulario(compromisso: Agenda) -> SimpleNamespace:
     )
 
 
+def _data_segura(valor: str) -> date | None:
+    """Converte a string de uma data vinda de querystring (campo
+    rascunho=1 de novo()/editar() abaixo) com segurança. Nunca declarado
+    como `date | None` direto no parâmetro da rota: ao contrário de um
+    campo de formulário (POST, Form(None)), o FastAPI NÃO trata string
+    vazia como None para um parâmetro de query — tenta converter "" para
+    date e devolve 422. Como o campo de data do formulário, quando ainda
+    não preenchido, sempre chega vazio nessas idas e vindas de busca de
+    eleitor, precisa ser sempre string aqui, convertida à mão."""
+    if not valor or not valor.strip():
+        return None
+    try:
+        return date.fromisoformat(valor.strip())
+    except ValueError:
+        return None
+
+
+def _hora_segura(valor: str) -> time | None:
+    """Mesmo motivo de _data_segura() acima, para os campos de horário
+    (hora_inicio/hora_fim)."""
+    if not valor or not valor.strip():
+        return None
+    try:
+        return time.fromisoformat(valor.strip())
+    except ValueError:
+        return None
+
+
 def _montar_compromisso_preenchido(
     id: int | None,
     eleitor_id: str,
@@ -156,9 +184,9 @@ def novo(
     rascunho: bool = False,
     titulo: str = "",
     descricao: str = "",
-    data: date | None = None,
-    hora_inicio: time | None = None,
-    hora_fim: time | None = None,
+    data: str = "",
+    hora_inicio: str = "",
+    hora_fim: str = "",
     local: str = "",
     responsavel: str = "",
     telefone_contato: str = "",
@@ -185,8 +213,8 @@ def novo(
     compromisso = None
     if rascunho:
         compromisso = _montar_compromisso_preenchido(
-            None, "", titulo, descricao, data, hora_inicio, hora_fim, local, responsavel,
-            telefone_contato, status,
+            None, "", titulo, descricao, _data_segura(data), _hora_segura(hora_inicio),
+            _hora_segura(hora_fim), local, responsavel, telefone_contato, status,
         )
 
     return templates.TemplateResponse(
@@ -295,9 +323,9 @@ def editar(
     rascunho: bool = False,
     titulo: str = "",
     descricao: str = "",
-    data: date | None = None,
-    hora_inicio: time | None = None,
-    hora_fim: time | None = None,
+    data: str = "",
+    hora_inicio: str = "",
+    hora_fim: str = "",
     local: str = "",
     responsavel: str = "",
     telefone_contato: str = "",
@@ -331,8 +359,8 @@ def editar(
     # mostrando exatamente o que está salvo, como sempre.
     compromisso_formulario = (
         _montar_compromisso_preenchido(
-            agenda_id, "", titulo, descricao, data, hora_inicio, hora_fim, local, responsavel,
-            telefone_contato, status,
+            agenda_id, "", titulo, descricao, _data_segura(data), _hora_segura(hora_inicio),
+            _hora_segura(hora_fim), local, responsavel, telefone_contato, status,
         )
         if rascunho
         else _para_formulario(compromisso)

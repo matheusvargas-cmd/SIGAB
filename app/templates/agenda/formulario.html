@@ -79,12 +79,12 @@
                         <dt class="col-sm-3">Bairro/Cidade</dt>
                         <dd class="col-sm-9 mb-0">{{ eleitor_atual.bairro or '-' }}{% if eleitor_atual.cidade %} · {{ eleitor_atual.cidade }}{% endif %}</dd>
                     </dl>
-                    <button class="btn btn-sm btn-outline-secondary text-nowrap" type="submit" formmethod="get" formaction="{{ acao_busca }}" name="trocar_eleitor" value="1">Trocar</button>
+                    <button class="btn btn-sm btn-outline-secondary text-nowrap" type="submit" formmethod="get" formnovalidate formaction="{{ acao_busca }}" name="trocar_eleitor" value="1">Trocar</button>
                 </div>
                 {% else %}
                 <div class="d-flex align-items-center justify-content-between gap-2 border rounded p-3 bg-light">
                     <span class="form-control-plaintext py-0 text-muted">Nenhum</span>
-                    <button class="btn btn-sm btn-outline-secondary text-nowrap" type="submit" formmethod="get" formaction="{{ acao_busca }}" name="trocar_eleitor" value="1">Trocar</button>
+                    <button class="btn btn-sm btn-outline-secondary text-nowrap" type="submit" formmethod="get" formnovalidate formaction="{{ acao_busca }}" name="trocar_eleitor" value="1">Trocar</button>
                 </div>
                 {% endif %}
                 <input type="hidden" name="eleitor_id" value="{{ eleitor_atual.id if eleitor_atual else '' }}">

@@ -16,9 +16,9 @@
             <input class="form-control" id="pesquisa_eleitor" name="pesquisa_eleitor" value="{{ pesquisa_eleitor }}" placeholder="Nome ou título de eleitor" autofocus>
         </div>
         <div class="col-auto">
-            <button class="btn btn-primary" type="submit" formmethod="get" formaction="{{ acao_busca }}">Buscar</button>
+            <button class="btn btn-primary" type="submit" formmethod="get" formnovalidate formaction="{{ acao_busca }}">Buscar</button>
             {% if not obrigatorio %}
-            <button class="btn btn-outline-secondary" type="submit" formmethod="get" formaction="{{ acao_busca }}" name="sem_eleitor" value="1">Continuar sem eleitor</button>
+            <button class="btn btn-outline-secondary" type="submit" formmethod="get" formnovalidate formaction="{{ acao_busca }}" name="sem_eleitor" value="1">Continuar sem eleitor</button>
             {% endif %}
         </div>
     </div>
@@ -36,7 +36,7 @@
                     <td>{{ resultado.telefone or resultado.whatsapp or '-' }}</td>
                     <td>{{ resultado.bairro or '-' }}</td>
                     <td class="text-end">
-                        <button class="btn btn-sm btn-outline-primary" type="submit" formmethod="get" formaction="{{ acao_busca }}" name="selecionar_eleitor_id" value="{{ resultado.id }}">Selecionar</button>
+                        <button class="btn btn-sm btn-outline-primary" type="submit" formmethod="get" formnovalidate formaction="{{ acao_busca }}" name="selecionar_eleitor_id" value="{{ resultado.id }}">Selecionar</button>
                     </td>
                 </tr>
                 {% endfor %}
@@ -50,6 +50,6 @@
     {% if resultados_busca_eleitor %}
     <p class="text-muted small mt-3 mb-1">Não encontrou quem procurava?</p>
     {% endif %}
-    <button class="btn btn-outline-primary btn-sm" type="submit" formmethod="get" formaction="/eleitores/novo" name="voltar" value="{{ acao_busca }}">Cadastrar novo eleitor</button>
+    <button class="btn btn-outline-primary btn-sm" type="submit" formmethod="get" formnovalidate formaction="/eleitores/novo" name="voltar" value="{{ acao_busca }}">Cadastrar novo eleitor</button>
     {% endif %}
 </div>

@@ -90,6 +90,23 @@ def _opcoes_formulario(
     }
 
 
+def _data_segura(valor: str) -> date | None:
+    """Converte a string de uma data vinda de querystring (campo
+    rascunho=1 de novo()/editar() abaixo) com segurança. Nunca declarado
+    como `date | None` direto no parâmetro da rota: ao contrário de um
+    campo de formulário (POST, Form(None)), o FastAPI NÃO trata string
+    vazia como None para um parâmetro de query — tenta converter "" para
+    date e devolve 422. Como o campo de data do formulário, quando ainda
+    não preenchido, sempre chega vazio nessas idas e vindas de busca de
+    eleitor, precisa ser sempre string aqui, convertida à mão."""
+    if not valor or not valor.strip():
+        return None
+    try:
+        return date.fromisoformat(valor.strip())
+    except ValueError:
+        return None
+
+
 def _montar_demanda_preenchida(
     id: int | None,
     eleitor_id: str,
@@ -235,8 +252,8 @@ def novo(
     status: str = "",
     prioridade: str = "",
     responsavel: str = "",
-    prazo: date | None = None,
-    data_solicitacao: date | None = None,
+    prazo: str = "",
+    data_solicitacao: str = "",
     observacoes_internas: str = "",
     db: Session = Depends(get_db),
     contexto: ContextoSessao = Depends(obter_contexto_atual),
@@ -264,7 +281,7 @@ def novo(
     if rascunho:
         demanda = _montar_demanda_preenchida(
             None, "", titulo, descricao, categoria_id, subcategoria_id, status, prioridade,
-            responsavel, prazo, data_solicitacao, observacoes_internas,
+            responsavel, _data_segura(prazo), _data_segura(data_solicitacao), observacoes_internas,
         )
         categoria_atual = (
             CategoriaService.obter_por_id(db, contexto.gabinete_id, demanda.categoria_id)
@@ -557,8 +574,8 @@ def editar(
     status: str = "",
     prioridade: str = "",
     responsavel: str = "",
-    prazo: date | None = None,
-    data_solicitacao: date | None = None,
+    prazo: str = "",
+    data_solicitacao: str = "",
     observacoes_internas: str = "",
     db: Session = Depends(get_db),
     contexto: ContextoSessao = Depends(obter_contexto_atual),
@@ -588,7 +605,7 @@ def editar(
     if rascunho:
         demanda_formulario = _montar_demanda_preenchida(
             demanda_id, "", titulo, descricao, categoria_id, subcategoria_id, status, prioridade,
-            responsavel, prazo, data_solicitacao, observacoes_internas,
+            responsavel, _data_segura(prazo), _data_segura(data_solicitacao), observacoes_internas,
         )
         categoria_atual = (
             CategoriaService.obter_por_id(db, contexto.gabinete_id, demanda_formulario.categoria_id)
