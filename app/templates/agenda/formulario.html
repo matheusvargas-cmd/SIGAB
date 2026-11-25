@@ -16,7 +16,7 @@
         <div class="row g-3">
             <div class="col-md-8">
                 <label class="form-label" for="titulo">Título *</label>
-                <input class="form-control" id="titulo" name="titulo" value="{{ compromisso.titulo if compromisso else '' }}" maxlength="150" minlength="5" required autofocus>
+                <input class="form-control" id="titulo" name="titulo" value="{{ compromisso.titulo if compromisso else '' }}" maxlength="150" minlength="5" required {% if eleitor_resolvido %}autofocus{% endif %}>
                 <div class="form-text">Mínimo de 5 caracteres.</div>
             </div>
             <div class="col-md-4">

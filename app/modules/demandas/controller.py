@@ -262,7 +262,12 @@ def novo(
         db, contexto.gabinete_id, selecionar_eleitor_id
     )
     resultados_busca_eleitor = []
-    if not eleitor_resolvido and pesquisa_eleitor.strip():
+    # rascunho=1 (não pesquisa_eleitor.strip()) é o que decide se já
+    # busca: clicar em "Buscar" com o campo vazio deve listar todos os
+    # eleitores do gabinete (EleitorService.listar sem termo não filtra
+    # nada), não ficar sem mostrar nada só porque o texto está em branco.
+    # Continua sem listar nada na primeira visita à tela (sem rascunho).
+    if not eleitor_resolvido and rascunho:
         resultados_busca_eleitor, _, _ = EleitorService.listar(
             db, contexto.gabinete_id, pesquisa_eleitor, 1
         )
@@ -588,7 +593,12 @@ def editar(
         db, contexto.gabinete_id, selecionar_eleitor_id, demanda.eleitor_id, trocar_eleitor
     )
     resultados_busca_eleitor = []
-    if not eleitor_resolvido and pesquisa_eleitor.strip():
+    # rascunho=1 (não pesquisa_eleitor.strip()) é o que decide se já
+    # busca: clicar em "Buscar" com o campo vazio deve listar todos os
+    # eleitores do gabinete (EleitorService.listar sem termo não filtra
+    # nada), não ficar sem mostrar nada só porque o texto está em branco.
+    # Continua sem listar nada na primeira visita à tela (sem rascunho).
+    if not eleitor_resolvido and rascunho:
         resultados_busca_eleitor, _, _ = EleitorService.listar(
             db, contexto.gabinete_id, pesquisa_eleitor, 1
         )
