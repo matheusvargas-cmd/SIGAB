@@ -98,6 +98,7 @@ async def dashboard(
     demandas_por_status = DemandaService.relatorio_por_status(db, gabinete_id)
     aniversariantes_hoje = EleitorService.listar_aniversariantes_hoje(db, gabinete_id)
     demandas_urgentes = DemandaService.listar_urgentes(db, gabinete_id, LIMITE_RECENTES)
+    demandas_hoje = DemandaService.listar_vencendo_hoje(db, gabinete_id, hoje)
     return templates.TemplateResponse(
         request=request,
         name="dashboard/index.html",
@@ -112,6 +113,7 @@ async def dashboard(
             "demandas_prazo_proximo": DemandaService.contar_prazo_proximo(db, gabinete_id, 7),
             "demandas_urgentes": demandas_urgentes,
             "total_demandas_urgentes": DemandaService.contar_urgentes(db, gabinete_id),
+            "demandas_hoje": demandas_hoje,
             "proximos_compromissos": AgendaService.listar_proximos(db, gabinete_id, LIMITE_RECENTES),
             "aniversariantes_hoje": _preparar_aniversariantes(
                 aniversariantes_hoje, hoje, contexto.gabinete.nome
