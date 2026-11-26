@@ -85,8 +85,17 @@ _ORDEM_PRIORIDADE = case(
 COLUNAS_ORDENAVEIS = {
     "data_solicitacao": Demanda.data_solicitacao,
     "prazo": Demanda.prazo,
+    # "Atraso" não é uma coluna própria (é calculado na hora por
+    # DemandaService.calcular_atraso, a partir do prazo) — ordenar por ela
+    # é sempre ordenar pelo próprio prazo, só com uma chave (ordenar_por)
+    # independente, para a seta de ordenação aparecer no cabeçalho certo.
+    "atraso": Demanda.prazo,
     "status": Demanda.status,
     "prioridade": _ORDEM_PRIORIDADE,
+    "origem": Demanda.origem,
+    "titulo": Demanda.titulo,
+    "categoria": Demanda.categoria,
+    "eleitor": Eleitor.nome,
 }
 
 
