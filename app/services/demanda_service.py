@@ -401,6 +401,26 @@ class DemandaService:
         return list(db.scalars(consulta).unique().all())
 
     @staticmethod
+    def listar_cadastradas_hoje(db: Session, gabinete_id: int, data: date | None = None) -> list[Demanda]:
+        """Demandas CRIADAS (data_abertura) na data de referência — nunca
+        confundir com listar_vencendo_hoje() acima, que é sobre prazo.
+        Pensado para o cartão "Demandas cadastradas no dia" do dashboard:
+        equipes em turnos diferentes não têm como saber o que o turno
+        anterior lançou, sem depender de nenhum status específico (ao
+        contrário de atrasadas/vencendo hoje, aqui aparece TUDO que foi
+        cadastrado, mesmo já concluído). Mais recente primeiro."""
+        referencia = data or date.today()
+        consulta = (
+            select(Demanda)
+            .where(Demanda.gabinete_id == gabinete_id)
+            .where(Demanda.data_abertura >= datetime.combine(referencia, time.min))
+            .where(Demanda.data_abertura <= datetime.combine(referencia, time.max))
+            .options(joinedload(Demanda.eleitor))
+            .order_by(Demanda.data_abertura.desc())
+        )
+        return list(db.scalars(consulta).unique().all())
+
+    @staticmethod
     def listar_recentes(db: Session, gabinete_id: int, limite: int = 5) -> list[Demanda]:
         consulta = (
             select(Demanda)

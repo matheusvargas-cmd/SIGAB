@@ -312,7 +312,12 @@ class EleitorService:
         Se o CPF já pertence a um eleitor deste gabinete: atualiza só os
         campos que vieram preenchidos desta vez, preservando o valor já
         cadastrado em cada campo que o cidadão deixou em branco — nunca
-        apaga dado existente por causa de um reenvio incompleto."""
+        apaga dado existente por causa de um reenvio incompleto. O nome é
+        a única exceção: nunca é sobrescrito num reenvio (ver nome= logo
+        abaixo), porque é o dado que o gabinete mais frequentemente já
+        corrigiu/validou manualmente — um reenvio com apelido, nome
+        abreviado ou erro de digitação não pode silenciosamente substituir
+        o nome correto já cadastrado."""
         cpf_normalizado = normalizar_cpf(cpf)
         if not cpf_normalizado or not validar_cpf(cpf_normalizado):
             raise ValueError("Informe um CPF válido.")
@@ -340,7 +345,7 @@ class EleitorService:
         return EleitorService.atualizar(
             db,
             eleitor_existente,
-            nome=(nome or "").strip() or eleitor_existente.nome,
+            nome=eleitor_existente.nome,
             telefone=(telefone or "").strip() or eleitor_existente.telefone,
             whatsapp=(whatsapp or "").strip() or eleitor_existente.whatsapp,
             nascimento=eleitor_existente.nascimento,
