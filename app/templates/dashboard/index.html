@@ -49,6 +49,7 @@
     </div>
 </div>
 
+{% if cards.urgentes %}
 <div class="row g-3 mt-1">
     <div class="col-12">
         <div class="card h-100 border-danger">
@@ -78,7 +79,9 @@
         </div>
     </div>
 </div>
+{% endif %}
 
+{% if cards.demandas_hoje %}
 <div class="row g-3 mt-1">
     <div class="col-12">
         <div class="card h-100">
@@ -112,8 +115,43 @@
         </div>
     </div>
 </div>
+{% endif %}
 
+{% if cards.atencao_gabinete %}
 <div class="row g-3 mt-1">
+    <div class="col-12">
+        <div class="card h-100">
+            <div class="card-header">Atenção do gabinete</div>
+            <div class="card-body">
+                {% if demandas_atrasadas or demandas_prazo_proximo %}
+                <ul class="list-unstyled mb-0">
+                    {% if demandas_atrasadas %}
+                    <li class="py-2 border-bottom">
+                        <a class="d-flex justify-content-between align-items-center text-decoration-none text-dark" href="/demandas?atrasada=1">
+                            <span>🔴 Demandas atrasadas</span>
+                            <span class="fw-semibold">{{ demandas_atrasadas }}</span>
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% if demandas_prazo_proximo %}
+                    <li class="d-flex justify-content-between align-items-center py-2">
+                        <span>📅 Prazo nos próximos 7 dias</span>
+                        <span class="fw-semibold">{{ demandas_prazo_proximo }}</span>
+                    </li>
+                    {% endif %}
+                </ul>
+                {% else %}
+                <p class="text-success fw-semibold mb-0">✓ Nenhuma pendência crítica no momento.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if cards.demandas_por_status or cards.cadastradas_hoje %}
+<div class="row g-3 mt-1">
+    {% if cards.demandas_por_status %}
     <div class="col-lg-6">
         <div class="card h-100">
             <div class="card-header">Demandas por status</div>
@@ -150,6 +188,8 @@
             </div>
         </div>
     </div>
+    {% endif %}
+    {% if cards.cadastradas_hoje %}
     <div class="col-lg-6">
         <div class="card h-100">
             <div class="card-header">🗓️ Demandas cadastradas no dia</div>
@@ -183,9 +223,13 @@
             </div>
         </div>
     </div>
+    {% endif %}
 </div>
+{% endif %}
 
+{% if cards.aniversariantes or cards.proximos_compromissos %}
 <div class="row g-3 mt-1">
+    {% if cards.aniversariantes %}
     <div class="col-lg-6">
         <div class="card h-100">
             <div class="card-header">🎂 Aniversariantes do dia</div>
@@ -213,6 +257,8 @@
             </div>
         </div>
     </div>
+    {% endif %}
+    {% if cards.proximos_compromissos %}
     <div class="col-lg-6">
         <div class="card h-100">
             <div class="card-header">Próximos compromissos</div>
@@ -235,5 +281,52 @@
             </div>
         </div>
     </div>
+    {% endif %}
 </div>
+{% endif %}
+
+{% if cards.atalho_relatorios or cards.bloco_notas %}
+<div class="row g-3 mt-1">
+    {% if cards.atalho_relatorios %}
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header">📊 Relatórios</div>
+            <div class="card-body">
+                <div class="d-flex flex-wrap gap-2">
+                    <a class="btn btn-outline-secondary btn-sm" href="/relatorios/demandas-por-status">Demandas por status</a>
+                    <a class="btn btn-outline-secondary btn-sm" href="/relatorios/demandas-por-categoria">Demandas por categoria</a>
+                    <a class="btn btn-outline-secondary btn-sm" href="/relatorios/demandas-por-periodo">Demandas por período</a>
+                    <a class="btn btn-outline-secondary btn-sm" href="/relatorios/demandas-por-eleitor">Demandas por eleitor</a>
+                    <a class="btn btn-outline-secondary btn-sm" href="/relatorios/eleitores-por-bairro">Eleitores por bairro</a>
+                    <a class="btn btn-outline-secondary btn-sm" href="/relatorios/compromissos-por-periodo">Compromissos por período</a>
+                </div>
+                <a class="btn btn-link btn-sm px-0 mt-2" href="/relatorios">Ver todos os relatórios →</a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    {% if cards.bloco_notas %}
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header">📝 Bloco de notas do gabinete</div>
+            <div class="card-body">
+                <form method="post" action="/nota-dashboard">
+                    <textarea class="form-control" name="conteudo" rows="4" placeholder="Recados da equipe, lembretes rápidos...">{{ gabinete.nota_dashboard or '' }}</textarea>
+                    <div class="d-flex justify-content-between align-items-center mt-2">
+                        <span class="text-muted small">
+                            {% if gabinete.nota_dashboard_atualizada_em %}
+                            Atualizado{% if gabinete.nota_dashboard_atualizado_por %} por {{ gabinete.nota_dashboard_atualizado_por.nome }}{% endif %} em {{ gabinete.nota_dashboard_atualizada_em.strftime('%d/%m/%Y às %H:%M') }}
+                            {% else %}
+                            Visível para toda a equipe.
+                            {% endif %}
+                        </span>
+                        <button class="btn btn-primary btn-sm" type="submit">Salvar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
 {% endblock %}

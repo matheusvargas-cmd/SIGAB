@@ -63,6 +63,7 @@ if settings.is_sqlite:
     MigrationService.semear_categorias_demandas_reais()
     MigrationService.adicionar_controle_assinatura()
     MigrationService.adicionar_integracao_asaas()
+    MigrationService.adicionar_personalizacao_dashboard()
     MigrationService.garantir_gabinete_padrao_local()
 
 # debug=True liga páginas de erro do Starlette com traceback completo (e

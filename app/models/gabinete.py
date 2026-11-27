@@ -1,6 +1,7 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, Date, DateTime, Integer, String
+from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import relationship
 
 from app.core.database import Base
 from app.core.tempo import hoje_operacional
@@ -99,6 +100,25 @@ class Gabinete(Base):
     asaas_customer_id = Column(String(64), nullable=True)
     asaas_subscription_id = Column(String(64), nullable=True)
     asaas_checkout_id = Column(String(64), nullable=True)
+
+    # Personalização do dashboard: quais cards este gabinete decidiu
+    # exibir na tela inicial — texto JSON ({"chave_do_card": bool, ...}),
+    # nunca uma coluna booleana por card (evitaria uma migration toda vez
+    # que um card novo é criado). Nulo = "nenhuma escolha feita ainda":
+    # GabineteService.obter_cards_dashboard sempre mescla com os padrões
+    # (ver DASHBOARD_CARDS_PADRAO), nunca lê esta coluna diretamente em
+    # nenhum outro lugar do sistema.
+    dashboard_cards_ativos = Column(Text, nullable=True)
+
+    # Bloco de notas do dashboard — um único texto POR GABINETE (não por
+    # usuário): qualquer membro vê e pode substituir o conteúdo, serve
+    # como recado da equipe (ex.: avisos entre turnos). Nunca um
+    # histórico de versões, só o estado atual + quem/quando foi a última
+    # alteração, para dar transparência sem precisar de uma tabela nova.
+    nota_dashboard = Column(Text, nullable=True)
+    nota_dashboard_atualizada_em = Column(DateTime, nullable=True)
+    nota_dashboard_atualizado_por_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+    nota_dashboard_atualizado_por = relationship("Usuario")
 
     @property
     def assinatura_vencida(self) -> bool:

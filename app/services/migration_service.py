@@ -469,6 +469,30 @@ class MigrationService:
         )
 
     @staticmethod
+    def adicionar_personalizacao_dashboard() -> None:
+        """Ponte de compatibilidade só para SQLite local — mesmo padrão de
+        adicionar_integracao_asaas() logo abaixo. Todas as colunas
+        nascem nulas (nenhum gabinete já tem preferência salva; o
+        dashboard cai nos padrões — ver GabineteService.
+        obter_cards_dashboard). Idempotente: só executa o que ainda não
+        existir."""
+        inspector = inspect(engine)
+        if "gabinetes" not in inspector.get_table_names():
+            return
+        colunas = {coluna["name"] for coluna in inspector.get_columns("gabinetes")}
+        if "dashboard_cards_ativos" not in colunas:
+            with engine.begin() as conexao:
+                conexao.execute(text("ALTER TABLE gabinetes ADD COLUMN dashboard_cards_ativos TEXT"))
+                conexao.execute(text("ALTER TABLE gabinetes ADD COLUMN nota_dashboard TEXT"))
+                conexao.execute(
+                    text("ALTER TABLE gabinetes ADD COLUMN nota_dashboard_atualizada_em DATETIME")
+                )
+                conexao.execute(
+                    text("ALTER TABLE gabinetes ADD COLUMN nota_dashboard_atualizado_por_id INTEGER")
+                )
+            logger.info("Colunas de personalização do dashboard adicionadas a gabinetes (SQLite local).")
+
+    @staticmethod
     def adicionar_integracao_asaas() -> None:
         """Ponte de compatibilidade só para SQLite local que já existia
         antes da Fase 2 (integração de pagamentos com o Asaas) — mesmo

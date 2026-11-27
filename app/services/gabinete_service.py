@@ -1,5 +1,6 @@
+import json
 import secrets
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -18,6 +19,26 @@ from app.services.demanda_service import CATEGORIAS
 
 NOME_MINIMO_CARACTERES = 2
 SENHA_MINIMO_CARACTERES = 8
+
+# Catálogo de cards que o dashboard sabe exibir, com rótulo (tela de
+# personalização) e se vem ligado por padrão para um gabinete que nunca
+# mexeu nisso. Único lugar que define essa lista — tanto a tela de
+# personalização (app/modules/gabinete/controller.py) quanto o dashboard
+# em si (app/modules/dashboard/controller.py) sempre leem daqui, nunca
+# reescrevem a lista cada um do seu jeito. Adicionar um card novo no
+# futuro é só adicionar uma linha aqui (nenhuma migration necessária:
+# ver Gabinete.dashboard_cards_ativos).
+CARDS_DASHBOARD = {
+    "urgentes": {"rotulo": "Demandas urgentes", "padrao": True},
+    "demandas_hoje": {"rotulo": "Demandas de hoje (prazo vencendo)", "padrao": True},
+    "cadastradas_hoje": {"rotulo": "Demandas cadastradas no dia", "padrao": True},
+    "atencao_gabinete": {"rotulo": "Atenção do gabinete (atrasadas e prazo próximo)", "padrao": False},
+    "demandas_por_status": {"rotulo": "Demandas por status", "padrao": True},
+    "aniversariantes": {"rotulo": "Aniversariantes do dia", "padrao": True},
+    "proximos_compromissos": {"rotulo": "Próximos compromissos", "padrao": True},
+    "atalho_relatorios": {"rotulo": "Atalho para Relatórios", "padrao": False},
+    "bloco_notas": {"rotulo": "Bloco de notas do gabinete", "padrao": False},
+}
 
 # Sem 0/O/1/I/L (visualmente ambíguos) — o token é lido/digitado por
 # pessoas (URL do futuro módulo de Atendimento ao Cidadão), não só por
@@ -314,3 +335,47 @@ class GabineteService:
     def ja_enviou_diario_hoje(db: Session, gabinete_id: int, data: date) -> bool:
         gabinete = db.get(Gabinete, gabinete_id)
         return gabinete is not None and gabinete.ultimo_email_diario_data == data
+
+    @staticmethod
+    def obter_cards_dashboard(gabinete: Gabinete) -> dict[str, bool]:
+        """Sempre devolve TODAS as chaves de CARDS_DASHBOARD (nunca só as
+        que o gabinete já salvou) — um card adicionado depois que este
+        gabinete configurou a tela pela última vez aparece com o próprio
+        padrão dele, nunca ausente/quebrando o template. JSON salvo
+        corrompido/inválido é tratado como "nenhuma escolha feita ainda"
+        (cai nos padrões), nunca um erro 500."""
+        salvo: dict = {}
+        if gabinete.dashboard_cards_ativos:
+            try:
+                salvo = json.loads(gabinete.dashboard_cards_ativos)
+            except (TypeError, ValueError):
+                salvo = {}
+        return {
+            chave: bool(salvo[chave]) if chave in salvo else info["padrao"]
+            for chave, info in CARDS_DASHBOARD.items()
+        }
+
+    @staticmethod
+    def atualizar_cards_dashboard(db: Session, gabinete: Gabinete, cards_ativos: dict[str, bool]) -> Gabinete:
+        """Só grava as chaves conhecidas em CARDS_DASHBOARD — nunca uma
+        chave arbitrária vinda do formulário, mesmo que o HTML sempre
+        envie exatamente essas (defesa contra um POST montado à mão)."""
+        cards_validos = {chave: bool(cards_ativos.get(chave, False)) for chave in CARDS_DASHBOARD}
+        gabinete.dashboard_cards_ativos = json.dumps(cards_validos)
+        db.commit()
+        db.refresh(gabinete)
+        return gabinete
+
+    @staticmethod
+    def atualizar_nota_dashboard(
+        db: Session, gabinete: Gabinete, conteudo: str, usuario_id: int
+    ) -> Gabinete:
+        """Nota única por gabinete (não por usuário) — qualquer membro
+        autenticado pode substituir o conteúdo; só registra quem/quando
+        foi a última alteração, nunca um histórico de versões."""
+        gabinete.nota_dashboard = (conteudo or "").strip() or None
+        gabinete.nota_dashboard_atualizada_em = datetime.now()
+        gabinete.nota_dashboard_atualizado_por_id = usuario_id
+        db.commit()
+        db.refresh(gabinete)
+        return gabinete

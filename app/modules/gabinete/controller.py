@@ -9,7 +9,7 @@ from app.core.config import TEMPLATES_DIR
 from app.core.contexto import ContextoSessao, exigir_perfil, obter_contexto_atual
 from app.core.database import get_db
 from app.core.flash import codificar_flash, decodificar_flash
-from app.services.gabinete_service import GabineteService
+from app.services.gabinete_service import CARDS_DASHBOARD, GabineteService
 from app.services.qrcode_service import QrCodeService
 
 router = APIRouter(prefix="/configuracoes/gabinete", tags=["Cadastros"])
@@ -20,9 +20,9 @@ _exigir_admin = exigir_perfil("ADMIN")
 
 
 def flash_message(
-    message: str | None = None, category: str = "warning"
+    message: str | None = None, category: str = "warning", destino: str = "/configuracoes/gabinete"
 ) -> RedirectResponse:
-    redirect = RedirectResponse("/configuracoes/gabinete", status_code=303)
+    redirect = RedirectResponse(destino, status_code=303)
     if message is not None:
         redirect.set_cookie(
             "flash_message", codificar_flash(message), max_age=10, httponly=True,
@@ -77,6 +77,63 @@ def atualizar(
             status_code=400,
         )
     return flash_message("Gabinete atualizado.", "success")
+
+
+@router.get("/dashboard", response_class=HTMLResponse)
+def personalizar_dashboard(request: Request, contexto: ContextoSessao = Depends(_exigir_admin)):
+    resposta = templates.TemplateResponse(
+        request=request,
+        name="configuracoes/gabinete_dashboard.html",
+        context={
+            "titulo": "Personalização do Dashboard",
+            "cards": CARDS_DASHBOARD,
+            "cards_ativos": GabineteService.obter_cards_dashboard(contexto.gabinete),
+            "flash_message": decodificar_flash(request.cookies.get("flash_message")),
+            "flash_category": request.cookies.get("flash_category", "warning"),
+        },
+    )
+    resposta.delete_cookie("flash_message", path="/configuracoes")
+    resposta.delete_cookie("flash_category", path="/configuracoes")
+    return resposta
+
+
+@router.post("/dashboard")
+def atualizar_dashboard(
+    urgentes: bool = Form(False),
+    demandas_hoje: bool = Form(False),
+    cadastradas_hoje: bool = Form(False),
+    atencao_gabinete: bool = Form(False),
+    demandas_por_status: bool = Form(False),
+    aniversariantes: bool = Form(False),
+    proximos_compromissos: bool = Form(False),
+    atalho_relatorios: bool = Form(False),
+    bloco_notas: bool = Form(False),
+    db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(_exigir_admin),
+):
+    # Checkbox desmarcado simplesmente não vem no corpo do POST (padrão
+    # HTML) — por isso cada card é seu próprio Form(False) (mesmo padrão
+    # já usado em "ativo" no formulário do gabinete acima), nunca lido
+    # genericamente: um nome de campo que não existisse aqui seria
+    # ignorado de qualquer forma por GabineteService.
+    # atualizar_cards_dashboard, que só aceita as chaves de
+    # CARDS_DASHBOARD — mas declarar cada um explicitamente também serve
+    # de documentação viva de quais cards existem hoje.
+    cards_ativos = {
+        "urgentes": urgentes,
+        "demandas_hoje": demandas_hoje,
+        "cadastradas_hoje": cadastradas_hoje,
+        "atencao_gabinete": atencao_gabinete,
+        "demandas_por_status": demandas_por_status,
+        "aniversariantes": aniversariantes,
+        "proximos_compromissos": proximos_compromissos,
+        "atalho_relatorios": atalho_relatorios,
+        "bloco_notas": bloco_notas,
+    }
+    GabineteService.atualizar_cards_dashboard(db, contexto.gabinete, cards_ativos)
+    return flash_message(
+        "Personalização do dashboard salva.", "success", destino="/configuracoes/gabinete/dashboard"
+    )
 
 
 @router.get("/link-publico", response_class=HTMLResponse)

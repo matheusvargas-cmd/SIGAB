@@ -1,17 +1,19 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Form, Request
+from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.core.config import TEMPLATES_DIR
-from app.core.contexto import obter_contexto_atual, obter_usuario_atual
+from app.core.contexto import ContextoSessao, obter_contexto_atual, obter_usuario_atual
 from app.core.database import get_db
 from app.models.eleitor import Eleitor
 from app.modules.landing.view import renderizar_landing
 from app.services.agenda_service import AgendaService
 from app.services.demanda_service import DemandaService
 from app.services.eleitor_service import EleitorService
+from app.services.gabinete_service import GabineteService
 from app.services.whatsapp_link_service import WhatsappLinkService
 
 router = APIRouter()
@@ -95,29 +97,67 @@ async def dashboard(
     contexto = obter_contexto_atual(request, db, usuario)
     gabinete_id = contexto.gabinete_id
     hoje = date.today()
-    demandas_por_status = DemandaService.relatorio_por_status(db, gabinete_id)
-    aniversariantes_hoje = EleitorService.listar_aniversariantes_hoje(db, gabinete_id)
-    demandas_urgentes = DemandaService.listar_urgentes(db, gabinete_id, LIMITE_RECENTES)
-    demandas_hoje = DemandaService.listar_vencendo_hoje(db, gabinete_id, hoje)
-    demandas_cadastradas_hoje = DemandaService.listar_cadastradas_hoje(db, gabinete_id, hoje)
-    return templates.TemplateResponse(
-        request=request,
-        name="dashboard/index.html",
-        context={
-            "titulo": "Dashboard",
-            "total_eleitores": EleitorService.contar(db, gabinete_id),
-            "total_demandas": DemandaService.contar_total(db, gabinete_id),
-            "total_demandas_pendentes": DemandaService.contar_em_andamento(db, gabinete_id),
-            "total_compromissos_hoje": AgendaService.contar_hoje(db, gabinete_id),
-            "demandas_por_status": demandas_por_status,
-            "demandas_urgentes": demandas_urgentes,
-            "total_demandas_urgentes": DemandaService.contar_urgentes(db, gabinete_id),
-            "demandas_hoje": demandas_hoje,
-            "demandas_cadastradas_hoje": demandas_cadastradas_hoje,
-            "proximos_compromissos": AgendaService.listar_proximos(db, gabinete_id, LIMITE_RECENTES),
-            "aniversariantes_hoje": _preparar_aniversariantes(
-                aniversariantes_hoje, hoje, contexto.gabinete.nome
-            ),
-            "hoje": hoje,
-        },
-    )
+    cards = GabineteService.obter_cards_dashboard(contexto.gabinete)
+
+    # Os 4 indicadores do topo (eleitores/demandas/pendências/agenda de
+    # hoje) e o próprio "cards" nunca são opcionais — só os cards abaixo
+    # deles são. Cada bloco só consulta o banco se o card correspondente
+    # estiver ligado (ver /configuracoes/gabinete/dashboard): um gabinete
+    # que desligou "Aniversariantes", por exemplo, nem gera a consulta.
+    contexto_tela = {
+        "titulo": "Dashboard",
+        "total_eleitores": EleitorService.contar(db, gabinete_id),
+        "total_demandas": DemandaService.contar_total(db, gabinete_id),
+        "total_demandas_pendentes": DemandaService.contar_em_andamento(db, gabinete_id),
+        "total_compromissos_hoje": AgendaService.contar_hoje(db, gabinete_id),
+        "cards": cards,
+        "gabinete": contexto.gabinete,
+        "hoje": hoje,
+    }
+
+    if cards["urgentes"]:
+        contexto_tela["demandas_urgentes"] = DemandaService.listar_urgentes(
+            db, gabinete_id, LIMITE_RECENTES
+        )
+        contexto_tela["total_demandas_urgentes"] = DemandaService.contar_urgentes(db, gabinete_id)
+
+    if cards["demandas_hoje"]:
+        contexto_tela["demandas_hoje"] = DemandaService.listar_vencendo_hoje(db, gabinete_id, hoje)
+
+    if cards["cadastradas_hoje"]:
+        contexto_tela["demandas_cadastradas_hoje"] = DemandaService.listar_cadastradas_hoje(
+            db, gabinete_id, hoje
+        )
+
+    if cards["atencao_gabinete"]:
+        contexto_tela["demandas_atrasadas"] = DemandaService.contar_atrasadas(db, gabinete_id)
+        contexto_tela["demandas_prazo_proximo"] = DemandaService.contar_prazo_proximo(db, gabinete_id, 7)
+
+    if cards["demandas_por_status"]:
+        contexto_tela["demandas_por_status"] = DemandaService.relatorio_por_status(db, gabinete_id)
+
+    if cards["aniversariantes"]:
+        aniversariantes_hoje = EleitorService.listar_aniversariantes_hoje(db, gabinete_id)
+        contexto_tela["aniversariantes_hoje"] = _preparar_aniversariantes(
+            aniversariantes_hoje, hoje, contexto.gabinete.nome
+        )
+
+    if cards["proximos_compromissos"]:
+        contexto_tela["proximos_compromissos"] = AgendaService.listar_proximos(
+            db, gabinete_id, LIMITE_RECENTES
+        )
+
+    return templates.TemplateResponse(request=request, name="dashboard/index.html", context=contexto_tela)
+
+
+@router.post("/nota-dashboard")
+def salvar_nota_dashboard(
+    conteudo: str = Form(""),
+    db: Session = Depends(get_db),
+    contexto: ContextoSessao = Depends(obter_contexto_atual),
+):
+    # Qualquer perfil autenticado do gabinete pode editar — é um recado de
+    # equipe (ver Gabinete.nota_dashboard), não uma configuração
+    # administrativa; nunca exigir_perfil("ADMIN") aqui.
+    GabineteService.atualizar_nota_dashboard(db, contexto.gabinete, conteudo, contexto.usuario.id)
+    return RedirectResponse("/", status_code=303)
