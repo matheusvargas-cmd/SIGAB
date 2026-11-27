@@ -24,12 +24,13 @@
         <h2>Seus dados</h2>
         <div class="row g-3">
             <div class="col-12">
-                <label class="form-label" for="nome">Nome completo *</label>
-                <input class="form-control" id="nome" name="nome" value="{{ dados.nome or '' }}" required autofocus>
-            </div>
-            <div class="col-md-6">
                 <label class="form-label" for="cpf">CPF *</label>
-                <input class="form-control" id="cpf" name="cpf" value="{{ dados.cpf or '' }}" inputmode="numeric" placeholder="000.000.000-00" required>
+                <input class="form-control" id="cpf" name="cpf" value="{{ dados.cpf or '' }}" inputmode="numeric" placeholder="000.000.000-00" required autofocus>
+                <div class="form-text" id="cpf-mensagem"></div>
+            </div>
+            <div class="col-12">
+                <label class="form-label" for="nome">Nome completo *</label>
+                <input class="form-control" id="nome" name="nome" value="{{ dados.nome or '' }}" required>
             </div>
             <div class="col-md-6">
                 <label class="form-label" for="whatsapp">WhatsApp *</label>
@@ -52,6 +53,7 @@
             <div class="col-md-4">
                 <label class="form-label" for="cep">CEP</label>
                 <input class="form-control" id="cep" name="cep" value="{{ dados.cep or '' }}" inputmode="numeric">
+                <div class="form-text" id="cep-mensagem"></div>
             </div>
             <div class="col-md-8">
                 <label class="form-label" for="logradouro">Logradouro</label>
@@ -201,6 +203,112 @@
     }
 
     inputFotos.addEventListener('change', renderizarFotos);
+})();
+
+(function () {
+    // Busca automática pelo CPF: já existindo cadastro deste CPF neste
+    // gabinete, preenche nome/whatsapp/telefone/e-mail/bairro/cidade
+    // sozinho — evita que a mesma pessoa seja recadastrada com nome
+    // diferente a cada novo pedido. Só dispara quando o CPF tem 11
+    // dígitos (nunca a cada tecla antes disso) e nunca repete a mesma
+    // busca em seguida. Falha de rede/limite de tentativas: nunca trava
+    // o formulário, só deixa de preencher — a pessoa sempre pode
+    // continuar digitando os dados na mão.
+    var campoCpf = document.getElementById('cpf');
+    var mensagemCpf = document.getElementById('cpf-mensagem');
+    var ultimoCpfBuscado = null;
+
+    function somenteDigitos(valor) {
+        return (valor || '').replace(/\D/g, '');
+    }
+
+    function preencherSeVazio(id, valor) {
+        var campo = document.getElementById(id);
+        if (campo && valor) {
+            campo.value = valor;
+        }
+    }
+
+    function buscarPorCpf() {
+        var cpf = somenteDigitos(campoCpf.value);
+        if (cpf.length !== 11 || cpf === ultimoCpfBuscado) {
+            return;
+        }
+        ultimoCpfBuscado = cpf;
+        mensagemCpf.textContent = '';
+        mensagemCpf.className = 'form-text';
+
+        fetch('/cidadao/{{ gabinete.public_token }}/eleitor-por-cpf?cpf=' + encodeURIComponent(cpf))
+            .then(function (resposta) { return resposta.ok ? resposta.json() : { encontrado: false }; })
+            .then(function (dados) {
+                if (!dados.encontrado) {
+                    return;
+                }
+                preencherSeVazio('nome', dados.nome);
+                preencherSeVazio('whatsapp', dados.whatsapp);
+                preencherSeVazio('telefone', dados.telefone);
+                preencherSeVazio('email', dados.email);
+                preencherSeVazio('bairro', dados.bairro);
+                preencherSeVazio('cidade', dados.cidade);
+                mensagemCpf.textContent = '✓ Encontramos seu cadastro! Conferimos os dados abaixo — ajuste o que estiver desatualizado.';
+                mensagemCpf.className = 'form-text text-success fw-semibold';
+            })
+            .catch(function () {
+                // Sem conexão ou erro inesperado: segue o preenchimento
+                // manual normalmente, sem mensagem de erro alarmante.
+            });
+    }
+
+    campoCpf.addEventListener('input', buscarPorCpf);
+    campoCpf.addEventListener('blur', buscarPorCpf);
+})();
+
+(function () {
+    // Busca automática pelo CEP (ViaCEP, serviço público gratuito,
+    // consultado direto do navegador — nenhum dado sai do servidor do
+    // SIGAB para isso) — preenche logradouro/bairro/cidade. Número e
+    // complemento continuam sendo digitados pela pessoa: o ViaCEP não
+    // tem como saber esses dois. Mesma tolerância a falha do CPF acima:
+    // erro de rede ou CEP não encontrado nunca travam o formulário.
+    var campoCep = document.getElementById('cep');
+    var mensagemCep = document.getElementById('cep-mensagem');
+    var ultimoCepBuscado = null;
+
+    function somenteDigitosCep(valor) {
+        return (valor || '').replace(/\D/g, '');
+    }
+
+    function buscarPorCep() {
+        var cep = somenteDigitosCep(campoCep.value);
+        if (cep.length !== 8 || cep === ultimoCepBuscado) {
+            return;
+        }
+        ultimoCepBuscado = cep;
+        mensagemCep.textContent = 'Buscando endereço...';
+        mensagemCep.className = 'form-text text-muted';
+
+        fetch('https://viacep.com.br/ws/' + cep + '/json/')
+            .then(function (resposta) { return resposta.ok ? resposta.json() : { erro: true }; })
+            .then(function (dados) {
+                if (dados.erro) {
+                    mensagemCep.textContent = 'CEP não encontrado — preencha o endereço manualmente.';
+                    mensagemCep.className = 'form-text text-muted';
+                    return;
+                }
+                document.getElementById('logradouro').value = dados.logradouro || '';
+                document.getElementById('bairro').value = dados.bairro || '';
+                document.getElementById('cidade').value = dados.localidade || '';
+                mensagemCep.textContent = '✓ Endereço preenchido automaticamente.';
+                mensagemCep.className = 'form-text text-success fw-semibold';
+                document.getElementById('numero').focus();
+            })
+            .catch(function () {
+                mensagemCep.textContent = '';
+            });
+    }
+
+    campoCep.addEventListener('input', buscarPorCep);
+    campoCep.addEventListener('blur', buscarPorCep);
 })();
 </script>
 {% endblock %}

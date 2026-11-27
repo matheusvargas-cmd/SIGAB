@@ -1,9 +1,11 @@
 import json
 import logging
 import secrets
+import time
+from collections import defaultdict
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
@@ -16,10 +18,35 @@ from app.services.atendimento_publico_service import (
     SolicitacaoEmProcessamentoError,
 )
 from app.services.categoria_service import CategoriaService
+from app.services.eleitor_service import EleitorService
 from app.services.gabinete_service import GabineteService
 from app.services.subcategoria_service import SubcategoriaService
 
 logger = logging.getLogger(__name__)
+
+# Limitador simples (em memória, por processo) da busca de eleitor por
+# CPF no formulário público — sem login, então sem como confirmar que
+# quem digitou o CPF é o dono dele. Não elimina o risco de alguém tentar
+# descobrir se um CPF específico está cadastrado, só dificulta uma
+# varredura em massa. Chave por (IP, public_token): o mesmo IP não fica
+# bloqueado para um gabinete só porque esgotou o limite testando outro.
+# Em memória de propósito (sem Redis/banco) — reinicia a cada deploy, e
+# só vale para um único processo; aceitável na escala deste sistema, mesmo
+# trade-off já assumido em outros pontos simples do projeto (ex.:
+# app.state.ultimo_heartbeat em main.py).
+_TENTATIVAS_BUSCA_CPF: dict[tuple[str, str], list[float]] = defaultdict(list)
+_JANELA_LIMITE_SEGUNDOS = 600
+_LIMITE_TENTATIVAS = 15
+
+
+def _limite_busca_cpf_excedido(chave: tuple[str, str]) -> bool:
+    agora = time.monotonic()
+    tentativas = _TENTATIVAS_BUSCA_CPF[chave]
+    tentativas[:] = [instante for instante in tentativas if agora - instante < _JANELA_LIMITE_SEGUNDOS]
+    if len(tentativas) >= _LIMITE_TENTATIVAS:
+        return True
+    tentativas.append(agora)
+    return False
 
 # Prefixo próprio /cidadao, fora de /eleitor, /eleitores, /demandas — nunca
 # reaproveitado por essas rotas autenticadas de propósito: é uma porta de
@@ -73,6 +100,44 @@ def _pagina_indisponivel(request: Request) -> HTMLResponse:
         name="cidadao/indisponivel.html",
         context={"titulo": "Link indisponível"},
         status_code=404,
+    )
+
+
+@router.get("/{public_token}/eleitor-por-cpf")
+def eleitor_por_cpf(request: Request, public_token: str, cpf: str = "", db: Session = Depends(get_db)):
+    """Busca automática ao digitar o CPF no formulário público: se já
+    existe cadastro deste CPF neste gabinete, devolve os dados para o
+    JavaScript da tela preencher o resto do formulário sozinho — evita
+    que a mesma pessoa seja recadastrada com nome diferente a cada novo
+    pedido (ver AtendimentoPublicoService/EleitorService.
+    criar_ou_atualizar_por_cpf). Nunca devolve nada fora deste gabinete
+    (isolamento pelo public_token, igual a toda rota deste módulo), e
+    nunca mais que {"encontrado": false} para CPF mal formatado,
+    inexistente, token inválido/gabinete inativo, ou limite de tentativas
+    excedido — a mesma resposta nesses quatro casos, de propósito, para
+    não dar pista sobre qual deles é o motivo."""
+    gabinete = _resolver_gabinete_ativo(db, public_token)
+    if gabinete is None:
+        return JSONResponse({"encontrado": False})
+
+    ip_remoto = request.client.host if request.client else "desconhecido"
+    if _limite_busca_cpf_excedido((ip_remoto, public_token)):
+        return JSONResponse({"encontrado": False}, status_code=429)
+
+    eleitor = EleitorService.obter_por_cpf(db, gabinete.id, cpf)
+    if eleitor is None:
+        return JSONResponse({"encontrado": False})
+
+    return JSONResponse(
+        {
+            "encontrado": True,
+            "nome": eleitor.nome,
+            "whatsapp": eleitor.whatsapp or "",
+            "telefone": eleitor.telefone or "",
+            "email": eleitor.email or "",
+            "bairro": eleitor.bairro or "",
+            "cidade": eleitor.cidade or "",
+        }
     )
 
 

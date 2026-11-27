@@ -173,6 +173,22 @@ class EleitorService:
         return resultado
 
     @staticmethod
+    def obter_por_cpf(db: Session, gabinete_id: int, cpf: str) -> Eleitor | None:
+        """Usado pela busca automática do formulário público (digitou o
+        CPF, puxa o cadastro já existente) — nunca por nome/telefone,
+        mesma chave de criar_ou_atualizar_por_cpf(). CPF mal formatado ou
+        sem dígito verificador válido sempre devolve None (nunca estoura
+        exceção aqui): o chamador decide o que fazer com "não encontrado"."""
+        cpf_normalizado = normalizar_cpf(cpf)
+        if not cpf_normalizado or not validar_cpf(cpf_normalizado):
+            return None
+        return db.scalar(
+            select(Eleitor).where(
+                Eleitor.gabinete_id == gabinete_id, Eleitor.cpf_normalizado == cpf_normalizado
+            )
+        )
+
+    @staticmethod
     def criar(
         db: Session,
         gabinete_id: int,
