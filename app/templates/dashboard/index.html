@@ -149,42 +149,26 @@
 </div>
 {% endif %}
 
-{% if cards.demandas_por_status or cards.cadastradas_hoje %}
+{% if cards.bloco_notas or cards.cadastradas_hoje %}
 <div class="row g-3 mt-1">
-    {% if cards.demandas_por_status %}
+    {% if cards.bloco_notas %}
     <div class="col-lg-6">
         <div class="card h-100">
-            <div class="card-header">Demandas por status</div>
+            <div class="card-header">📝 Bloco de notas do gabinete</div>
             <div class="card-body">
-                {% if total_demandas %}
-                {% set status_classes = {
-                    'Protocolado': 'bg-primary',
-                    'A fazer': 'badge-laranja',
-                    'Em andamento': 'bg-warning',
-                    'Em análise': 'bg-info',
-                    'Não realizado': 'bg-danger',
-                    'Concluído': 'bg-success',
-                    'Cancelada': 'bg-secondary',
-                } %}
-                {% for item in demandas_por_status %}
-                {% set conteudo %}
-                    <div class="d-flex justify-content-between small mb-1">
-                        <span>{{ item.rotulo }}</span>
-                        <span class="fw-semibold">{{ item.quantidade }}</span>
+                <form method="post" action="/nota-dashboard">
+                    <textarea class="form-control" name="conteudo" rows="4" placeholder="Recados da equipe, lembretes rápidos...">{{ gabinete.nota_dashboard or '' }}</textarea>
+                    <div class="d-flex justify-content-between align-items-center mt-2">
+                        <span class="text-muted small">
+                            {% if gabinete.nota_dashboard_atualizada_em %}
+                            Atualizado{% if gabinete.nota_dashboard_atualizado_por %} por {{ gabinete.nota_dashboard_atualizado_por.nome }}{% endif %} em {{ gabinete.nota_dashboard_atualizada_em.strftime('%d/%m/%Y às %H:%M') }}
+                            {% else %}
+                            Visível para toda a equipe.
+                            {% endif %}
+                        </span>
+                        <button class="btn btn-primary btn-sm" type="submit">Salvar</button>
                     </div>
-                    <div class="progress" style="height: 8px;" role="progressbar" aria-valuenow="{{ item.quantidade }}" aria-valuemin="0" aria-valuemax="{{ total_demandas }}">
-                        <div class="progress-bar {{ status_classes.get(item.rotulo, 'bg-secondary') }}" style="width: {{ (item.quantidade / total_demandas * 100) | round(1) }}%;"></div>
-                    </div>
-                {% endset %}
-                {% if item.quantidade %}
-                <a class="d-block text-decoration-none text-dark {% if not loop.last %}mb-3{% endif %}" href="/demandas?status={{ item.rotulo|urlencode }}">{{ conteudo }}</a>
-                {% else %}
-                <div class="{% if not loop.last %}mb-3{% endif %}">{{ conteudo }}</div>
-                {% endif %}
-                {% endfor %}
-                {% else %}
-                <p class="text-muted mb-0">Nenhuma demanda cadastrada.</p>
-                {% endif %}
+                </form>
             </div>
         </div>
     </div>
@@ -285,7 +269,7 @@
 </div>
 {% endif %}
 
-{% if cards.atalho_relatorios or cards.bloco_notas %}
+{% if cards.atalho_relatorios or cards.demandas_por_status %}
 <div class="row g-3 mt-1">
     {% if cards.atalho_relatorios %}
     <div class="col-lg-6">
@@ -305,24 +289,40 @@
         </div>
     </div>
     {% endif %}
-    {% if cards.bloco_notas %}
+    {% if cards.demandas_por_status %}
     <div class="col-lg-6">
         <div class="card h-100">
-            <div class="card-header">📝 Bloco de notas do gabinete</div>
-            <div class="card-body">
-                <form method="post" action="/nota-dashboard">
-                    <textarea class="form-control" name="conteudo" rows="4" placeholder="Recados da equipe, lembretes rápidos...">{{ gabinete.nota_dashboard or '' }}</textarea>
-                    <div class="d-flex justify-content-between align-items-center mt-2">
-                        <span class="text-muted small">
-                            {% if gabinete.nota_dashboard_atualizada_em %}
-                            Atualizado{% if gabinete.nota_dashboard_atualizado_por %} por {{ gabinete.nota_dashboard_atualizado_por.nome }}{% endif %} em {{ gabinete.nota_dashboard_atualizada_em.strftime('%d/%m/%Y às %H:%M') }}
-                            {% else %}
-                            Visível para toda a equipe.
-                            {% endif %}
-                        </span>
-                        <button class="btn btn-primary btn-sm" type="submit">Salvar</button>
+            <div class="card-header">Demandas por status</div>
+            <div class="card-body" style="max-height: 220px; overflow-y: auto;">
+                {% if total_demandas %}
+                {% set status_classes = {
+                    'Protocolado': 'bg-primary',
+                    'A fazer': 'badge-laranja',
+                    'Em andamento': 'bg-warning',
+                    'Em análise': 'bg-info',
+                    'Não realizado': 'bg-danger',
+                    'Concluído': 'bg-success',
+                    'Cancelada': 'bg-secondary',
+                } %}
+                {% for item in demandas_por_status %}
+                {% set conteudo %}
+                    <div class="d-flex justify-content-between small mb-1">
+                        <span>{{ item.rotulo }}</span>
+                        <span class="fw-semibold">{{ item.quantidade }}</span>
                     </div>
-                </form>
+                    <div class="progress" style="height: 8px;" role="progressbar" aria-valuenow="{{ item.quantidade }}" aria-valuemin="0" aria-valuemax="{{ total_demandas }}">
+                        <div class="progress-bar {{ status_classes.get(item.rotulo, 'bg-secondary') }}" style="width: {{ (item.quantidade / total_demandas * 100) | round(1) }}%;"></div>
+                    </div>
+                {% endset %}
+                {% if item.quantidade %}
+                <a class="d-block text-decoration-none text-dark {% if not loop.last %}mb-3{% endif %}" href="/demandas?status={{ item.rotulo|urlencode }}">{{ conteudo }}</a>
+                {% else %}
+                <div class="{% if not loop.last %}mb-3{% endif %}">{{ conteudo }}</div>
+                {% endif %}
+                {% endfor %}
+                {% else %}
+                <p class="text-muted mb-0">Nenhuma demanda cadastrada.</p>
+                {% endif %}
             </div>
         </div>
     </div>

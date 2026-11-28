@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.security import gerar_hash_senha
-from app.core.tempo import hoje_operacional
+from app.core.tempo import agora_operacional, hoje_operacional
 from app.models.agenda import Agenda
 from app.models.categoria import Categoria
 from app.models.demanda import Demanda
@@ -374,7 +374,7 @@ class GabineteService:
         autenticado pode substituir o conteúdo; só registra quem/quando
         foi a última alteração, nunca um histórico de versões."""
         gabinete.nota_dashboard = (conteudo or "").strip() or None
-        gabinete.nota_dashboard_atualizada_em = datetime.now()
+        gabinete.nota_dashboard_atualizada_em = agora_operacional()
         gabinete.nota_dashboard_atualizado_por_id = usuario_id
         db.commit()
         db.refresh(gabinete)

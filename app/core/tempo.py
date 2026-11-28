@@ -17,3 +17,14 @@ FUSO_OPERACIONAL = ZoneInfo("America/Sao_Paulo")
 
 def hoje_operacional() -> date:
     return datetime.now(FUSO_OPERACIONAL).date()
+
+
+def agora_operacional() -> datetime:
+    """Equivalente a hoje_operacional(), mas com hora — para qualquer
+    campo exibido como "atualizado às HH:MM" (ex.: Gabinete.
+    nota_dashboard_atualizada_em). Devolve naive (sem tzinfo), já
+    convertido para America/Sao_Paulo: salva/exibe direto por
+    strftime(), sem precisar converter de novo em nenhum outro lugar —
+    mesma convenção das demais colunas DateTime deste projeto, só que
+    com o fuso certo em vez do fuso do servidor."""
+    return datetime.now(FUSO_OPERACIONAL).replace(tzinfo=None)
